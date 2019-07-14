@@ -1,0 +1,8 @@
+# Directories
+data
+model
+.idea
+tboard
+# temporary files
+*~
+*.pyc
