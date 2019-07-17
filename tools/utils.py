@@ -29,7 +29,6 @@ def define_args():
     parser.add_argument('--nworkers', type=int, default=8, help='num of threads')
     parser.add_argument('--no_dropout', action='store_true', help='no dropout in network')
     parser.add_argument('--nclasses', type=int, default=2, choices=[2, 4], help='num output channels for segmentation')
-    parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
     parser.add_argument('--resize', type=int, default=256, help='resize image to resize x (ratio*resize)')
     parser.add_argument('--mod', type=str, default='erfnet', help='model to train')
     parser.add_argument('--layers', type=int, default=18, help='amount of layers in model')
@@ -86,6 +85,16 @@ def define_args():
     parser.add_argument('--save_freq', type=int, default=500, help='padding')
     # Skip batch
     parser.add_argument('--list', type=int, nargs='+', default=[954, 2789], help='Images you want to skip')
+
+    # 3D LaneNet
+    parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
+    parser.add_argument('--ipm_w', type=int, default=208, help='width of inverse projective map (IPM)')
+    parser.add_argument('--num_y_anchor', type=int, default=6, help='number of y values for each lane anchor')
+    parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
+    parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
+    parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
+    parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
+    parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
     return parser
 
 

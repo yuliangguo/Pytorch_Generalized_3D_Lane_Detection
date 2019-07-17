@@ -4,13 +4,9 @@ import torch.optim
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from math import ceil
 import cv2
 import torchvision.models as models
 from tools.utils import define_args, define_init_weights
-
-h_top = 208
-w_top = 208
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):
@@ -201,7 +197,7 @@ class TopViewPathway(nn.Module):
 #  Lane Prediction Head: through a series of convolutions with no padding in the y dimension, the feature maps are
 #  reduced in height, and finally the prediction layer size is N × 1 × 3 ·(2 · K + 1)
 class LanePredictionHead(nn.Module):
-    def __init__(self, batch_norm=False, init_weights=True):
+    def __init__(self, num_y_anchor):
         super(LanePredictionHead, self).__init__()
         layers = []
         conv2d = nn.Conv2d(512, 64, kernel_size=3, padding=(0, 1))
@@ -221,10 +217,16 @@ class LanePredictionHead(nn.Module):
         layers += [conv2d, nn.ReLU(inplace=True)]
         self.features = nn.Sequential(*layers)
 
-        # TODO: 3 additional layers are needed here
+        # reshape is needed before executing later layers
+        self.dim_rt1 = nn.Conv2d(256, 64, kernel_size=1, padding=0)
+        self.dim_rt2 = nn.Conv2d(64, 2*num_y_anchor+1, kernel_size=1, padding=0)
 
     def forward(self, x):
         x = self.features(x)
+        # x suppose to be N X 64 X 4 X 26, reshape to N X 256 X 26 X 1
+        x = x.reshape(x.shape[0], x.shape[1]*x.shape[2], x.shape[3], 1)
+        x = self.dim_rt1(x)
+        x = self.dim_rt2(x)
         return x
 
 
@@ -238,16 +240,11 @@ class Net(nn.Module):
         # size = torch.Size([args.batch_size, args.nclasses, args.resize, 2*args.resize])
 
         # M, M_inv = Init_Projective_transform(args.nclasses, args.batch_size, args.resize)
-        top_view_region = np.array([[-40, 100], [40, 100], [-40, 5], [40, 5]])
-        org_img_size = [720, 1280]
+        org_img_size = [args.org_h, args.org_w]
         resize_img_size = [args.resize, 2*args.resize]
-        pitch = np.pi / 180 * 3
-        cam_height = 1.6
-        K = np.array([[720, 0, 640],
-                      [0, 720, 360],
-                      [0, 0, 1]])
-        M, M_inv = Init_Projective_tranform(top_view_region, args.batch_size, org_img_size,
-                                            args.crop_size, resize_img_size, pitch, cam_height, K)
+        pitch = np.pi / 180 * args.pitch
+        M, M_inv = Init_Projective_tranform(args.top_view_region, args.batch_size, org_img_size,
+                                            args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
         # self.M = M
         self.M_inv = M_inv
         if not args.no_cuda:
@@ -257,13 +254,13 @@ class Net(nn.Module):
         output_layers = [8, 15, 22, 29]
         self.im_encoder = VGG_encoder(output_layers, True)
         # the grid considers both src and dst grid normalized
-        self.size_top1 = torch.Size([args.batch_size, 128, h_top, w_top])
+        self.size_top1 = torch.Size([args.batch_size, 128, args.ipm_h, args.ipm_w])
         self.project_layer1 = ProjectiveGridGenerator(self.size_top1, M_inv, args.no_cuda)
-        self.size_top2 = torch.Size([args.batch_size, 128, np.int(h_top/2), np.int(w_top/2)])
+        self.size_top2 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
         self.project_layer2 = ProjectiveGridGenerator(self.size_top2, M_inv, args.no_cuda)
-        self.size_top3 = torch.Size([args.batch_size, 128, np.int(h_top/4), np.int(w_top/4)])
+        self.size_top3 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
         self.project_layer3 = ProjectiveGridGenerator(self.size_top3, M_inv, args.no_cuda)
-        self.size_top4 = torch.Size([args.batch_size, 128, np.int(h_top/8), np.int(w_top/8)])
+        self.size_top4 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
         self.project_layer4 = ProjectiveGridGenerator(self.size_top4, M_inv, args.no_cuda)
 
         self.dim_rt1 = nn.Conv2d(256, 128, kernel_size=1, padding=0)
@@ -271,7 +268,7 @@ class Net(nn.Module):
         self.dim_rt3 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
 
         self.top_pathway = TopViewPathway()
-        self.lane_out = LanePredictionHead()
+        self.lane_out = LanePredictionHead(args.num_y_anchor)
 
     def forward(self, input):
         x1, x2, x3, x4 = self.im_encoder(input)
@@ -295,14 +292,17 @@ class Net(nn.Module):
 
 # unit test
 if __name__ == '__main__':
-    from PIL import Image, ImageOps
+    from PIL import Image
     from torchvision import transforms, utils
     import torchvision.transforms.functional as F2
 
     global args
     parser = define_args()
     args = parser.parse_args()
-
+    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
+    args.K = np.array([[720, 0, 640],
+                       [0, 720, 360],
+                       [0, 0, 1]])
     model = Net(args)
     print(model)
 
