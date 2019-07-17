@@ -18,10 +18,9 @@ from tensorboardX import SummaryWriter
 
 from Dataloader.Load_Data_new import get_loader, get_homography, \
                                      load_valid_set_file_all, write_lsq_results
-from eval_lane import LaneEval
-from Loss_crit import define_loss_crit, polynomial 
-from Networks.LSQ_layer import Net
-from Networks.utils import define_args, save_weightmap, first_run,\
+from Networks.Loss_crit import define_loss_crit, polynomial
+from Networks.LaneNet3D import Net
+from tools.utils import define_args, save_weightmap, first_run,\
                            mkdir_if_missing, Logger, define_init_weights,\
                            define_scheduler, define_optim, AverageMeter \
 

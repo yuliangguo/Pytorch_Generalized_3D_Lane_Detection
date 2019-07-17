@@ -6,9 +6,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from math import ceil
 import cv2
-import Networks.BaseNet as basenet
 import torchvision.models as models
-from tools.utils import define_args
+from tools.utils import define_args, define_init_weights
 
 h_top = 208
 w_top = 208
@@ -28,26 +27,24 @@ def make_layers(cfg, in_channels=3, batch_norm=False):
             in_channels = v
     return nn.Sequential(*layers)
 
-# find a top view rect, and computes its corresponding image pixels, and their normalized coords in image
-# define their dst coords in visualize image
-# compute the normalized homograph
-# all the grids in dst view image can interpolated afterwards
-# def Init_Projective_transform(nclasses, batch_size, resize):
-#     # M_orig: unnormalized Transformation matrix
-#     # M: normalized transformation matrix
-#     # M_inv: Inverted normalized transformation matrix --> Needed for grid sample
-#     # original aspect ratio: 720x1280 --> after 80 rows cropped: 640x1280 --> after resize: 256x512 (default) or resize x 2*resize (in general)
-#     size = torch.Size([batch_size, nclasses, resize, 2*resize])
-#     y_start = 0.3
-#     y_stop = 1
-#     xd1, xd2, xd3, xd4 = 0.45, 0.55, 0.45, 0.55
-#     src = np.float32([[0.45, y_start], [0.55, y_start], [0.1, y_stop], [0.9, y_stop]])
-#     dst = np.float32([[xd3, y_start], [xd4, y_start], [xd1, y_stop], [xd2, y_stop]])
-#     M = cv2.getPerspectiveTransform(src, dst)
-#     M_inv = cv2.getPerspectiveTransform(dst, src)
-#     M = torch.from_numpy(M).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-#     M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-#     return size, M, M_inv
+
+def Init_Projective_transform_test(nclasses, batch_size, resize):
+    # M_orig: unnormalized Transformation matrix
+    # M: normalized transformation matrix
+    # M_inv: Inverted normalized transformation matrix --> Needed for grid sample
+    # original aspect ratio: 720x1280 --> after 80 rows cropped: 640x1280 --> after resize: 256x512 (default) or resize x 2*resize (in general)
+    size = torch.Size([batch_size, nclasses, resize, 2*resize])
+    y_start = 0.3
+    y_stop = 1
+    xd1, xd2, xd3, xd4 = 0.45, 0.55, 0.45, 0.55
+    src = np.float32([[0.45, y_start], [0.55, y_start], [0.1, y_stop], [0.9, y_stop]])
+    dst = np.float32([[xd3, y_start], [xd4, y_start], [xd1, y_stop], [xd2, y_stop]])
+    M = cv2.getPerspectiveTransform(src, dst)
+    M_inv = cv2.getPerspectiveTransform(dst, src)
+    M = torch.from_numpy(M).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
+    M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
+    return size, M, M_inv
+
 
 # compute normalized transformation matrix for a top-view region boundaries
 def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
@@ -122,9 +119,9 @@ class VGG_encoder(nn.Module):
 
     def forward(self, x):
         x1 = self.features1(x)
-        x2 = self.features1(x1)
-        x3 = self.features1(x2)
-        x4 = self.features1(x3)
+        x2 = self.features2(x1)
+        x3 = self.features3(x2)
+        x4 = self.features4(x3)
         return x1, x2, x3, x4
 
     def _initialize_weights(self):
@@ -163,7 +160,7 @@ class ProjectiveGridGenerator(nn.Module):
     def forward(self, theta):
         # if base_grid is top-view, should theta be top-to-img homograph, and vice versa
         grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), theta.transpose(1, 2))
-        grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:])
+        grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape([self.N, self.H, self.W, 2])
         return grid
 
 
@@ -181,9 +178,9 @@ class TopViewPathway(nn.Module):
     def forward(self, a, b, c, d):
         x = self.features1(a)
         x = torch.cat([x, b], 1)
-        x = self.features1(x)
+        x = self.features2(x)
         x = torch.cat([x, c], 1)
-        x = self.features1(x)
+        x = self.features3(x)
         x = torch.cat([x, d], 1)
         return x
 
@@ -207,21 +204,24 @@ class LanePredictionHead(nn.Module):
     def __init__(self, batch_norm=False, init_weights=True):
         super(LanePredictionHead, self).__init__()
         layers = []
-        conv2d = nn.Conv2d(512, 64, kernel_size=2, stride=(0, 1))
+        conv2d = nn.Conv2d(512, 64, kernel_size=3, padding=(0, 1))
         layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=2, stride=(0, 1))
+        conv2d = nn.Conv2d(64, 64, kernel_size=3, padding=(0, 1))
         layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=2, stride=(0, 1))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-
-        conv2d = nn.Conv2d(64, 64, kernel_size=2, stride=(0, 2))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=2, stride=(0, 2))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=2, stride=(0, 2))
+        conv2d = nn.Conv2d(64, 64, kernel_size=3, padding=(0, 1))
         layers += [conv2d, nn.ReLU(inplace=True)]
 
+        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
+        layers += [conv2d, nn.ReLU(inplace=True)]
+        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
+        layers += [conv2d, nn.ReLU(inplace=True)]
+        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
+        layers += [conv2d, nn.ReLU(inplace=True)]
+        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
+        layers += [conv2d, nn.ReLU(inplace=True)]
         self.features = nn.Sequential(*layers)
+
+        # TODO: 3 additional layers are needed here
 
     def forward(self, x):
         x = self.features(x)
@@ -250,6 +250,8 @@ class Net(nn.Module):
                                             args.crop_size, resize_img_size, pitch, cam_height, K)
         # self.M = M
         self.M_inv = M_inv
+        if not args.no_cuda:
+            self.M_inv = self.M_inv.cuda()
 
         # Define network
         output_layers = [8, 15, 22, 29]
@@ -264,9 +266,9 @@ class Net(nn.Module):
         self.size_top4 = torch.Size([args.batch_size, 128, np.int(h_top/8), np.int(w_top/8)])
         self.project_layer4 = ProjectiveGridGenerator(self.size_top4, M_inv, args.no_cuda)
 
-        self.dim_rt1 = nn.Conv2d(256, 128, kernel_size=1, padding=1)
-        self.dim_rt2 = nn.Conv2d(512, 256, kernel_size=1, padding=1)
-        self.dim_rt3 = nn.Conv2d(512, 256, kernel_size=1, padding=1)
+        self.dim_rt1 = nn.Conv2d(256, 128, kernel_size=1, padding=0)
+        self.dim_rt2 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
+        self.dim_rt3 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
 
         self.top_pathway = TopViewPathway()
         self.lane_out = LanePredictionHead()
@@ -293,6 +295,10 @@ class Net(nn.Module):
 
 # unit test
 if __name__ == '__main__':
+    from PIL import Image, ImageOps
+    from torchvision import transforms, utils
+    import torchvision.transforms.functional as F2
+
     global args
     parser = define_args()
     args = parser.parse_args()
@@ -300,3 +306,21 @@ if __name__ == '__main__':
     model = Net(args)
     print(model)
 
+    # initialize model weights
+    define_init_weights(model, args.weight_init)
+    # put model on gpu
+    model = model.cuda()
+    # load input
+    img_name = '/home/yuliangguo/Projects/3DLaneNet/1.jpg'
+    with open(img_name, 'rb') as f:
+        image = (Image.open(f).convert('RGB'))
+    w, h = image.size
+    image = F2.crop(image, h-640, 0, 640, w)
+    image = F2.resize(image, size=(args.resize, 2*args.resize), interpolation=Image.BILINEAR)
+    image = transforms.ToTensor()(image).float()
+    image.unsqueeze_(0)
+    image = torch.cat(list(torch.split(image, 1, dim=0))*args.batch_size)
+    image = image.cuda()
+    output_net = model(image)
+
+    print(output_net.shape)
