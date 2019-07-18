@@ -233,13 +233,14 @@ class Laneline_3D_loss(nn.Module):
 # unit test
 if __name__ == '__main__':
     criterion = Laneline_3D_loss()
+    criterion = criterion.cuda()
 
-    pred_3D_lanes = torch.rand(8, 26, 39)
-    gt_3D_lanes = torch.rand(8, 26, 39)
-    pred_pitch = torch.ones(8).float()
-    gt_pitch = torch.ones(8).float()
-    pred_hcam = torch.ones(8).float()
-    gt_hcam = torch.ones(8).float()
+    pred_3D_lanes = torch.rand(8, 26, 39).cuda()
+    gt_3D_lanes = torch.rand(8, 26, 39).cuda()
+    pred_pitch = torch.ones(8).float().cuda()
+    gt_pitch = torch.ones(8).float().cuda()
+    pred_hcam = torch.ones(8).float().cuda()
+    gt_hcam = torch.ones(8).float().cuda()
 
     loss = criterion(pred_3D_lanes, gt_3D_lanes, pred_pitch, gt_pitch, pred_hcam, gt_hcam)
 
