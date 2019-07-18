@@ -219,14 +219,16 @@ class LanePredictionHead(nn.Module):
 
         # reshape is needed before executing later layers
         self.dim_rt1 = nn.Conv2d(256, 64, kernel_size=1, padding=0)
-        self.dim_rt2 = nn.Conv2d(64, 2*num_y_anchor+1, kernel_size=1, padding=0)
+        self.dim_rt2 = nn.Conv2d(64, 3*(2*num_y_anchor+1), kernel_size=1, padding=0)
 
     def forward(self, x):
         x = self.features(x)
         # x suppose to be N X 64 X 4 X 26, reshape to N X 256 X 26 X 1
-        x = x.reshape(x.shape[0], x.shape[1]*x.shape[2], x.shape[3], 1)
+        sizes = x.shape
+        x = x.reshape(sizes[0], sizes[1]*sizes[2], sizes[3], 1)
         x = self.dim_rt1(x)
         x = self.dim_rt2(x)
+        x = x.squeeze(-1).transpose(1, 2)
         return x
 
 

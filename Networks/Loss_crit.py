@@ -182,3 +182,48 @@ class Homography_MSE_Loss(nn.Module):
         x = torch.bmm(gt_params.unsqueeze(1), Y).squeeze(1)
         loss = torch.mean(torch.sum(((x-x_cal)**2),1))
         return loss, x, x_cal
+
+
+class Laneline_3D_loss(nn.Module):
+    """
+    compute the loss between predicted 3D lanelines in anchor representation,
+    and the ground-truth 3D lanelines in anchor representation.
+    loss = loss1 + loss2 + loss2
+    loss1: cross entropy loss for lane type classification
+    loss2: sum of geometric distance betwen 3D lane anchor points in X and Z offsets
+    loss3: error in estimating pitch and camera heights
+    """
+    def __init__(self):
+        super(Laneline_3D_loss, self).__init__()
+
+    def forward(self, pred_3D_lanes, gt_3D_lanes, pred_pitch, gt_pitch, pred_hcam, gt_hcam):
+        """
+
+        :param pred_3D_lanes: predicted tensor with size N x (ipm_w/8) x 3*(2*K+1)
+        :param gt_3D_lanes: ground-truth tensor with size N x (ipm_w/8) x 3*(2*K+1)
+        :param pred_pitch: predicted pitch with size N
+        :param gt_pitch: ground-truth pitch with size N
+        :param pred_hcam: predicted camera height with size N
+        :param gt_hcam: ground-truth camera height with size N
+        :return:
+        """
+        sizes = pred_3D_lanes.shape
+        # reshape to N x ipm_w/8 x 3 x (2K+1)
+        pred_3D_lanes = pred_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
+        gt_3D_lanes = gt_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
+
+        # class prob N x ipm_w/8 x 3 x 1, anchor value N x ipm_w/8 x 3 x 2K
+        pred_class = pred_3D_lanes[:, :, :, -1]
+        pred_anchors = pred_3D_lanes[:, :, :, :-1]
+        gt_class = gt_3D_lanes[:, :, :, -1]
+        gt_anchors = gt_3D_lanes[:, :, :, :-1]
+
+        # pred_class need to apply softmax to convert to [0,1] range
+        pred_class = nn.softmax(pred_class, dim=2)
+        loss1 = -torch.sum(gt_class*torch.log(pred_class) +
+                           (torch.ones_like(gt_class)-gt_class)*torch.log((torch.ones_like(pred_class)-pred_class)))
+        # applying L1 norm does not need to separate X and Z
+        loss2 = torch.sum(torch.norm(gt_class*(pred_anchors-gt_anchors), p=1, dim=3))
+        loss3 = torch.sum(torch.abs(gt_pitch-pred_pitch))+torch.sum(torch.abs(gt_hcam-pred_hcam))
+        return loss1+loss2+loss3
+
