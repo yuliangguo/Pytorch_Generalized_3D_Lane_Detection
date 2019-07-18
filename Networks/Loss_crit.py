@@ -213,13 +213,15 @@ class Laneline_3D_loss(nn.Module):
         gt_3D_lanes = gt_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
 
         # class prob N x ipm_w/8 x 3 x 1, anchor value N x ipm_w/8 x 3 x 2K
-        pred_class = pred_3D_lanes[:, :, :, -1]
+        pred_class = pred_3D_lanes[:, :, :, -1].unsqueeze(-1)
         pred_anchors = pred_3D_lanes[:, :, :, :-1]
-        gt_class = gt_3D_lanes[:, :, :, -1]
+        gt_class = gt_3D_lanes[:, :, :, -1].unsqueeze(-1)
         gt_anchors = gt_3D_lanes[:, :, :, :-1]
 
-        # pred_class need to apply softmax to convert to [0,1] range
-        pred_class = nn.softmax(pred_class, dim=2)
+        # pred_class need to apply softmax to convert to (0,1) range, or the log of it will cause error
+        # apply to gt_class for safe
+        pred_class = F.softmax(pred_class, dim=2)
+        gt_class = F.softmax(gt_class, dim=2)
         loss1 = -torch.sum(gt_class*torch.log(pred_class) +
                            (torch.ones_like(gt_class)-gt_class)*torch.log((torch.ones_like(pred_class)-pred_class)))
         # applying L1 norm does not need to separate X and Z
@@ -227,3 +229,18 @@ class Laneline_3D_loss(nn.Module):
         loss3 = torch.sum(torch.abs(gt_pitch-pred_pitch))+torch.sum(torch.abs(gt_hcam-pred_hcam))
         return loss1+loss2+loss3
 
+
+# unit test
+if __name__ == '__main__':
+    criterion = Laneline_3D_loss()
+
+    pred_3D_lanes = torch.rand(8, 26, 39)
+    gt_3D_lanes = torch.rand(8, 26, 39)
+    pred_pitch = torch.ones(8).float()
+    gt_pitch = torch.ones(8).float()
+    pred_hcam = torch.ones(8).float()
+    gt_hcam = torch.ones(8).float()
+
+    loss = criterion(pred_3D_lanes, gt_3D_lanes, pred_pitch, gt_pitch, pred_hcam, gt_hcam)
+
+    print(loss)

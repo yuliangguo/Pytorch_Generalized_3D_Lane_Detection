@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="931bcb41-9576-4916-a93a-66bee6e62088" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/Networks/LaneNet3D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/LaneNet3D.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Networks/Loss_crit.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/Loss_crit.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -16,8 +15,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-263">
-              <caret line="86" column="53" lean-forward="true" selection-start-line="86" selection-start-column="53" selection-end-line="86" selection-end-column="53" />
+            <state relative-caret-position="18">
+              <caret line="383" column="16" selection-start-line="383" selection-start-column="16" selection-end-line="383" selection-end-column="16" />
               <folding>
                 <element signature="e#48#66#0" expanded="true" />
               </folding>
@@ -28,8 +27,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="234">
-              <caret line="205" column="34" selection-start-line="205" selection-start-column="30" selection-end-line="205" selection-end-column="34" />
+            <state relative-caret-position="18">
+              <caret line="138" column="12" selection-start-line="137" selection-start-column="31" selection-end-line="138" selection-end-column="12" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -40,8 +39,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="161">
-              <caret line="192" column="18" selection-start-line="192" selection-start-column="18" selection-end-line="192" selection-end-column="18" />
+            <state relative-caret-position="563">
+              <caret line="237" column="39" lean-forward="true" selection-start-line="237" selection-start-column="39" selection-end-line="237" selection-end-column="39" />
               <folding>
                 <element signature="e#24#36#0" expanded="true" />
               </folding>
@@ -61,8 +60,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_new.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2052">
-              <caret line="114" column="18" selection-start-line="114" selection-start-column="18" selection-end-line="114" selection-end-column="18" />
+            <state relative-caret-position="419">
+              <caret line="487" column="52" lean-forward="true" selection-start-line="487" selection-start-column="52" selection-end-line="487" selection-end-column="52" />
               <folding>
                 <element signature="e#47#65#0" expanded="true" />
               </folding>
@@ -81,12 +80,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>output</find>
-      <find>save_wei</find>
-      <find>args</find>
-      <find>encoder</find>
-      <find>cat</find>
-      <find>Networks</find>
       <find>LaneEval</find>
       <find>define_init_weights</find>
       <find>validat</find>
@@ -109,8 +102,14 @@
       <find>define_init</find>
       <find>init_</find>
       <find>totensor</find>
-      <find>cuda</find>
       <find>crop</find>
+      <find>cuda</find>
+      <find>criterion</find>
+      <find>.size</find>
+      <find>shape</find>
+      <find>float</find>
+      <find>dim</find>
+      <find>append</find>
     </findStrings>
     <replaceStrings>
       <replace>args.num_y_anchor</replace>
@@ -190,7 +189,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.3DLaneNet">
+  <component name="RunManager" selected="Python.Loss_crit">
     <configuration name="3DLaneNet" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="3DLaneNet" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -233,6 +232,27 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="Loss_crit" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="3DLaneNet" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$USER_HOME$/anaconda3/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Networks" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Networks/Loss_crit.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="3DLaneNet" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -257,9 +277,11 @@
     <list>
       <item itemvalue="Python.3DLaneNet" />
       <item itemvalue="Python.BaseNet" />
+      <item itemvalue="Python.Loss_crit" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.Loss_crit" />
         <item itemvalue="Python.3DLaneNet" />
         <item itemvalue="Python.BaseNet" />
       </list>
@@ -318,6 +340,11 @@
     </expressions>
     <expressions id="evaluateExpression">
       <expression>
+        <expression-string>gt_class*torch.log(pred_class)</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
         <expression-string>image = torch.cat(list(image)*10)</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
@@ -354,11 +381,6 @@
       </expression>
       <expression>
         <expression-string>image = F.crop(image, h-640, 0, 640, w)</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>import torchvision.transforms.functional as F</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
@@ -434,26 +456,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_new.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2052">
-          <caret line="114" column="18" selection-start-line="114" selection-start-column="18" selection-end-line="114" selection-end-column="18" />
-          <folding>
-            <element signature="e#47#65#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/main.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-263">
-          <caret line="86" column="53" lean-forward="true" selection-start-line="86" selection-start-column="53" selection-end-line="86" selection-end-column="53" />
-          <folding>
-            <element signature="e#48#66#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/tools/utils.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="691">
@@ -463,18 +465,38 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="234">
-          <caret line="205" column="34" selection-start-line="205" selection-start-column="30" selection-end-line="205" selection-end-column="34" />
+        <state relative-caret-position="18">
+          <caret line="138" column="12" selection-start-line="137" selection-start-column="31" selection-end-line="138" selection-end-column="12" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/main.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="18">
+          <caret line="383" column="16" selection-start-line="383" selection-start-column="16" selection-end-line="383" selection-end-column="16" />
+          <folding>
+            <element signature="e#48#66#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_new.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="419">
+          <caret line="487" column="52" lean-forward="true" selection-start-line="487" selection-start-column="52" selection-end-line="487" selection-end-column="52" />
+          <folding>
+            <element signature="e#47#65#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="161">
-          <caret line="192" column="18" selection-start-line="192" selection-start-column="18" selection-end-line="192" selection-end-column="18" />
+        <state relative-caret-position="563">
+          <caret line="237" column="39" lean-forward="true" selection-start-line="237" selection-start-column="39" selection-end-line="237" selection-end-column="39" />
           <folding>
             <element signature="e#24#36#0" expanded="true" />
           </folding>
