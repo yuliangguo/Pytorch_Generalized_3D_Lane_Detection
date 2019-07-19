@@ -89,12 +89,13 @@ def define_args():
     # 3D LaneNet
     parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
     parser.add_argument('--ipm_w', type=int, default=208, help='width of inverse projective map (IPM)')
-    parser.add_argument('--num_y_anchor', type=int, default=6, help='number of y values for each lane anchor')
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
     parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
     parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
+    parser.add_argument('--num_y_anchor', type=int, default=6, help='number of y values for each lane anchor')
+    parser.add_argument('--y_ref', type=int, default=20, help='the ref Y distance in meter from where lane association is determined')
     return parser
 
 

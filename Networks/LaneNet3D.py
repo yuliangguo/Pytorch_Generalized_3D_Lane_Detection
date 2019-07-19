@@ -231,6 +231,7 @@ class LanePredictionHead(nn.Module):
         x = x.squeeze(-1).transpose(1, 2)
         return x
 
+# TODO: implement homography net
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
