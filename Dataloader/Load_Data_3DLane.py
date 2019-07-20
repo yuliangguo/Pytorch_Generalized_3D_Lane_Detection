@@ -22,13 +22,22 @@ from torch.utils.data.dataloader import default_collate
 warnings.simplefilter('ignore', np.RankWarning)
 
 
-class LaneDataset(Dataset):
-    """Dataset with labeled lanes"""
+class LaneDatasetTuSimple(Dataset):
+    """
+    Dataset with labeled lanes
+        This implementation considers:
+        w/o laneline 3D attributes
+        w/o centerline annotations
+        default considers 3D laneline, including centerlines
+    """
     def __init__(self, dataset_base_dir, dataset_info_file, args):
         """
 
         :param dataset_info_file: json file list
         """
+        self.totensor = transforms.ToTensor()
+        self.no_3d = args.no_3d
+        self.no_centerline = args.no_centerline
 
         self.h_org = args.org_h
         self.w_org = args.org_w
@@ -44,8 +53,6 @@ class LaneDataset(Dataset):
         self.top_view_region = args.top_view_region
         # initialize the homography between image and IPM, this need to be exactly the same as network
         self.pitch = np.pi / 180 * args.pitch
-        # M, M_inv = compute_normalized_homography(self.top_view_region, [self.h_org, self.w_org], self.h_crop,
-        #                                     [self.h_net, self.w_net], self.pitch, args.cam_height, args.K)
         H_g2c, H_c2g = compute_homograpthy(self.pitch, args.cam_height, args.K)
         self.H_c2g = H_c2g
         # compute y_ref in ground
@@ -56,7 +63,8 @@ class LaneDataset(Dataset):
         self.anchor_x_steps = np.linspace(x_min, x_max, args.w_ipm/8, endpoint=True)
 
         self.n_samples = 0
-        self._label_image_path, self._label_lane_pts_all, self._label_lane_types_all = self._init_dataset(dataset_base_dir, dataset_info_file)
+        self._label_image_path, self._label_lane_pts_all, self._label_lane_types_all = \
+            self._init_dataset(dataset_base_dir, dataset_info_file)
         self._random_dataset()
 
     def _init_dataset(self, dataset_base_dir, dataset_info_file):
@@ -104,6 +112,8 @@ class LaneDataset(Dataset):
                     gt_lane_pts_all.append(gt_lane_pts)
                     gt_lane_types_all.append(np.array(gt_lane_types))
 
+                    # TODO: implement centerline case when dataset avaliable
+
                     self.n_samples += 1
         label_image_path = np.array(label_image_path)
         return label_image_path, gt_lane_pts_all, gt_lane_types_all
@@ -131,41 +141,54 @@ class LaneDataset(Dataset):
         Args: idx (int): Index in list to load image
         """
         img_name = self._label_image_path[idx]
-        gt_lanes_2D = self._label_lane_pts_all[idx]
         with open(img_name, 'rb') as f:
             image = (Image.open(f).convert('RGB'))
 
         image = F.crop(image, self.h_crop, 0, self.h_org-self.h_crop, self.w_org)
         image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
-        gt_anchor = np.zeros([self.w_ipm / 8, 3, 2 * self.num_y_steps + 1], dtype=np.float32)
 
-        for i in range(len(gt_lanes_2D)):
-            gt_lane_2D = gt_lanes_2D[i]
+        if self.no_3d:
+            num_types = 1
+        else:
+            num_types = 3
+
+        if self.no_centerline:
+            dim_anchor = self.num_y_steps + 1
+        else:
+            dim_anchor = 2*self.num_y_steps + 1
+        gt_anchor = np.zeros([self.w_ipm / 8, num_types, dim_anchor], dtype=np.float32)
+
+        gt_lanes_2d = self._label_lane_pts_all[idx]
+        for i in range(len(gt_lanes_2d)):
+            gt_lane_2d = gt_lanes_2d[i]
             # project to ground coordinates
-            gt_lane_grd = homogenous_transformation(self.H_c2g, gt_lane_2D[:, 0], gt_lane_2D[:, 1])
-            gt_lane_3D = np.zeros_like(gt_lane_2D, dtype=np.float32)
-            gt_lane_3D[:2, :] = gt_lane_grd
-            if gt_lane_2D.shape[1] > 2:
-                gt_lane_3D[2, :] = gt_lane_2D[2, :]
+            gt_lane_grd = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
+            gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
+            gt_lane_3d[:2, :] = gt_lane_grd
+            if gt_lane_2d.shape[1] > 2:
+                gt_lane_3d[2, :] = gt_lane_2d[2, :]
 
             # ignore GT does not pass y_ref
-            if gt_lane_3D[0, 1] > self.y_ref or gt_lane_3D[-1, 1] < self.y_ref:
+            if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
                 continue
 
-            # resample at y steps
-            x_values, z_values = resample_3D_laneline(gt_lane_3D, self.anchor_x_steps)
+            # resample ground-truth laneline at anchor y steps
+            x_values, z_values = resample_3D_laneline(gt_lane_3d, self.anchor_x_steps)
 
             # decide association at r_ref
             min_idx = np.amin((self.anchor_x_steps - x_values[1])**2)
+            # assign anchor tensor values
+            gt_anchor[min_idx, 0, 0: self.num_y_steps] = x_values - self.anchor_x_steps[min_idx]
+            gt_anchor[min_idx, 0, self.num_y_steps:2*self.num_y_steps] = z_values
+            gt_anchor[min_idx, 0, -1] = 1.0
 
-            # TODO: now only save results for laneline, need to include centerline later/ separate datasets
-            gt_anchor[min_idx, 2, 0: self.num_y_steps] = x_values - self.anchor_x_steps[min_idx]
-            gt_anchor[min_idx, 2, self.num_y_steps:2*self.num_y_steps] = z_values
-            gt_anchor[min_idx, 2, -1] = 1.0
+        # TODO: implement centerlines case when avaliable
 
         image, gt_anchor = self.totensor(image).float(), (self.totensor(gt_anchor)).float()
-
+        image = image.permute([2, 0, 1])
+        gt_anchor = gt_anchor.squeeze(-1)
         return image, gt_anchor
+
 
 def resample_3D_laneline(gt_lane_3D, y_steps):
     """
@@ -201,50 +224,6 @@ def resample_3D_laneline(gt_lane_3D, y_steps):
     return x_values, z_values
 
 
-# compute normalized transformation matrix for a top-view region boundaries
-def compute_normalized_homography(top_view_region, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
-    """
-        Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
-        the top view image's 4 corners
-        Ground coordinates: x-right, y-forward, z-up
-
-    :param top_view_region: a 4 X 2 list of (X, Y) indicating the top-view region corners in order:
-                            top-left, top-right, bottom-left, bottom-right
-    :param org_img_size: the size of original image size: (h, w)
-    :param crop_y: pixels croped from original img
-    :param resize_img_size: the size of image as network input: (h, w)
-    :param pitch: camera pitch angle wrt ground plane
-    :param cam_height: camera height wrt ground plane in meters
-    :param K: camera intrinsic parameters
-    :return: M_inv: the normalized transformation from image to IPM image
-    """
-
-    # transform top-view region to original image region
-    R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(-np.pi / 2 - pitch), -np.sin(-np.pi / 2 - pitch)],
-                      [0, np.sin(-np.pi / 2 - pitch), np.cos(-np.pi / 2 - pitch)]])
-    H_g2c = np.matmul(K, np.concatenate(
-        [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c, np.array([[0], [0], [-cam_height]]))], 1))
-    X = np.concatenate([top_view_region, np.ones([4, 1])], 1)
-    img_region = np.matmul(X, H_g2c.T)
-    border_org = np.divide(img_region[:, :2], img_region[:, 2:3])
-
-    # transform original image region to network input region
-    ratio_x = resize_img_size[1] / org_img_size[1]
-    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
-    H_c = np.array([[ratio_x, 0, 0],
-                    [0, ratio_y, -ratio_y * crop_y]])
-    border_net = np.matmul(np.concatenate([border_org, np.ones([4, 1])], 1), H_c.T)
-    border_net[:, 0] = border_net[:, 0] / resize_img_size[1]
-    border_net[:, 1] = border_net[:, 1] / resize_img_size[0]
-    border_net = np.float32(border_net)
-
-    # compute the normalized transformation
-    dst = np.float32([[0, 0], [0, 1], [1, 0], [1, 1]])
-    M = cv2.getPerspectiveTransform(border_net, dst)
-    M_inv = cv2.getPerspectiveTransform(dst, border_net)
-    return M, M_inv
-
 def compute_homograpthy(pitch, cam_height, K):
     # transform top-view region to original image region
     R_g2c = np.array([[1, 0, 0],
@@ -254,6 +233,7 @@ def compute_homograpthy(pitch, cam_height, K):
         [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c, np.array([[0], [0], [-cam_height]]))], 1))
     H_c2g = np.invert(H_g2c)
     return H_g2c, H_c2g
+
 
 def homogenous_transformation(Matrix, x, y):
     """
@@ -272,7 +252,53 @@ def homogenous_transformation(Matrix, x, y):
     y_vals = trans[1,:]/trans[2,:]
     return x_vals, y_vals
 
+# TODO: A series of data augmentation functions can be implemented here
+
+
+def get_loader(num_train, json_file, image_dir, gt_dir, flip_on, batch_size,
+               shuffle, num_workers, end_to_end, resize, split_percentage=0.2):
+    '''
+    Splits dataset in training and validation set and creates dataloaders
+    '''
+    indices = list(range(num_train))
+    split = int(np.floor(split_percentage*num_train))
+
+    if shuffle is True:
+        np.random.seed(num_train)
+        np.random.shuffle(indices)
+    train_idx, valid_idx = indices[split:], indices[:split]
+    train_idx = train_idx[0:len(train_idx)//batch_size*batch_size]
+    valid_idx = valid_idx[0:len(valid_idx)//batch_size*batch_size]
+    # TODO: how to make sure of consistency of train_idx, valid_idx in samplers and dataset?
+    train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
+    valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+
+    transformed_dataset = LaneDataset(end_to_end=end_to_end,
+                                      valid_idx=valid_idx,
+                                      json_file=json_file,
+                                      image_dir=image_dir,
+                                      gt_dir=gt_dir,
+                                      flip_on=flip_on,
+                                      resize=resize)
+
+    train_loader = DataLoader(transformed_dataset,
+                              batch_size=batch_size, sampler=train_sampler,
+                              num_workers=num_workers, pin_memory=True) #, collate_fn=my_collate)
+
+    valid_loader = DataLoader(transformed_dataset,
+                              batch_size=batch_size, sampler=valid_sampler,
+                              num_workers=num_workers, pin_memory=True) #collate_fn=my_collate)
+
+    return train_loader, valid_loader, valid_idx
 
 # unit test
 if __name__ == '__main__':
+
+    # prepare datasets and loaders
+
+    # get a batch from loader
+
+    # recover lanelines from gt_tensor and visualize the result
+
+
     print('done')

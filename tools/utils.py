@@ -95,6 +95,9 @@ def define_args():
     parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
+    parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
+    parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
+
     return parser
 
 

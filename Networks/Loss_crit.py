@@ -158,7 +158,7 @@ class Homography_MSE_Loss(nn.Module):
         start = 250
         delta = 10
         num_heights = (720-start)//delta
-        self.y_d = Variable((torch.arange(start,720,delta)-80)/(639))
+        self.y_d = Variable((torch.arange(start, 720, delta)-80)/(639))
         self.y_orig = self.y_d.expand(options.batch_size, num_heights)
         self.ones = Variable(torch.ones(options.batch_size, num_heights))
 
@@ -171,7 +171,7 @@ class Homography_MSE_Loss(nn.Module):
         y_prime = (M[:,1,1:2]*self.y_d + M[:,1,2:])/(M[:,2,1:2]*self.y_d+M[:,2,2:])
         y_eval = 1 - y_prime
         Y = torch.stack((y_eval**2, y_eval, self.ones),1)
-        x_prime=torch.bmm(params.transpose(1,2), Y).squeeze(1)
+        x_prime=torch.bmm(params.transpose(1, 2), Y).squeeze(1)
         coordinates = torch.stack((x_prime, y_prime, self.ones),1)
         trans = torch.bmm(M_inv, coordinates)
 
