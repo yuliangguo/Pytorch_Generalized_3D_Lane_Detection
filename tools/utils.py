@@ -94,8 +94,7 @@ def define_args():
     parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
     parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
-    parser.add_argument('--num_y_anchor', type=int, default=6, help='number of y values for each lane anchor')
-    parser.add_argument('--y_ref', type=int, default=20, help='the ref Y distance in meter from where lane association is determined')
+    parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
     return parser
 
 

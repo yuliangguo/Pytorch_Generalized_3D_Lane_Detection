@@ -48,6 +48,7 @@ def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, 
         Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
         the top view image's 4 corners
         Ground coordinates: x-right, y-forward, z-up
+        The purpose of applying normalized transformation is for invariance in scale change
 
     :param top_view_region: a 4 X 2 list of (X, Y) indicating the top-view region corners in order:
                             top-left, top-right, bottom-left, bottom-right
@@ -303,6 +304,8 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
     args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.num_y_anchor = len(args.anchor_y_steps)
     args.K = np.array([[720, 0, 640],
                        [0, 720, 360],
                        [0, 0, 1]])
