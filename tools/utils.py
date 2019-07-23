@@ -63,8 +63,8 @@ def define_args():
     parser.add_argument('--use_cholesky', action='store_true', help='use cholesky decomposition')
     parser.add_argument('--activation_net', type=str, default='relu', help='activation in network used')
     # Paths settings
-    parser.add_argument('--image_dir', type=str, required=True, help='directory to image dir')
-    parser.add_argument('--gt_dir', type=str, required=True, help='directory to gt')
+    # parser.add_argument('--image_dir', type=str, required=True, help='directory to image dir')
+    # parser.add_argument('--gt_dir', type=str, required=True, help='directory to gt')
     parser.add_argument('--save_path', type=str, default='Saved/', help='directory to gt')
     parser.add_argument('--json_file', type=str, default='Labels/Curve_parameters.json', help='directory to json input')
     # LOSS settings

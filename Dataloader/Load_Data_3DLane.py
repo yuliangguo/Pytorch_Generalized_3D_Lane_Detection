@@ -22,7 +22,7 @@ from torch.utils.data.dataloader import default_collate
 warnings.simplefilter('ignore', np.RankWarning)
 
 
-class LaneDatasetTuSimple(Dataset):
+class LaneDataset(Dataset):
     """
     Dataset with labeled lanes
         This implementation considers:
@@ -30,7 +30,7 @@ class LaneDatasetTuSimple(Dataset):
         w/o centerline annotations
         default considers 3D laneline, including centerlines
     """
-    def __init__(self, dataset_base_dir, dataset_info_file, args):
+    def __init__(self, dataset_base_dir, json_file_path, args):
         """
 
         :param dataset_info_file: json file list
@@ -60,14 +60,16 @@ class LaneDatasetTuSimple(Dataset):
         # compute x_steps
         x_min = self.top_view_region[0, 0]
         x_max = self.top_view_region[1, 0]
-        self.anchor_x_steps = np.linspace(x_min, x_max, args.w_ipm/8, endpoint=True)
+        self.anchor_x_steps = np.linspace(x_min, x_max, args.ipm_w/8, endpoint=True)
 
-        self.n_samples = 0
-        self._label_image_path, self._label_lane_pts_all, self._label_lane_types_all = \
-            self._init_dataset(dataset_base_dir, dataset_info_file)
-        self._random_dataset()
+        # self._label_image_path, self._label_lane_pts_all, self._label_lane_types_all = \
+        #     self._init_dataset(dataset_base_dir, json_file_path)
+        self._label_image_path, self._label_lane_pts_all = \
+            self._init_dataset_tusimple(dataset_base_dir, json_file_path)
+        self.n_samples = self._label_image_path.shape[0]
+        # self._random_dataset()
 
-    def _init_dataset(self, dataset_base_dir, dataset_info_file):
+    def _init_dataset(self, dataset_base_dir, json_file_path):
         """
         :param dataset_info_file:
         :return: image paths, labels in normalized net input coordinates
@@ -79,56 +81,99 @@ class LaneDatasetTuSimple(Dataset):
         # load image path, and lane pts
         label_image_path = []
         gt_lane_pts_all = []
-        gt_lane_types_all = []
 
-        for json_file_path in dataset_info_file:
-            assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
+        assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
 
-            # src_dir = ops.split(json_file_path)[0]
+        # src_dir = ops.split(json_file_path)[0]
 
-            with open(json_file_path, 'r') as file:
-                for line in file:
-                    info_dict = json.loads(line)
+        with open(json_file_path, 'r') as file:
+            for line in file:
+                info_dict = json.loads(line)
 
-                    image_path = ops.join(dataset_base_dir, info_dict['raw_file'])
-                    assert ops.exists(image_path), '{:s} not exist'.format(image_path)
+                image_path = ops.join(dataset_base_dir, info_dict['raw_file'])
+                assert ops.exists(image_path), '{:s} not exist'.format(image_path)
 
-                    label_image_path.append(image_path)
+                label_image_path.append(image_path)
 
-                    gt_lane_pts = info_dict['lanes']
+                gt_lane_pts = info_dict['lanes']
+                for i, lane in enumerate(gt_lane_pts):
+                    # A GT lane can be either 2D or 3D
+                    # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
+                    lane = np.array(lane)
                     # rescale to net input
-                    for i, lane in enumerate(gt_lane_pts):
-                        # A GT lane can be either 2D or 3D
-                        # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
-                        lane = np.array(lane)
-                        lane[:, 0] *= self.x_ratio
-                        lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
-                        # normalize 2D attributes
-                        lane[:, 0] /= self.w_net
-                        lane[:, 1] /= self.h_net
-                        gt_lane_pts[i] = lane
-                    gt_lane_types = info_dict['lane_types']
+                    lane[:, 0] *= self.x_ratio
+                    lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
+                    gt_lane_pts[i] = lane
+                gt_lane_pts_all.append(gt_lane_pts)
 
-                    gt_lane_pts_all.append(gt_lane_pts)
-                    gt_lane_types_all.append(np.array(gt_lane_types))
+                # TODO: implement centerline case when avaliable
 
-                    # TODO: implement centerline case when dataset avaliable
-
-                    self.n_samples += 1
         label_image_path = np.array(label_image_path)
-        return label_image_path, gt_lane_pts_all, gt_lane_types_all
+        return label_image_path, gt_lane_pts_all
 
-    def _random_dataset(self):
+    def _init_dataset_tusimple(self, dataset_base_dir, json_file_path):
+        """
+        :param json_file_path:
+        :return: image paths, labels in normalized net input coordinates
+
+        data processing:
+        ground truth labels map are scaled wrt network input sizes
         """
 
-        :return:
-        """
+        # load image path, and lane pts
+        label_image_path = []
+        gt_lane_pts_all = []
 
-        random_idx = np.random.permutation(self._label_image_path.shape[0])
-        self._label_image_path = self._label_image_path[random_idx]
-        self._label_lane_types_all = [self._label_lane_types_all[i] for i in random_idx]
-        self._label_lane_pts_all = [self._label_lane_pts_all[i] for i in random_idx]
-        self._next_batch_loop_count = 0
+        assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
+
+        # src_dir = ops.split(json_file_path)[0]
+
+        with open(json_file_path, 'r') as file:
+            for line in file:
+                info_dict = json.loads(line)
+
+                image_path = ops.join(dataset_base_dir, info_dict['raw_file'])
+                assert ops.exists(image_path), '{:s} not exist'.format(image_path)
+
+                label_image_path.append(image_path)
+
+                gt_lane_pts_X = info_dict['lanes']
+                gt_y_steps = np.array(info_dict['h_samples'])
+                gt_lane_pts = []
+
+                for i, lane_x in enumerate(gt_lane_pts_X):
+                    lane = np.zeros([gt_y_steps.shape[0], 2])
+
+                    lane_x = np.array(lane_x)
+                    lane[:, 0] = lane_x
+                    lane[:, 1] = gt_y_steps
+                    # remove invalid samples
+                    lane = lane[lane_x >= 0, :]
+
+                    if lane.shape[0] < 2:
+                        continue
+
+                    # rescale to net input
+                    lane[:, 0] *= self.x_ratio
+                    lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
+
+                    gt_lane_pts.append(lane)
+
+                gt_lane_pts_all.append(gt_lane_pts)
+        label_image_path = np.array(label_image_path)
+        return label_image_path, gt_lane_pts_all
+
+    # def _random_dataset(self):
+    #     """
+    #
+    #     :return:
+    #     """
+    #
+    #     random_idx = np.random.permutation(self._label_image_path.shape[0])
+    #     self._label_image_path = self._label_image_path[random_idx]
+    #     self._label_lane_types_all = [self._label_lane_types_all[i] for i in random_idx]
+    #     self._label_lane_pts_all = [self._label_lane_pts_all[i] for i in random_idx]
+    #     self._next_batch_loop_count = 0
 
     def __len__(self):
         """
@@ -144,6 +189,7 @@ class LaneDatasetTuSimple(Dataset):
         with open(img_name, 'rb') as f:
             image = (Image.open(f).convert('RGB'))
 
+        # image preprocess with crop and resize
         image = F.crop(image, self.h_crop, 0, self.h_org-self.h_crop, self.w_org)
         image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
 
@@ -156,24 +202,25 @@ class LaneDatasetTuSimple(Dataset):
             dim_anchor = self.num_y_steps + 1
         else:
             dim_anchor = 2*self.num_y_steps + 1
-        gt_anchor = np.zeros([self.w_ipm / 8, num_types, dim_anchor], dtype=np.float32)
+        gt_anchor = np.zeros([np.int32(self.w_ipm / 8), num_types, dim_anchor], dtype=np.float32)
 
         gt_lanes_2d = self._label_lane_pts_all[idx]
         for i in range(len(gt_lanes_2d)):
             gt_lane_2d = gt_lanes_2d[i]
             # project to ground coordinates
-            gt_lane_grd = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
+            gt_lane_grd_x, gt_lane_grd_y = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0].T, gt_lane_2d[:, 1].T)
             gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
-            gt_lane_3d[:2, :] = gt_lane_grd
+            gt_lane_3d[:, 0] = gt_lane_grd_x
+            gt_lane_3d[:, 1] = gt_lane_grd_y
             if gt_lane_2d.shape[1] > 2:
-                gt_lane_3d[2, :] = gt_lane_2d[2, :]
+                gt_lane_3d[:, 2] = gt_lane_2d[:, 2]
 
             # ignore GT does not pass y_ref
             if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
                 continue
 
             # resample ground-truth laneline at anchor y steps
-            x_values, z_values = resample_3D_laneline(gt_lane_3d, self.anchor_x_steps)
+            x_values, z_values = resample_3d_laneline(gt_lane_3d, self.anchor_x_steps)
 
             # decide association at r_ref
             min_idx = np.amin((self.anchor_x_steps - x_values[1])**2)
@@ -190,7 +237,7 @@ class LaneDatasetTuSimple(Dataset):
         return image, gt_anchor
 
 
-def resample_3D_laneline(gt_lane_3D, y_steps):
+def resample_3d_laneline(gt_lane_3D, y_steps):
     """
         suppose to interpolate x, z values even there associated y's are beyond ground-truth scope
     :param gt_lane_3D:
@@ -231,74 +278,72 @@ def compute_homograpthy(pitch, cam_height, K):
                       [0, np.sin(-np.pi / 2 - pitch), np.cos(-np.pi / 2 - pitch)]])
     H_g2c = np.matmul(K, np.concatenate(
         [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c, np.array([[0], [0], [-cam_height]]))], 1))
-    H_c2g = np.invert(H_g2c)
+    H_c2g = np.linalg.inv(H_g2c)
     return H_g2c, H_c2g
 
 
 def homogenous_transformation(Matrix, x, y):
     """
-    Helper function to transform coordionates defined by transformation matrix
+    Helper function to transform coordinates defined by transformation matrix
 
     Args:
             Matrix (multi dim - array): Transformation matrix
             x (array): original x coordinates
             y (array): original y coordinates
     """
-    ones = np.ones((1,len(y)))
+    ones = np.ones((1, len(y)))
     coordinates = np.vstack((x, y, ones))
     trans = np.matmul(Matrix, coordinates)
 
-    x_vals = trans[0,:]/trans[2,:]
-    y_vals = trans[1,:]/trans[2,:]
+    x_vals = trans[0,:]/trans[2, :]
+    y_vals = trans[1,:]/trans[2, :]
     return x_vals, y_vals
 
 # TODO: A series of data augmentation functions can be implemented here
 
 
-def get_loader(num_train, json_file, image_dir, gt_dir, flip_on, batch_size,
-               shuffle, num_workers, end_to_end, resize, split_percentage=0.2):
-    '''
-    Splits dataset in training and validation set and creates dataloaders
-    '''
-    indices = list(range(num_train))
-    split = int(np.floor(split_percentage*num_train))
+def get_loader(dataset_base_dir, json_file_path, args):
+    """
+        create dataset from ground-truth
+        return a batch sampler based ont the dataset
+    """
 
-    if shuffle is True:
-        np.random.seed(num_train)
-        np.random.shuffle(indices)
-    train_idx, valid_idx = indices[split:], indices[:split]
-    train_idx = train_idx[0:len(train_idx)//batch_size*batch_size]
-    valid_idx = valid_idx[0:len(valid_idx)//batch_size*batch_size]
-    # TODO: how to make sure of consistency of train_idx, valid_idx in samplers and dataset?
+    transformed_dataset = LaneDataset(dataset_base_dir, json_file_path, args)
+    train_idx = range(transformed_dataset.n_samples)
+    train_idx = train_idx[0:len(train_idx)//args.batch_size*args.batch_size]
     train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
-    valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
-
-    transformed_dataset = LaneDataset(end_to_end=end_to_end,
-                                      valid_idx=valid_idx,
-                                      json_file=json_file,
-                                      image_dir=image_dir,
-                                      gt_dir=gt_dir,
-                                      flip_on=flip_on,
-                                      resize=resize)
-
     train_loader = DataLoader(transformed_dataset,
-                              batch_size=batch_size, sampler=train_sampler,
-                              num_workers=num_workers, pin_memory=True) #, collate_fn=my_collate)
+                              batch_size=args.batch_size, sampler=train_sampler,
+                              num_workers=args.nworkers, pin_memory=True) #, collate_fn=my_collate)
 
-    valid_loader = DataLoader(transformed_dataset,
-                              batch_size=batch_size, sampler=valid_sampler,
-                              num_workers=num_workers, pin_memory=True) #collate_fn=my_collate)
+    return train_loader
 
-    return train_loader, valid_loader, valid_idx
 
 # unit test
 if __name__ == '__main__':
+    from tools.utils import define_args
+
+    parser = define_args()
+    args = parser.parse_args()
+    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.num_y_anchor = len(args.anchor_y_steps)
+    args.K = np.array([[720, 0, 640],
+                       [0, 720, 360],
+                       [0, 0, 1]])
 
     # prepare datasets and loaders
+    dataset_base_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
+    json_file_path = ops.join(dataset_base_dir, 'label_data_0601.json')
+    test_loader = get_loader(dataset_base_dir, json_file_path, args)
 
     # get a batch from loader
+    for batch_ndx, (image_tensor, gt_tensor) in enumerate(test_loader):
+        print('batch id: {:d}, image tensor shape:'.format(batch_ndx))
+        print(image_tensor.shape)
+        print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
+        print(gt_tensor.shape)
 
     # recover lanelines from gt_tensor and visualize the result
-
 
     print('done')
