@@ -204,9 +204,8 @@ class LaneDataset(Dataset):
             dim_anchor = 2*self.num_y_steps + 1
         gt_anchor = np.zeros([np.int32(self.w_ipm / 8), num_types, dim_anchor], dtype=np.float32)
 
-
-        cv2.imshow('image', np.asarray(image))
-        cv2.waitKey(50)
+        # cv2.imshow('image', np.asarray(image))
+        # cv2.waitKey(50)
         gt_lanes_2d = self._label_lane_pts_all[idx]
         for i in range(len(gt_lanes_2d)):
             gt_lane_2d = gt_lanes_2d[i]
@@ -217,6 +216,11 @@ class LaneDataset(Dataset):
             gt_lane_3d[:, 1] = gt_lane_grd_y
             if gt_lane_2d.shape[1] > 2:
                 gt_lane_3d[:, 2] = gt_lane_2d[:, 2]
+
+            # remove points with y out of range
+            gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 100), ...]
+            if gt_lane_3d.shape[0] < 2:
+                continue
 
             # ignore GT does not pass y_ref
             if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -241,36 +245,48 @@ class LaneDataset(Dataset):
         return image, gt_anchor
 
 
-def resample_3d_laneline(gt_lane_3D, y_steps):
+def resample_3d_laneline(gt_lane_3d, y_steps):
     """
         suppose to interpolate x, z values even there associated y's are beyond ground-truth scope
-    :param gt_lane_3D:
+    :param gt_lane_3d:
     :param y_steps:
     :return:
     """
-    j = 0
+    assert(gt_lane_3d.shape[0] >= 2)
+
     x_values = np.zeros_like(y_steps)
     z_values = np.zeros_like(y_steps)
 
-    if gt_lane_3D.shape[1] < 3:
-        gt_lane_3D = np.concatenate([gt_lane_3D, np.zeros([gt_lane_3D.shape[0], 1])], axis=1)
+    if gt_lane_3d.shape[1] < 3:
+        gt_lane_3d = np.concatenate([gt_lane_3d, np.zeros([gt_lane_3d.shape[0], 1])], axis=1)
 
+    y1 = gt_lane_3d[0, 1]
+    x1 = gt_lane_3d[0, 0]
+    z1 = gt_lane_3d[0, 2]
+    y2 = gt_lane_3d[1, 1]
+    x2 = gt_lane_3d[1, 0]
+    z2 = gt_lane_3d[1, 2]
+
+    j = 0
     for i, y_grid in enumerate(y_steps):
-        while gt_lane_3D[j, 1] < y_grid and j < gt_lane_3D.shape[0]:
+        while j < gt_lane_3d.shape[0] and gt_lane_3d[j, 1] < y_grid:
             j += 1
-        y1 = gt_lane_3D[j, 1]
-        x1 = gt_lane_3D[j, 0]
-        z1 = gt_lane_3D[j, 2]
-        if (j-1) >= 0:
-            y2 = gt_lane_3D[j-1, 1]
-            x2 = gt_lane_3D[j-1, 0]
-            z2 = gt_lane_3D[j-1, 2]
-        elif (j+1) < gt_lane_3D.shape[0]:
-            y2 = gt_lane_3D[j+1, 1]
-            x2 = gt_lane_3D[j+1, 0]
-            z2 = gt_lane_3D[j+1, 2]
-        else:
-            continue
+
+        # for the y_grid beyond ground-truth y range, keep using the previous two to interpolate in a line
+        if j < gt_lane_3d.shape[0]:
+            y1 = gt_lane_3d[j, 1]
+            x1 = gt_lane_3d[j, 0]
+            z1 = gt_lane_3d[j, 2]
+            if (j-1) >= 0:
+                y2 = gt_lane_3d[j - 1, 1]
+                x2 = gt_lane_3d[j - 1, 0]
+                z2 = gt_lane_3d[j - 1, 2]
+            elif (j+1) < gt_lane_3d.shape[0]:
+                y2 = gt_lane_3d[j + 1, 1]
+                x2 = gt_lane_3d[j + 1, 0]
+                z2 = gt_lane_3d[j + 1, 2]
+            else:
+                continue
 
         if y2 == y1:
             continue
@@ -384,15 +400,19 @@ if __name__ == '__main__':
         images = image_tensor.numpy()
         gt_anchors = gt_tensor.numpy()
         for i in range(args.batch_size):
-            img = images[i, :, :, :].transpose([1, 2, 0])[...,::-1]
+            img = images[i, :, :, :].transpose([1, 2, 0])[...,::-1]*255
+            img = img.astype(np.uint8)
             gt_anchor = gt_anchors[i, :, :]
             for j in range(gt_anchor.shape[0]):
                 if gt_anchor[j, -1] > 0:
                     x_offsets = gt_anchor[j, :-1]
                     x_3d = x_offsets + anchor_x_steps[j]
                     x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
-
-                    img[y_2d, x_2d, :] = [0, 0, 255]
+                    pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
+                    x_2d = pts_2d[0, :].astype(np.int)
+                    y_2d = pts_2d[1, :].astype(np.int)
+                    for k in range(1, x_2d.shape[0]):
+                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [0, 0, 255], 2)
             cv2.imshow('2D gt check', img)
             cv2.waitKey()
 
