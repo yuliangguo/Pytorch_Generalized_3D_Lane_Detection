@@ -100,9 +100,9 @@ class LaneDataset(Dataset):
                     # A GT lane can be either 2D or 3D
                     # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
                     lane = np.array(lane)
-                    # rescale to net input
-                    lane[:, 0] *= self.x_ratio
-                    lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
+                    # # rescale to net input
+                    # lane[:, 0] *= self.x_ratio
+                    # lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
                     gt_lane_pts[i] = lane
                 gt_lane_pts_all.append(gt_lane_pts)
 
@@ -153,9 +153,9 @@ class LaneDataset(Dataset):
                     if lane.shape[0] < 2:
                         continue
 
-                    # rescale to net input
-                    lane[:, 0] *= self.x_ratio
-                    lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
+                    # # rescale to net input
+                    # lane[:, 0] *= self.x_ratio
+                    # lane[:, 1] = (lane[:, 1] - self.h_crop) * self.y_ratio
 
                     gt_lane_pts.append(lane)
 
@@ -204,11 +204,14 @@ class LaneDataset(Dataset):
             dim_anchor = 2*self.num_y_steps + 1
         gt_anchor = np.zeros([np.int32(self.w_ipm / 8), num_types, dim_anchor], dtype=np.float32)
 
+
+        cv2.imshow('image', np.asarray(image))
+        cv2.waitKey(50)
         gt_lanes_2d = self._label_lane_pts_all[idx]
         for i in range(len(gt_lanes_2d)):
             gt_lane_2d = gt_lanes_2d[i]
             # project to ground coordinates
-            gt_lane_grd_x, gt_lane_grd_y = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0].T, gt_lane_2d[:, 1].T)
+            gt_lane_grd_x, gt_lane_grd_y = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
             gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
             gt_lane_3d[:, 0] = gt_lane_grd_x
             gt_lane_3d[:, 1] = gt_lane_grd_y
@@ -220,20 +223,21 @@ class LaneDataset(Dataset):
                 continue
 
             # resample ground-truth laneline at anchor y steps
-            x_values, z_values = resample_3d_laneline(gt_lane_3d, self.anchor_x_steps)
+            x_values, z_values = resample_3d_laneline(gt_lane_3d, self.anchor_y_steps)
 
             # decide association at r_ref
-            min_idx = np.amin((self.anchor_x_steps - x_values[1])**2)
+            min_idx = np.argmin((self.anchor_x_steps - x_values[1])**2)
             # assign anchor tensor values
             gt_anchor[min_idx, 0, 0: self.num_y_steps] = x_values - self.anchor_x_steps[min_idx]
-            gt_anchor[min_idx, 0, self.num_y_steps:2*self.num_y_steps] = z_values
+            if not self.no_3d:
+                gt_anchor[min_idx, 0, self.num_y_steps:2*self.num_y_steps] = z_values
             gt_anchor[min_idx, 0, -1] = 1.0
 
         # TODO: implement centerlines case when avaliable
 
-        image, gt_anchor = self.totensor(image).float(), (self.totensor(gt_anchor)).float()
-        image = image.permute([2, 0, 1])
-        gt_anchor = gt_anchor.squeeze(-1)
+        image = self.totensor(image).float()
+        gt_anchor = gt_anchor.reshape([np.int32(self.w_ipm / 8), -1])
+        gt_anchor = torch.from_numpy(gt_anchor)
         return image, gt_anchor
 
 
@@ -247,6 +251,10 @@ def resample_3d_laneline(gt_lane_3D, y_steps):
     j = 0
     x_values = np.zeros_like(y_steps)
     z_values = np.zeros_like(y_steps)
+
+    if gt_lane_3D.shape[1] < 3:
+        gt_lane_3D = np.concatenate([gt_lane_3D, np.zeros([gt_lane_3D.shape[0], 1])], axis=1)
+
     for i, y_grid in enumerate(y_steps):
         while gt_lane_3D[j, 1] < y_grid and j < gt_lane_3D.shape[0]:
             j += 1
@@ -266,6 +274,7 @@ def resample_3d_laneline(gt_lane_3D, y_steps):
 
         if y2 == y1:
             continue
+        # interpolate x value and z value at anchor grid
         x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
         z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
     return x_values, z_values
@@ -274,12 +283,28 @@ def resample_3d_laneline(gt_lane_3D, y_steps):
 def compute_homograpthy(pitch, cam_height, K):
     # transform top-view region to original image region
     R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(-np.pi / 2 - pitch), -np.sin(-np.pi / 2 - pitch)],
-                      [0, np.sin(-np.pi / 2 - pitch), np.cos(-np.pi / 2 - pitch)]])
+                      [0, np.cos(np.pi / 2 + pitch), -np.sin(np.pi / 2 + pitch)],
+                      [0, np.sin(np.pi / 2 + pitch), np.cos(np.pi / 2 + pitch)]])
     H_g2c = np.matmul(K, np.concatenate(
-        [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c, np.array([[0], [0], [-cam_height]]))], 1))
+        [R_g2c[:, 0:2], np.matmul(R_g2c.transpose(), np.array([[0], [0], [-cam_height]]))], 1))
     H_c2g = np.linalg.inv(H_g2c)
     return H_g2c, H_c2g
+
+
+def homography_crop_resize(org_img_size, crop_y, resize_img_size):
+    """
+        compute the homography matrix transform original image to cropped and resized image
+    :param org_img_size: [org_h, org_w]
+    :param crop_y:
+    :param resize_img_size: [resize_h, resize_w]
+    :return:
+    """
+    # transform original image region to network input region
+    ratio_x = resize_img_size[1] / org_img_size[1]
+    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
+    H_c = np.array([[ratio_x, 0, 0],
+                    [0, ratio_y, -ratio_y*crop_y]])
+    return H_c
 
 
 def homogenous_transformation(Matrix, x, y):
@@ -331,6 +356,18 @@ if __name__ == '__main__':
     args.K = np.array([[720, 0, 640],
                        [0, 720, 360],
                        [0, 0, 1]])
+    # current test only considers no_centerline, no 3d case
+    args.no_centerline = True
+    args.no_3d = True
+
+    x_min = args.top_view_region[0, 0]
+    x_max = args.top_view_region[1, 0]
+    anchor_x_steps = np.linspace(x_min, x_max, args.ipm_w/8, endpoint=True)
+    anchor_y_steps = args.anchor_y_steps
+    pitch = np.pi / 180 * args.pitch
+
+    H_g2c, H_c2g = compute_homograpthy(pitch, args.cam_height, args.K)
+    H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize, 2*args.resize])
 
     # prepare datasets and loaders
     dataset_base_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
@@ -343,6 +380,21 @@ if __name__ == '__main__':
         print(image_tensor.shape)
         print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
         print(gt_tensor.shape)
+
+        images = image_tensor.numpy()
+        gt_anchors = gt_tensor.numpy()
+        for i in range(args.batch_size):
+            img = images[i, :, :, :].transpose([1, 2, 0])[...,::-1]
+            gt_anchor = gt_anchors[i, :, :]
+            for j in range(gt_anchor.shape[0]):
+                if gt_anchor[j, -1] > 0:
+                    x_offsets = gt_anchor[j, :-1]
+                    x_3d = x_offsets + anchor_x_steps[j]
+                    x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
+
+                    img[y_2d, x_2d, :] = [0, 0, 255]
+            cv2.imshow('2D gt check', img)
+            cv2.waitKey()
 
     # recover lanelines from gt_tensor and visualize the result
 

@@ -67,7 +67,7 @@ def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, 
                       [0, np.cos(-np.pi/2 - pitch), -np.sin(-np.pi/2 - pitch)],
                       [0, np.sin(-np.pi/2 - pitch), np.cos(-np.pi/2 - pitch)]])
     H_g2c = np.matmul(K, np.concatenate(
-                [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c, np.array([[0], [0], [-cam_height]]))], 1))
+                [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c.transpose(), np.array([[0], [0], [-cam_height]]))], 1))
     X = np.concatenate([top_view_region, np.ones([4, 1])], 1)
     img_region = np.matmul(X, H_g2c.T)
     border_org = np.divide(img_region[:, :2], img_region[:, 2:3])
@@ -77,7 +77,7 @@ def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, 
     ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
     H_c = np.array([[ratio_x, 0, 0],
                     [0, ratio_y, -ratio_y*crop_y]])
-    border_net = np.matmul(np.concatenate([border_org, np.ones([4, 1])], 1), H_c.T)
+    border_net = np.matmul(np.concatenate([border_org, np.ones([4, 1])], axis=1), H_c.T)
     border_net[:, 0] = border_net[:, 0] / resize_img_size[1]
     border_net[:, 1] = border_net[:, 1] / resize_img_size[0]
     border_net = np.float32(border_net)
