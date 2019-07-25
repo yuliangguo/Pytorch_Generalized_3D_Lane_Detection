@@ -92,12 +92,15 @@ def define_args():
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
     parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
-    parser.add_argument('--cam_height', type=float, default=1.5, help='height of camera in meters')
-    parser.add_argument('--pitch', type=float, default=2, help='pitch angle of camera to ground in centi degree')
+    parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
+    parser.add_argument('--pitch', type=float, default=9, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
     parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
     parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
-
+    parser.add_argument('--k_fx', type=int, default=1000, help='camera intrinsic parameter fx')
+    parser.add_argument('--k_fy', type=int, default=1000, help='camera intrinsic parameter fx')
+    parser.add_argument('--k_dx', type=int, default=640, help='camera intrinsic parameter fx')
+    parser.add_argument('--k_dy', type=int, default=400, help='camera intrinsic parameter fx')
     return parser
 
 
@@ -199,9 +202,12 @@ def draw_homography_points(img, x, resize=256, color=(255,0,0)):
     src = np.float32([[0.45*(2*resize-1),y_start],[0.55*(2*resize-1), y_start],[0.1*(2*resize-1),y_stop],[0.9*(2*resize-1), y_stop]])
     dst = np.float32([[(0.45+x[0])*(2*resize-1), y_start1],[(0.55+x[1])*(2*resize-1), y_start1],[(0.45+x[0])*(2*resize-1), y_stop],[(0.55+x[1])*(2*resize-1),y_stop]])
     dst_ideal = np.float32([[0.45*(2*resize-1), y_start],[0.55*(2*resize-1), y_start],[0.45*(2*resize-1), y_stop],[0.55*(2*resize-1),y_stop]])
-    [cv2.circle(np.asarray(img), tuple(idx), radius=5, thickness=-1, color=(255,0,0)) for idx in src]
-    [cv2.circle(np.asarray(img), tuple(idx), radius=5, thickness=-1, color=(0,255,0)) for idx in dst_ideal]
-    [cv2.circle(np.asarray(img), tuple(idx), radius=5, thickness=-1, color=(0,0,255)) for idx in dst]
+    for idx in src:
+        img = cv2.circle(img, tuple(idx), radius=5, thickness=-1, color=(255,0,0))
+    for idx in dst_ideal:
+        img = cv2.circle(img, tuple(idx), radius=5, thickness=-1, color=(0,255,0))
+    for idx in dst:
+        img = cv2.circle(img, tuple(idx), radius=5, thickness=-1, color=(0,0,255))
     return img
 
 

@@ -222,6 +222,9 @@ class LaneDataset(Dataset):
             if gt_lane_3d.shape[0] < 2:
                 continue
 
+            # reverse the order of 3d pints to make the first point the closest
+            gt_lane_3d = gt_lane_3d[::-1, :]
+
             # ignore GT does not pass y_ref
             if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
                 continue
@@ -247,11 +250,14 @@ class LaneDataset(Dataset):
 
 def resample_3d_laneline(gt_lane_3d, y_steps):
     """
-        suppose to interpolate x, z values even there associated y's are beyond ground-truth scope
-    :param gt_lane_3d:
-    :param y_steps:
+        Suppose to interpolate x, z values even there associated y's are beyond ground-truth scope
+    :param gt_lane_3d: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
+                       It requires the first point the closest.
+    :param y_steps: a vector of anchor steps in y-forward
     :return:
     """
+
+    # TODO: the back-projected results loss accuracy need to check where
     assert(gt_lane_3d.shape[0] >= 2)
 
     x_values = np.zeros_like(y_steps)
@@ -301,8 +307,7 @@ def compute_homograpthy(pitch, cam_height, K):
     R_g2c = np.array([[1, 0, 0],
                       [0, np.cos(np.pi / 2 + pitch), -np.sin(np.pi / 2 + pitch)],
                       [0, np.sin(np.pi / 2 + pitch), np.cos(np.pi / 2 + pitch)]])
-    H_g2c = np.matmul(K, np.concatenate(
-        [R_g2c[:, 0:2], np.matmul(R_g2c.transpose(), np.array([[0], [0], [-cam_height]]))], 1))
+    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
     H_c2g = np.linalg.inv(H_g2c)
     return H_g2c, H_c2g
 
@@ -363,14 +368,15 @@ def get_loader(dataset_base_dir, json_file_path, args):
 # unit test
 if __name__ == '__main__':
     from tools.utils import define_args
+    from tools.utils import draw_homography_points
 
     parser = define_args()
     args = parser.parse_args()
     args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
     args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     args.num_y_anchor = len(args.anchor_y_steps)
-    args.K = np.array([[720, 0, 640],
-                       [0, 720, 360],
+    args.K = np.array([[args.k_fx, 0, args.k_dx],
+                       [0, args.k_fy, args.k_dy],
                        [0, 0, 1]])
     # current test only considers no_centerline, no 3d case
     args.no_centerline = True
@@ -381,6 +387,10 @@ if __name__ == '__main__':
     anchor_x_steps = np.linspace(x_min, x_max, args.ipm_w/8, endpoint=True)
     anchor_y_steps = args.anchor_y_steps
     pitch = np.pi / 180 * args.pitch
+
+    vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
+    print('visual area border:')
+    print(vis_border_3d)
 
     H_g2c, H_c2g = compute_homograpthy(pitch, args.cam_height, args.K)
     H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize, 2*args.resize])
@@ -402,11 +412,22 @@ if __name__ == '__main__':
         for i in range(args.batch_size):
             img = images[i, :, :, :].transpose([1, 2, 0])[...,::-1]*255
             img = img.astype(np.uint8)
+            # img = draw_homography_points(img, np.zeros(3), args.resize)
+            x_2d, y_2d = homogenous_transformation(H_g2c, vis_border_3d[:, 0], vis_border_3d[:, 1])
+            pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
+            x_2d = pts_2d[0, :].astype(np.int)
+            y_2d = pts_2d[1, :].astype(np.int)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [255, 0, 0], 2)
+            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [255, 0, 0], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [255, 0, 0], 2)
+            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [255, 0, 0], 2)
+
             gt_anchor = gt_anchors[i, :, :]
             for j in range(gt_anchor.shape[0]):
                 if gt_anchor[j, -1] > 0:
                     x_offsets = gt_anchor[j, :-1]
                     x_3d = x_offsets + anchor_x_steps[j]
+                    # x_3d[:] = anchor_x_steps[j]
                     x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
                     pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
                     x_2d = pts_2d[0, :].astype(np.int)
@@ -414,7 +435,8 @@ if __name__ == '__main__':
                     for k in range(1, x_2d.shape[0]):
                         img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [0, 0, 255], 2)
             cv2.imshow('2D gt check', img)
-            cv2.waitKey()
+            cv2.waitKey(500)
+            print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
 
     # recover lanelines from gt_tensor and visualize the result
 

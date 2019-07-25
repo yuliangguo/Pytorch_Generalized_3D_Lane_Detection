@@ -64,10 +64,10 @@ def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, 
 
     # transform top-view region to original image region
     R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(-np.pi/2 - pitch), -np.sin(-np.pi/2 - pitch)],
-                      [0, np.sin(-np.pi/2 - pitch), np.cos(-np.pi/2 - pitch)]])
-    H_g2c = np.matmul(K, np.concatenate(
-                [R_g2c[:, 0:1], R_g2c[:, 1:2], np.matmul(R_g2c.transpose(), np.array([[0], [0], [-cam_height]]))], 1))
+                      [0, np.cos(np.pi/2 + pitch), -np.sin(np.pi/2 + pitch)],
+                      [0, np.sin(np.pi/2 + pitch), np.cos(np.pi/2 + pitch)]])
+    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
+
     X = np.concatenate([top_view_region, np.ones([4, 1])], 1)
     img_region = np.matmul(X, H_g2c.T)
     border_org = np.divide(img_region[:, :2], img_region[:, 2:3])
