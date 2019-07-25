@@ -142,7 +142,7 @@ class LaneDataset(Dataset):
                 gt_lane_pts = []
 
                 for i, lane_x in enumerate(gt_lane_pts_X):
-                    lane = np.zeros([gt_y_steps.shape[0], 2])
+                    lane = np.zeros([gt_y_steps.shape[0], 2], dtype=np.float32)
 
                     lane_x = np.array(lane_x)
                     lane[:, 0] = lane_x
@@ -251,34 +251,30 @@ class LaneDataset(Dataset):
 def resample_3d_laneline(gt_lane_3d, y_steps):
     """
         Suppose to interpolate x, z values even there associated y's are beyond ground-truth scope
+        Specifically for a y_grid out of ground-truth range
+            1. for the close end, use the nearest two ground-truth points to interpolate
+            2. for the distant end, use the same x and y values as the farthest ground-truth point
     :param gt_lane_3d: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
                        It requires the first point the closest.
     :param y_steps: a vector of anchor steps in y-forward
     :return:
     """
 
-    # TODO: the back-projected results loss accuracy need to check where
     assert(gt_lane_3d.shape[0] >= 2)
 
-    x_values = np.zeros_like(y_steps)
-    z_values = np.zeros_like(y_steps)
+    x_values = np.zeros_like(y_steps, dtype=np.float32)
+    z_values = np.zeros_like(y_steps, dtype=np.float32)
 
     if gt_lane_3d.shape[1] < 3:
-        gt_lane_3d = np.concatenate([gt_lane_3d, np.zeros([gt_lane_3d.shape[0], 1])], axis=1)
-
-    y1 = gt_lane_3d[0, 1]
-    x1 = gt_lane_3d[0, 0]
-    z1 = gt_lane_3d[0, 2]
-    y2 = gt_lane_3d[1, 1]
-    x2 = gt_lane_3d[1, 0]
-    z2 = gt_lane_3d[1, 2]
+        gt_lane_3d = np.concatenate([gt_lane_3d, np.zeros([gt_lane_3d.shape[0], 1], dtype=np.float32)], axis=1)
 
     j = 0
     for i, y_grid in enumerate(y_steps):
+        # search the next ground-truth point further than current y grid
         while j < gt_lane_3d.shape[0] and gt_lane_3d[j, 1] < y_grid:
             j += 1
 
-        # for the y_grid beyond ground-truth y range, keep using the previous two to interpolate in a line
+        # locate the two ground-truth points for interpolating x, z values at current y grid
         if j < gt_lane_3d.shape[0]:
             y1 = gt_lane_3d[j, 1]
             x1 = gt_lane_3d[j, 0]
@@ -287,15 +283,20 @@ def resample_3d_laneline(gt_lane_3d, y_steps):
                 y2 = gt_lane_3d[j - 1, 1]
                 x2 = gt_lane_3d[j - 1, 0]
                 z2 = gt_lane_3d[j - 1, 2]
-            elif (j+1) < gt_lane_3d.shape[0]:
+            elif (j+1) < gt_lane_3d.shape[0]:  # for a y grid closer than the closest ground-truth
                 y2 = gt_lane_3d[j + 1, 1]
                 x2 = gt_lane_3d[j + 1, 0]
                 z2 = gt_lane_3d[j + 1, 2]
-            else:
+            else:  # only a single ground-truth point existing
                 continue
+        else:  # for the y_grid farther than the farthest ground-truth y range,
+            y1 = gt_lane_3d[-1, 1]
+            x1 = gt_lane_3d[-1, 0]
+            z1 = gt_lane_3d[-1, 2]
+            y2 = gt_lane_3d[-2, 1]
+            x2 = gt_lane_3d[-2, 0]
+            z2 = gt_lane_3d[-2, 2]
 
-        if y2 == y1:
-            continue
         # interpolate x value and z value at anchor grid
         x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
         z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
