@@ -375,9 +375,14 @@ if __name__ == '__main__':
     args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
     args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     args.num_y_anchor = len(args.anchor_y_steps)
-    args.K = np.array([[args.k_fx, 0, args.k_dx],
-                       [0, args.k_fy, args.k_dy],
+
+    # set camera parameters for the test dataset
+    args.K = np.array([[1000, 0, 640],
+                       [0, 1000, 400],
                        [0, 0, 1]])
+    args.cam_height = 1.6
+    args.pitch = 9
+
     # current test only considers no_centerline, no 3d case
     args.no_centerline = True
     args.no_3d = True
@@ -412,7 +417,8 @@ if __name__ == '__main__':
         for i in range(args.batch_size):
             img = images[i, :, :, :].transpose([1, 2, 0])[...,::-1]*255
             img = img.astype(np.uint8)
-            # img = draw_homography_points(img, np.zeros(3), args.resize)
+
+            # visualize visual border for confirming calibration
             x_2d, y_2d = homogenous_transformation(H_g2c, vis_border_3d[:, 0], vis_border_3d[:, 1])
             pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
             x_2d = pts_2d[0, :].astype(np.int)
@@ -422,6 +428,7 @@ if __name__ == '__main__':
             img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [255, 0, 0], 2)
             img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [255, 0, 0], 2)
 
+            # visualize ground-truth anchor lanelines by projecting them on the image
             gt_anchor = gt_anchors[i, :, :]
             for j in range(gt_anchor.shape[0]):
                 if gt_anchor[j, -1] > 0:
