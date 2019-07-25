@@ -9,41 +9,26 @@ import torchvision.models as models
 from tools.utils import define_args, define_init_weights
 
 
-def make_layers(cfg, in_channels=3, batch_norm=False):
-    layers = []
-    for v in cfg:
-        if v == 'M':
-            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-        else:
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
-            if batch_norm:
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
-            else:
-                layers += [conv2d, nn.ReLU(inplace=True)]
-            in_channels = v
-    return nn.Sequential(*layers)
-
-
-def Init_Projective_transform_test(nclasses, batch_size, resize):
-    # M_orig: unnormalized Transformation matrix
-    # M: normalized transformation matrix
-    # M_inv: Inverted normalized transformation matrix --> Needed for grid sample
-    # original aspect ratio: 720x1280 --> after 80 rows cropped: 640x1280 --> after resize: 256x512 (default) or resize x 2*resize (in general)
-    size = torch.Size([batch_size, nclasses, resize, 2*resize])
-    y_start = 0.3
-    y_stop = 1
-    xd1, xd2, xd3, xd4 = 0.45, 0.55, 0.45, 0.55
-    src = np.float32([[0.45, y_start], [0.55, y_start], [0.1, y_stop], [0.9, y_stop]])
-    dst = np.float32([[xd3, y_start], [xd4, y_start], [xd1, y_stop], [xd2, y_stop]])
-    M = cv2.getPerspectiveTransform(src, dst)
-    M_inv = cv2.getPerspectiveTransform(dst, src)
-    M = torch.from_numpy(M).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-    M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-    return size, M, M_inv
+# def Init_Projective_transform_test(nclasses, batch_size, resize):
+#     # M_orig: unnormalized Transformation matrix
+#     # M: normalized transformation matrix
+#     # M_inv: Inverted normalized transformation matrix --> Needed for grid sample
+#     # original aspect ratio: 720x1280 --> after 80 rows cropped: 640x1280 --> after resize: 256x512 (default) or resize x 2*resize (in general)
+#     size = torch.Size([batch_size, nclasses, resize, 2*resize])
+#     y_start = 0.3
+#     y_stop = 1
+#     xd1, xd2, xd3, xd4 = 0.45, 0.55, 0.45, 0.55
+#     src = np.float32([[0.45, y_start], [0.55, y_start], [0.1, y_stop], [0.9, y_stop]])
+#     dst = np.float32([[xd3, y_start], [xd4, y_start], [xd1, y_stop], [xd2, y_stop]])
+#     M = cv2.getPerspectiveTransform(src, dst)
+#     M_inv = cv2.getPerspectiveTransform(dst, src)
+#     M = torch.from_numpy(M).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
+#     M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
+#     return size, M, M_inv
 
 
 # compute normalized transformation matrix for a top-view region boundaries
-def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
+def init_projective_transform(top_view_region, batch_size, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
     """
         Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
         the top view image's 4 corners
@@ -91,14 +76,25 @@ def Init_Projective_tranform(top_view_region, batch_size, org_img_size, crop_y, 
     return M, M_inv
 
 
-def square_tensor(x):
-    return x**2
+def make_layers(cfg, in_channels=3, batch_norm=False):
+    layers = []
+    for v in cfg:
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            if batch_norm:
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+            else:
+                layers += [conv2d, nn.ReLU(inplace=True)]
+            in_channels = v
+    return nn.Sequential(*layers)
 
 
-class VGG_encoder(nn.Module):
+class VggEncoder(nn.Module):
 
     def __init__(self, output_layers, pretrained=False, init_weights=True):
-        super(VGG_encoder, self).__init__()
+        super(VggEncoder, self).__init__()
         if pretrained:
             init_weights = False
         model_org = models.vgg16(pretrained)
@@ -198,7 +194,7 @@ class TopViewPathway(nn.Module):
 #  Lane Prediction Head: through a series of convolutions with no padding in the y dimension, the feature maps are
 #  reduced in height, and finally the prediction layer size is N × 1 × 3 ·(2 · K + 1)
 class LanePredictionHead(nn.Module):
-    def __init__(self, num_y_anchor):
+    def __init__(self, anchor_dim):
         super(LanePredictionHead, self).__init__()
         layers = []
         conv2d = nn.Conv2d(512, 64, kernel_size=3, padding=(0, 1))
@@ -220,11 +216,11 @@ class LanePredictionHead(nn.Module):
 
         # reshape is needed before executing later layers
         self.dim_rt1 = nn.Conv2d(256, 64, kernel_size=1, padding=0)
-        self.dim_rt2 = nn.Conv2d(64, 3*(2*num_y_anchor+1), kernel_size=1, padding=0)
+        self.dim_rt2 = nn.Conv2d(64, anchor_dim, kernel_size=1, padding=0)
 
     def forward(self, x):
         x = self.features(x)
-        # x suppose to be N X 64 X 4 X 26, reshape to N X 256 X 26 X 1
+        # x suppose to be N X 64 X 4 X w_ipm/8, reshape to N X 256 X w_ipm/8 X 1
         sizes = x.shape
         x = x.reshape(sizes[0], sizes[1]*sizes[2], sizes[3], 1)
         x = self.dim_rt1(x)
@@ -233,6 +229,7 @@ class LanePredictionHead(nn.Module):
         return x
 
 # TODO: implement homography net
+
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
@@ -247,16 +244,26 @@ class Net(nn.Module):
         org_img_size = [args.org_h, args.org_w]
         resize_img_size = [args.resize, 2*args.resize]
         pitch = np.pi / 180 * args.pitch
-        M, M_inv = Init_Projective_tranform(args.top_view_region, args.batch_size, org_img_size,
-                                            args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
+        M, M_inv = init_projective_transform(args.top_view_region, args.batch_size, org_img_size,
+                                             args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
         # self.M = M
         self.M_inv = M_inv
         if not args.no_cuda:
             self.M_inv = self.M_inv.cuda()
 
+        if args.no_centerline:
+            num_lane_type = 1
+        else:
+            num_lane_type = 3
+
+        if args.no_3d:
+            self.anchor_dim = num_lane_type * (args.num_y_anchor + 1)
+        else:
+            self.anchor_dim = num_lane_type * (2*args.num_y_anchor + 1)
+
         # Define network
         output_layers = [8, 15, 22, 29]
-        self.im_encoder = VGG_encoder(output_layers, True)
+        self.im_encoder = VggEncoder(output_layers, True)
         # the grid considers both src and dst grid normalized
         self.size_top1 = torch.Size([args.batch_size, 128, args.ipm_h, args.ipm_w])
         self.project_layer1 = ProjectiveGridGenerator(self.size_top1, M_inv, args.no_cuda)
@@ -272,7 +279,7 @@ class Net(nn.Module):
         self.dim_rt3 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
 
         self.top_pathway = TopViewPathway()
-        self.lane_out = LanePredictionHead(args.num_y_anchor)
+        self.lane_out = LanePredictionHead(self.anchor_dim)
 
     def forward(self, input):
         x1, x2, x3, x4 = self.im_encoder(input)
@@ -306,9 +313,18 @@ if __name__ == '__main__':
     args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
     args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     args.num_y_anchor = len(args.anchor_y_steps)
-    args.K = np.array([[720, 0, 640],
-                       [0, 720, 360],
+    # current test only considers no_centerline, no 3d case
+    args.no_centerline = True
+    args.no_3d = True
+
+    # set camera parameters for the test dataset
+    args.K = np.array([[1000, 0, 640],
+                       [0, 1000, 400],
                        [0, 0, 1]])
+    args.cam_height = 1.6
+    args.pitch = 9
+
+    # construct model
     model = Net(args)
     print(model)
 

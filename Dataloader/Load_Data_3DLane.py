@@ -250,10 +250,7 @@ class LaneDataset(Dataset):
 
 def resample_3d_laneline(gt_lane_3d, y_steps):
     """
-        Suppose to interpolate x, z values even there associated y's are beyond ground-truth scope
-        Specifically for a y_grid out of ground-truth range
-            1. for the close end, use the nearest two ground-truth points to interpolate
-            2. for the distant end, use the same x and y values as the farthest ground-truth point
+        Interpolate x, z values at each anchor grid, including those beyond the range of ground-truth y range
     :param gt_lane_3d: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
                        It requires the first point the closest.
     :param y_steps: a vector of anchor steps in y-forward
@@ -369,13 +366,17 @@ def get_loader(dataset_base_dir, json_file_path, args):
 # unit test
 if __name__ == '__main__':
     from tools.utils import define_args
-    from tools.utils import draw_homography_points
 
     parser = define_args()
     args = parser.parse_args()
-    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
-    args.num_y_anchor = len(args.anchor_y_steps)
+
+    # set dataset ground-truth path
+    dataset_base_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
+    json_file_path = ops.join(dataset_base_dir, 'label_data_0601.json')
+
+    # set flags to indicate centerline and 3D attributes availability
+    args.no_centerline = True
+    args.no_3d = True
 
     # set camera parameters for the test dataset
     args.K = np.array([[1000, 0, 640],
@@ -383,30 +384,30 @@ if __name__ == '__main__':
                        [0, 0, 1]])
     args.cam_height = 1.6
     args.pitch = 9
+    pitch = np.pi / 180 * args.pitch
 
-    # current test only considers no_centerline, no 3d case
-    args.no_centerline = True
-    args.no_3d = True
-
+    # set anchor grid
+    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.num_y_anchor = len(args.anchor_y_steps)
     x_min = args.top_view_region[0, 0]
     x_max = args.top_view_region[1, 0]
     anchor_x_steps = np.linspace(x_min, x_max, args.ipm_w/8, endpoint=True)
     anchor_y_steps = args.anchor_y_steps
-    pitch = np.pi / 180 * args.pitch
 
+    # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
     print('visual area border:')
     print(vis_border_3d)
 
+    # compute homography matrix
     H_g2c, H_c2g = compute_homograpthy(pitch, args.cam_height, args.K)
     H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize, 2*args.resize])
 
-    # prepare datasets and loaders
-    dataset_base_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
-    json_file_path = ops.join(dataset_base_dir, 'label_data_0601.json')
+    # load data
     test_loader = get_loader(dataset_base_dir, json_file_path, args)
 
-    # get a batch from loader
+    # get a batch of data/label pairs from loader
     for batch_ndx, (image_tensor, gt_tensor) in enumerate(test_loader):
         print('batch id: {:d}, image tensor shape:'.format(batch_ndx))
         print(image_tensor.shape)
@@ -416,7 +417,7 @@ if __name__ == '__main__':
         images = image_tensor.numpy()
         gt_anchors = gt_tensor.numpy()
         for i in range(args.batch_size):
-            img = images[i, :, :, :].transpose([1, 2, 0])[...,::-1]*255
+            img = images[i, :, :, :].transpose([1, 2, 0])[..., ::-1]*255
             img = img.astype(np.uint8)
 
             # visualize visual border for confirming calibration
@@ -445,7 +446,5 @@ if __name__ == '__main__':
             cv2.imshow('2D gt check', img)
             cv2.waitKey(500)
             print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
-
-    # recover lanelines from gt_tensor and visualize the result
 
     print('done')
