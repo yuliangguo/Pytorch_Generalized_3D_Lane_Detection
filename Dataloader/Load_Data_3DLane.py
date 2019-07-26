@@ -42,8 +42,8 @@ class LaneDataset(Dataset):
         self.h_org = args.org_h
         self.w_org = args.org_w
         self.h_crop = args.crop_size
-        self.h_net = args.resize
-        self.w_net = args.resize*2
+        self.h_net = args.resize_h
+        self.w_net = args.resize_w
         self.h_ipm = args.ipm_h
         self.w_ipm = args.ipm_w
         self.x_ratio = float(self.w_net) / float(self.w_org)
@@ -60,7 +60,7 @@ class LaneDataset(Dataset):
         # compute x_steps
         x_min = self.top_view_region[0, 0]
         x_max = self.top_view_region[1, 0]
-        self.anchor_x_steps = np.linspace(x_min, x_max, args.ipm_w/8, endpoint=True)
+        self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
 
         # self._label_image_path, self._label_lane_pts_all, self._label_lane_types_all = \
         #     self._init_dataset(dataset_base_dir, json_file_path)
@@ -322,7 +322,8 @@ def homography_crop_resize(org_img_size, crop_y, resize_img_size):
     ratio_x = resize_img_size[1] / org_img_size[1]
     ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
     H_c = np.array([[ratio_x, 0, 0],
-                    [0, ratio_y, -ratio_y*crop_y]])
+                    [0, ratio_y, -ratio_y*crop_y],
+                    [0, 0, 1]])
     return H_c
 
 
@@ -392,7 +393,7 @@ if __name__ == '__main__':
     args.num_y_anchor = len(args.anchor_y_steps)
     x_min = args.top_view_region[0, 0]
     x_max = args.top_view_region[1, 0]
-    anchor_x_steps = np.linspace(x_min, x_max, args.ipm_w/8, endpoint=True)
+    anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
     anchor_y_steps = args.anchor_y_steps
 
     # set 3D ground area for visualization
@@ -402,13 +403,14 @@ if __name__ == '__main__':
 
     # compute homography matrix
     H_g2c, H_c2g = compute_homograpthy(pitch, args.cam_height, args.K)
-    H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize, 2*args.resize])
+    H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize_h, args.resize_w])
+    M = np.matmul(H_crop, H_g2c)
 
     # load data
     test_loader = get_loader(dataset_base_dir, json_file_path, args)
 
     # get a batch of data/label pairs from loader
-    for batch_ndx, (image_tensor, gt_tensor) in enumerate(test_loader):
+    for batch_ndx, (image_tensor, gt_tensor, idx) in enumerate(test_loader):
         print('batch id: {:d}, image tensor shape:'.format(batch_ndx))
         print(image_tensor.shape)
         print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
@@ -421,10 +423,9 @@ if __name__ == '__main__':
             img = img.astype(np.uint8)
 
             # visualize visual border for confirming calibration
-            x_2d, y_2d = homogenous_transformation(H_g2c, vis_border_3d[:, 0], vis_border_3d[:, 1])
-            pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
-            x_2d = pts_2d[0, :].astype(np.int)
-            y_2d = pts_2d[1, :].astype(np.int)
+            x_2d, y_2d = homogenous_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
+            x_2d = x_2d.astype(np.int)
+            y_2d = y_2d.astype(np.int)
             img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [255, 0, 0], 2)
             img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [255, 0, 0], 2)
             img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [255, 0, 0], 2)

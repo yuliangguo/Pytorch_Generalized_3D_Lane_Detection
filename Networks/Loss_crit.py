@@ -193,8 +193,10 @@ class Laneline_3D_loss(nn.Module):
     loss2: sum of geometric distance betwen 3D lane anchor points in X and Z offsets
     loss3: error in estimating pitch and camera heights
     """
-    def __init__(self):
+    def __init__(self, num_types, anchor_dim):
         super(Laneline_3D_loss, self).__init__()
+        self.num_types = num_types
+        self.anchor_dim = anchor_dim
 
     def forward(self, pred_3D_lanes, gt_3D_lanes, pred_pitch, gt_pitch, pred_hcam, gt_hcam):
         """
@@ -209,8 +211,8 @@ class Laneline_3D_loss(nn.Module):
         """
         sizes = pred_3D_lanes.shape
         # reshape to N x ipm_w/8 x 3 x (2K+1)
-        pred_3D_lanes = pred_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
-        gt_3D_lanes = gt_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
+        pred_3D_lanes = pred_3D_lanes.reshape(sizes[0], sizes[1], self.num_types, self.anchor_dim)
+        gt_3D_lanes = gt_3D_lanes.reshape(sizes[0], sizes[1], self.num_types, self.anchor_dim)
 
         # class prob N x ipm_w/8 x 3 x 1, anchor value N x ipm_w/8 x 3 x 2K
         pred_class = pred_3D_lanes[:, :, :, -1].unsqueeze(-1)
@@ -239,8 +241,10 @@ class Laneline_3D_loss_fix_cam(nn.Module):
     loss2: sum of geometric distance betwen 3D lane anchor points in X and Z offsets
     loss3: error in estimating pitch and camera heights
     """
-    def __init__(self):
-        super(Laneline_3D_loss, self).__init__()
+    def __init__(self, num_types, anchor_dim):
+        super(Laneline_3D_loss_fix_cam, self).__init__()
+        self.num_types = num_types
+        self.anchor_dim = anchor_dim
 
     def forward(self, pred_3D_lanes, gt_3D_lanes):
         """
@@ -255,8 +259,8 @@ class Laneline_3D_loss_fix_cam(nn.Module):
         """
         sizes = pred_3D_lanes.shape
         # reshape to N x ipm_w/8 x 3 x (2K+1)
-        pred_3D_lanes = pred_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
-        gt_3D_lanes = gt_3D_lanes.reshape(sizes[0], sizes[1], 3, -1)
+        pred_3D_lanes = pred_3D_lanes.reshape(sizes[0], sizes[1], self.num_types, self.anchor_dim)
+        gt_3D_lanes = gt_3D_lanes.reshape(sizes[0], sizes[1], self.num_types, self.anchor_dim)
 
         # class prob N x ipm_w/8 x 3 x 1, anchor value N x ipm_w/8 x 3 x 2K
         pred_class = pred_3D_lanes[:, :, :, -1].unsqueeze(-1)
@@ -274,13 +278,16 @@ class Laneline_3D_loss_fix_cam(nn.Module):
         loss2 = torch.sum(torch.norm(gt_class*(pred_anchors-gt_anchors), p=1, dim=3))
         return loss1+loss2
 
+
 # unit test
 if __name__ == '__main__':
-    criterion = Laneline_3D_loss()
+    num_types = 3
+    anchor_dim = 13
+    criterion = Laneline_3D_loss(num_types, anchor_dim)
     criterion = criterion.cuda()
 
-    pred_3D_lanes = torch.rand(8, 26, 39).cuda()
-    gt_3D_lanes = torch.rand(8, 26, 39).cuda()
+    pred_3D_lanes = torch.rand(8, 26, num_types*anchor_dim).cuda()
+    gt_3D_lanes = torch.rand(8, 26, num_types*anchor_dim).cuda()
     pred_pitch = torch.ones(8).float().cuda()
     gt_pitch = torch.ones(8).float().cuda()
     pred_hcam = torch.ones(8).float().cuda()

@@ -86,9 +86,9 @@ def define_args():
     parser.add_argument('--list', type=int, nargs='+', default=[954, 2789], help='Images you want to skip')
 
     # dataset setting
-    parser.add_argument('--dataset_name', type=str, required=True, help='the dataset name to be used in saving model names')
-    parser.add_argument('--data_dir', type=str, required=True, help='The path saving train.json and val.json files')
-    parser.add_argument('--dataset_dir', type=str, required=True, help='The path saving actual data')
+    parser.add_argument('--dataset_name', type=str, help='the dataset name to be used in saving model names')
+    parser.add_argument('--data_dir', type=str, help='The path saving train.json and val.json files')
+    parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
     parser.add_argument('--save_path', type=str, default='Saved/', help='directory to save output')
     # parser.add_argument('--weights_path', type=str, help='The pretrained weights path')
     # 3D LaneNet
@@ -98,12 +98,12 @@ def define_args():
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
     parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
-    parser.add_argument('--resize_h', type=int, default=480, help='height of the original image')
-    parser.add_argument('--resize_w', type=int, default=640, help='width of the original image')
+    parser.add_argument('--resize_h', type=int, default=320, help='height of the original image')
+    parser.add_argument('--resize_w', type=int, default=480, help='width of the original image')
     parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=9, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
-    parser.add_argument('--fix_cam', type=str2bool, const=True, default=False, help='directory to save output')
+    parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='directory to save output')
     parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
     parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
     parser.add_argument('--k_fx', type=int, default=1000, help='camera intrinsic parameter fx')
@@ -113,15 +113,14 @@ def define_args():
     return parser
 
 
-def save_vis_result_2d(train_or_val, M, gt, pred, idx, i, images, resize, save_path):
+def save_vis_result_2d(train_or_val, M, gt, pred, idx, i, images, ipm_h, ipm_w, save_path):
     M = M.data.cpu().numpy()[0]
     x = np.zeros(3)
 
     im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
 
-    im, M_scaledup = test_projective_transform(im, resize, M)
-    im_inverse = cv2.warpPerspective(im, np.linalg.inv(M_scaledup), (2 * resize, resize))
-
+    # im, M_scaledup = test_projective_transform(im, resize, M)
+    im_inverse = cv2.warpPerspective(im, np.linalg.inv(M), (ipm_w, ipm_h))
     im_inverse = np.clip(im_inverse, 0, 1)
     im = np.clip(im, 0, 1)
 

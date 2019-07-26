@@ -2,13 +2,10 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="931bcb41-9576-4916-a93a-66bee6e62088" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" beforeDir="false" afterPath="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Networks/ERFNet.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Networks/LaneNet3D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/LaneNet3D.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Networks/Loss_crit.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/Loss_crit.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Networks/__init__.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tools/prepare_data_split.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/prepare_data_split.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tools/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/utils.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -19,11 +16,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="468">
-              <caret line="26" lean-forward="true" selection-start-line="26" selection-end-line="26" />
+            <state relative-caret-position="767">
+              <caret line="359" column="21" selection-start-line="359" selection-start-column="21" selection-end-line="359" selection-end-column="21" />
               <folding>
                 <element signature="e#48#66#0" expanded="true" />
               </folding>
@@ -34,8 +31,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1519">
-              <caret line="345" column="29" lean-forward="true" selection-start-line="345" selection-start-column="4" selection-end-line="345" selection-end-column="29" />
+            <state relative-caret-position="291">
+              <caret line="237" column="16" selection-start-line="237" selection-start-column="10" selection-end-line="237" selection-end-column="16" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -43,11 +40,11 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="349">
-              <caret line="430" column="87" selection-start-line="430" selection-start-column="86" selection-end-line="430" selection-end-column="87" />
+            <state relative-caret-position="309">
+              <caret line="162" column="44" selection-start-line="162" selection-start-column="44" selection-end-line="162" selection-end-column="44" />
               <folding>
                 <element signature="e#47#65#0" expanded="true" />
               </folding>
@@ -67,8 +64,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/utils/data/dataloader.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="449">
-              <caret line="741" column="86" selection-start-line="741" selection-start-column="86" selection-end-line="741" selection-end-column="86" />
+            <state relative-caret-position="-1183">
+              <caret line="712" selection-start-line="712" selection-end-line="712" />
               <folding>
                 <element signature="e#0#13#0" expanded="true" />
               </folding>
@@ -79,8 +76,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="673">
-              <caret line="52" column="29" selection-start-line="52" selection-start-column="20" selection-end-line="52" selection-end-column="29" />
+            <state relative-caret-position="363">
+              <caret line="234" column="40" selection-start-line="234" selection-start-column="34" selection-end-line="234" selection-end-column="40" />
               <folding>
                 <element signature="e#24#36#0" expanded="true" />
               </folding>
@@ -98,19 +95,10 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$APPLICATION_HOME_DIR$/helpers/pydev/pydevd.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="721">
-              <caret line="1740" selection-start-line="1740" selection-end-line="1740" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/tools/utils.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="416">
-              <caret line="123" lean-forward="true" selection-start-line="123" selection-end-line="123" />
+            <state relative-caret-position="291">
+              <caret line="30" column="31" selection-start-line="30" selection-start-column="27" selection-end-line="30" selection-end-column="31" />
               <folding>
                 <element signature="e#25#40#0" expanded="true" />
               </folding>
@@ -129,20 +117,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>save_id</find>
-      <find>save_pa</find>
-      <find>data_dir</find>
-      <find>weight_ini</find>
-      <find>ls_result_path</find>
-      <find>val_set_path</find>
-      <find>args.clas</find>
-      <find>loss</find>
-      <find>args</find>
-      <find>args.mod</find>
-      <find>pretr</find>
-      <find>ops</find>
-      <find>options</find>
-      <find>criterion</find>
       <find>mode</find>
       <find>losses</find>
       <find>gt_line</find>
@@ -154,11 +128,25 @@
       <find>M_inv</find>
       <find>save_weightmap</find>
       <find>train_or_val</find>
-      <find>validate</find>
       <find>avg_trapezium_rule</find>
-      <find>loader</find>
-      <find>test_projective_transform</find>
       <find>idx</find>
+      <find>loader</find>
+      <find>args.resi</find>
+      <find>astype</find>
+      <find>border_net</find>
+      <find>init_projective_transform</find>
+      <find>validate</find>
+      <find>loss_policy</find>
+      <find>ipm</find>
+      <find>crite</find>
+      <find>args.no_cen</find>
+      <find>H_crop</find>
+      <find>no_center</find>
+      <find>weight_seg</find>
+      <find>test_projective_transform</find>
+      <find>resize</find>
+      <find>criter</find>
+      <find>nwor</find>
     </findStrings>
     <replaceStrings>
       <replace>args.num_y_anchor</replace>
@@ -174,12 +162,12 @@
         <option value="$PROJECT_DIR$/Networks/3DLaneNet.py" />
         <option value="$PROJECT_DIR$/Networks/__init__.py" />
         <option value="$PROJECT_DIR$/Dataloader/Load_Data_new.py" />
-        <option value="$PROJECT_DIR$/Networks/LaneNet3D.py" />
         <option value="$PROJECT_DIR$/tools/prepare_data_split.py" />
-        <option value="$PROJECT_DIR$/Networks/Loss_crit.py" />
         <option value="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" />
-        <option value="$PROJECT_DIR$/main.py" />
+        <option value="$PROJECT_DIR$/Networks/LaneNet3D.py" />
+        <option value="$PROJECT_DIR$/Networks/Loss_crit.py" />
         <option value="$PROJECT_DIR$/tools/utils.py" />
+        <option value="$PROJECT_DIR$/main.py" />
       </list>
     </option>
   </component>
@@ -241,7 +229,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.prepare_data_split">
+  <component name="RunManager" selected="Python.main">
     <configuration name="3DLaneNet" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="3DLaneNet" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -255,27 +243,6 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Networks/LaneNet3D.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="BaseNet" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="3DLaneNet" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="$USER_HOME$/anaconda3/bin/python" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Networks" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Networks/BaseNet.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -347,6 +314,27 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="3DLaneNet" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$USER_HOME$/anaconda3/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="prepare_data_split" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="3DLaneNet" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -370,18 +358,18 @@
     </configuration>
     <list>
       <item itemvalue="Python.3DLaneNet" />
-      <item itemvalue="Python.BaseNet" />
       <item itemvalue="Python.Loss_crit" />
       <item itemvalue="Python.Load_Data_3DLane" />
       <item itemvalue="Python.prepare_data_split" />
+      <item itemvalue="Python.main" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.prepare_data_split" />
+        <item itemvalue="Python.main" />
+        <item itemvalue="Python.Loss_crit" />
         <item itemvalue="Python.3DLaneNet" />
         <item itemvalue="Python.Load_Data_3DLane" />
-        <item itemvalue="Python.Loss_crit" />
-        <item itemvalue="Python.BaseNet" />
+        <item itemvalue="Python.prepare_data_split" />
       </list>
     </recent_temporary>
   </component>
@@ -400,6 +388,7 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="1985" y="-4" width="2495" height="1444" extended-state="6" />
+    <editor active="true" />
     <layout>
       <window_info id="Favorites" order="0" side_tool="true" />
       <window_info content_ui="combo" id="Project" order="1" visible="true" weight="0.12702265" />
@@ -410,8 +399,8 @@
       <window_info anchor="bottom" id="Message" order="3" />
       <window_info anchor="bottom" id="Find" order="4" weight="0.32960477" />
       <window_info anchor="bottom" id="Version Control" order="5" weight="0.32960477" />
-      <window_info active="true" anchor="bottom" id="Run" order="6" visible="true" weight="0.32960477" />
-      <window_info anchor="bottom" id="Debug" order="7" weight="0.28635347" />
+      <window_info anchor="bottom" id="Run" order="6" weight="0.32960477" />
+      <window_info active="true" anchor="bottom" id="Debug" order="7" visible="true" weight="0.28635347" />
       <window_info anchor="bottom" id="Cvs" order="8" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="9" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="10" />
@@ -561,27 +550,10 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$APPLICATION_HOME_DIR$/helpers/pydev/_pydev_imps/_pydev_execfile.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="306">
-          <caret line="17" selection-start-line="17" selection-end-line="17" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Networks/ERFNet.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="270">
           <caret line="18" column="29" lean-forward="true" selection-start-line="18" selection-start-column="29" selection-end-line="18" selection-end-column="29" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/utils/data/dataloader.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="449">
-          <caret line="741" column="86" selection-start-line="741" selection-start-column="86" selection-end-line="741" selection-end-column="86" />
-          <folding>
-            <element signature="e#0#13#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -599,43 +571,10 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
+    <entry file="file://$APPLICATION_HOME_DIR$/helpers/pydev/_pydev_imps/_pydev_execfile.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="673">
-          <caret line="52" column="29" selection-start-line="52" selection-start-column="20" selection-end-line="52" selection-end-column="29" />
-          <folding>
-            <element signature="e#24#36#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1519">
-          <caret line="345" column="29" lean-forward="true" selection-start-line="345" selection-start-column="4" selection-end-line="345" selection-end-column="29" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/main.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="468">
-          <caret line="26" lean-forward="true" selection-start-line="26" selection-end-line="26" />
-          <folding>
-            <element signature="e#48#66#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/tools/utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="416">
-          <caret line="123" lean-forward="true" selection-start-line="123" selection-end-line="123" />
-          <folding>
-            <element signature="e#25#40#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="306">
+          <caret line="17" selection-start-line="17" selection-end-line="17" />
         </state>
       </provider>
     </entry>
@@ -646,12 +585,69 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/argparse.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="301">
+          <caret line="859" selection-start-line="859" selection-end-line="859" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="349">
-          <caret line="430" column="87" selection-start-line="430" selection-start-column="86" selection-end-line="430" selection-end-column="87" />
+        <state relative-caret-position="309">
+          <caret line="162" column="44" selection-start-line="162" selection-start-column="44" selection-end-line="162" selection-end-column="44" />
           <folding>
             <element signature="e#47#65#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="363">
+          <caret line="234" column="40" selection-start-line="234" selection-start-column="34" selection-end-line="234" selection-end-column="40" />
+          <folding>
+            <element signature="e#24#36#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="291">
+          <caret line="237" column="16" selection-start-line="237" selection-start-column="10" selection-end-line="237" selection-end-column="16" />
+          <folding>
+            <element signature="e#0#18#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/utils/data/dataloader.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1183">
+          <caret line="712" selection-start-line="712" selection-end-line="712" />
+          <folding>
+            <element signature="e#0#13#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tools/utils.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="291">
+          <caret line="30" column="31" selection-start-line="30" selection-start-column="27" selection-end-line="30" selection-end-column="31" />
+          <folding>
+            <element signature="e#25#40#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="767">
+          <caret line="359" column="21" selection-start-line="359" selection-start-column="21" selection-end-line="359" selection-end-column="21" />
+          <folding>
+            <element signature="e#48#66#0" expanded="true" />
           </folding>
         </state>
       </provider>

@@ -1,8 +1,7 @@
 # Directories
 data
-model
+Saved
 .idea
-tboard
 # temporary files
 *~
 *.pyc

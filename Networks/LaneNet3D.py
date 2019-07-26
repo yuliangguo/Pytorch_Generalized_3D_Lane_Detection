@@ -28,7 +28,7 @@ from tools.utils import define_args, define_init_weights
 
 
 # compute normalized transformation matrix for a top-view region boundaries
-def init_projective_transform(top_view_region, batch_size, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
+def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
     """
         Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
         the top view image's 4 corners
@@ -71,8 +71,6 @@ def init_projective_transform(top_view_region, batch_size, org_img_size, crop_y,
     dst = np.float32([[0, 0], [0, 1], [1, 0], [1, 1]])
     M = cv2.getPerspectiveTransform(border_net, dst)
     M_inv = cv2.getPerspectiveTransform(dst, border_net)
-    M = torch.from_numpy(M).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-    M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
     return M, M_inv
 
 
@@ -242,10 +240,12 @@ class Net(nn.Module):
 
         # M, M_inv = Init_Projective_transform(args.nclasses, args.batch_size, args.resize)
         org_img_size = [args.org_h, args.org_w]
-        resize_img_size = [args.resize, 2*args.resize]
+        resize_img_size = [args.resize_h, args.resize_w]
         pitch = np.pi / 180 * args.pitch
-        M, M_inv = init_projective_transform(args.top_view_region, args.batch_size, org_img_size,
+        M, M_inv = init_projective_transform(args.top_view_region, org_img_size,
                                              args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
+        M = torch.from_numpy(M).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
+        M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
         # self.M = M
         self.M_inv = M_inv
         if not args.no_cuda:
@@ -338,7 +338,7 @@ if __name__ == '__main__':
         image = (Image.open(f).convert('RGB'))
     w, h = image.size
     image = F2.crop(image, h-640, 0, 640, w)
-    image = F2.resize(image, size=(args.resize, 2*args.resize), interpolation=Image.BILINEAR)
+    image = F2.resize(image, size=(args.resize_h, args.resize_w), interpolation=Image.BILINEAR)
     image = transforms.ToTensor()(image).float()
     image.unsqueeze_(0)
     image = torch.cat(list(torch.split(image, 1, dim=0))*args.batch_size)
