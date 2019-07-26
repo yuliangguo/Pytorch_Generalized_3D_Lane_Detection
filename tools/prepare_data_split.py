@@ -8,7 +8,7 @@ import glob
 
 if __name__ == '__main__':
     dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled'
-    json_file_list = glob.glob('{:s}/vanishing_point_label*.json'.format(dataset_dir))
+    json_file_list = glob.glob('{:s}/label_data*.json'.format(dataset_dir))
 
     output_folder = '../data/tusimple/'
     split_ratio = [0.8, 0.1]

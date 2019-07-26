@@ -245,7 +245,7 @@ class LaneDataset(Dataset):
         image = self.totensor(image).float()
         gt_anchor = gt_anchor.reshape([np.int32(self.w_ipm / 8), -1])
         gt_anchor = torch.from_numpy(gt_anchor)
-        return image, gt_anchor
+        return image, gt_anchor, idx
 
 
 def resample_3d_laneline(gt_lane_3d, y_steps):

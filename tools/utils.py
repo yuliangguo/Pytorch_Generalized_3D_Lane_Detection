@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 
-import cv2
 import argparse
-import numpy as np
+import errno
 import os
 import sys
-import errno
-from PIL import Image
-import torch
-import torch.optim
-from torch.optim import lr_scheduler
-import torch.nn.init as init
+
+import cv2
 import matplotlib
+import numpy as np
+import torch
+import torch.nn.init as init
+import torch.optim
+from PIL import Image
+from torch.optim import lr_scheduler
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
@@ -28,10 +30,8 @@ def define_args():
     parser.add_argument('--no_cuda', action='store_true', help='if gpu available')
     parser.add_argument('--nworkers', type=int, default=8, help='num of threads')
     parser.add_argument('--no_dropout', action='store_true', help='no dropout in network')
-    parser.add_argument('--nclasses', type=int, default=2, choices=[2, 4], help='num output channels for segmentation')
-    parser.add_argument('--resize', type=int, default=256, help='resize image to resize x (ratio*resize)')
-    parser.add_argument('--mod', type=str, default='erfnet', help='model to train')
-    parser.add_argument('--layers', type=int, default=18, help='amount of layers in model')
+    # parser.add_argument('--resize', type=int, default=256, help='resize image to resize x (ratio*resize)')
+    # parser.add_argument('--layers', type=int, default=18, help='amount of layers in model')
     parser.add_argument("--pool", type=str2bool, nargs='?', const=True, default=True, help="use pooling")
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=False, help="use pretrained model")
     parser.add_argument('--pretrain_epochs', type=int, default=20, help='Number of epochs to perform segmentation pretraining')
@@ -65,13 +65,12 @@ def define_args():
     # Paths settings
     # parser.add_argument('--image_dir', type=str, required=True, help='directory to image dir')
     # parser.add_argument('--gt_dir', type=str, required=True, help='directory to gt')
-    parser.add_argument('--save_path', type=str, default='Saved/', help='directory to gt')
     parser.add_argument('--json_file', type=str, default='Labels/Curve_parameters.json', help='directory to json input')
     # LOSS settings
     parser.add_argument('--weight_seg', type=int, default=30, help='weight in loss criterium for segmentation')
     parser.add_argument('--weight_class', type=float, default=1, help='weight in loss criterium for classification branch')
     parser.add_argument('--weight_fit', type=float, default=1, help='weight in loss criterium for fit')
-    parser.add_argument('--loss_policy', type=str, default='area', help='use area_loss, homography_mse or classical mse in birds eye view')
+    # parser.add_argument('--loss_policy', type=str, default='area', help='use area_loss, homography_mse or classical mse in birds eye view')
     parser.add_argument('--weight_funct', type=str, default='none', help='apply weight function in birds eye when computing area loss')
     parser.add_argument("--end_to_end", type=str2bool, nargs='?', const=True, default=True, help="regression towards curve params by network or postprocessing")
     parser.add_argument('--gamma', type=float, default=0., help='factor to decay learning rate every lr_decay_iters with')
@@ -86,15 +85,25 @@ def define_args():
     # Skip batch
     parser.add_argument('--list', type=int, nargs='+', default=[954, 2789], help='Images you want to skip')
 
+    # dataset setting
+    parser.add_argument('--dataset_name', type=str, required=True, help='the dataset name to be used in saving model names')
+    parser.add_argument('--data_dir', type=str, required=True, help='The path saving train.json and val.json files')
+    parser.add_argument('--dataset_dir', type=str, required=True, help='The path saving actual data')
+    parser.add_argument('--save_path', type=str, default='Saved/', help='directory to save output')
+    # parser.add_argument('--weights_path', type=str, help='The pretrained weights path')
     # 3D LaneNet
+    parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
     parser.add_argument('--ipm_w', type=int, default=208, help='width of inverse projective map (IPM)')
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
     parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
+    parser.add_argument('--resize_h', type=int, default=480, help='height of the original image')
+    parser.add_argument('--resize_w', type=int, default=640, help='width of the original image')
     parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=9, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
+    parser.add_argument('--fix_cam', type=str2bool, const=True, default=False, help='directory to save output')
     parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
     parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
     parser.add_argument('--k_fx', type=int, default=1000, help='camera intrinsic parameter fx')
@@ -103,6 +112,28 @@ def define_args():
     parser.add_argument('--k_dy', type=int, default=400, help='camera intrinsic parameter fx')
     return parser
 
+
+def save_vis_result_2d(train_or_val, M, gt, pred, idx, i, images, resize, save_path):
+    M = M.data.cpu().numpy()[0]
+    x = np.zeros(3)
+
+    im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
+
+    im, M_scaledup = test_projective_transform(im, resize, M)
+    im_inverse = cv2.warpPerspective(im, np.linalg.inv(M_scaledup), (2 * resize, resize))
+
+    im_inverse = np.clip(im_inverse, 0, 1)
+    im = np.clip(im, 0, 1)
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(211)
+    ax2 = fig.add_subplot(212)
+    ax1.imshow(im)
+    ax2.imshow(im_inverse)
+
+    fig.savefig(save_path + '/example/{}/weight_idx-{}_batch-{}'.format(train_or_val, idx, i))
+    plt.clf()
+    plt.close(fig)
 
 def save_weightmap(train_or_val, M, M_inv, weightmap_zeros,
                    beta0, beta1, beta2, beta3, gt_params_lhs, 
