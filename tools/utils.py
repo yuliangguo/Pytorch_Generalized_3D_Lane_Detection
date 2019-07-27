@@ -113,20 +113,36 @@ def define_args():
     return parser
 
 
-def save_vis_result_2d(train_or_val, M, gt, pred, idx, i, images, ipm_h, ipm_w, save_path):
-    M = M.data.cpu().numpy()[0]
+def save_vis_result_2d(train_or_val, M_inv_scaledup, gt, pred, idx, i, images, ipm_h, ipm_w, save_path):
+    """
+
+    :param train_or_val:
+    :param M: img to ipm transformation in between normalized coordinates
+    :param gt:
+    :param pred:
+    :param idx:
+    :param i:
+    :param images:
+    :param ipm_h:
+    :param ipm_w:
+    :param save_path:
+    :return:
+    """
+    # M = M.data.cpu().numpy()[0]
     x = np.zeros(3)
 
     im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
 
     # im, M_scaledup = test_projective_transform(im, resize, M)
-    im_inverse = cv2.warpPerspective(im, np.linalg.inv(M), (ipm_w, ipm_h))
+    im_inverse = cv2.warpPerspective(im, M_inv_scaledup, (ipm_w, ipm_h))
     im_inverse = np.clip(im_inverse, 0, 1)
     im = np.clip(im, 0, 1)
 
+    # TODO: implement drawing of lanelines in both views
+
     fig = plt.figure()
-    ax1 = fig.add_subplot(211)
-    ax2 = fig.add_subplot(212)
+    ax1 = fig.add_subplot(121)
+    ax2 = fig.add_subplot(122)
     ax1.imshow(im)
     ax2.imshow(im_inverse)
 

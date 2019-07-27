@@ -44,7 +44,7 @@ def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_
     :param pitch: camera pitch angle wrt ground plane
     :param cam_height: camera height wrt ground plane in meters
     :param K: camera intrinsic parameters
-    :return: M_inv: the normalized transformation from image to IPM image
+    :return: M: the normalized transformation from image to IPM image
     """
 
     # transform top-view region to original image region
@@ -68,8 +68,10 @@ def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_
     border_net = np.float32(border_net)
 
     # compute the normalized transformation
-    dst = np.float32([[0, 0], [0, 1], [1, 0], [1, 1]])
+    dst = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
+    # img to ipm
     M = cv2.getPerspectiveTransform(border_net, dst)
+    # ipm to im
     M_inv = cv2.getPerspectiveTransform(dst, border_net)
     return M, M_inv
 
@@ -131,9 +133,11 @@ class VggEncoder(nn.Module):
 
 # initialize base_grid with different sizes can adapt to different sizes
 class ProjectiveGridGenerator(nn.Module):
-    def __init__(self, size, theta, no_cuda):
+    def __init__(self, size_ipm, im_h, im_w, theta, no_cuda):
         super().__init__()
-        self.N, self.C, self.H, self.W = size
+        self.N, self.C, self.H, self.W = size_ipm
+        self.im_h = im_h
+        self.im_w = im_w
         linear_points_W = torch.linspace(0, 1 - 1/self.W, self.W)
         linear_points_H = torch.linspace(0, 1 - 1/self.H, self.H)
 
@@ -147,11 +151,16 @@ class ProjectiveGridGenerator(nn.Module):
         self.base_grid = Variable(self.base_grid)
         if not no_cuda:
             self.base_grid = self.base_grid.cuda()
+            self.im_h = self.im_h.cuda()
+            self.im_w = self.im_w.cuda()
 
     def forward(self, theta):
         # if base_grid is top-view, should theta be top-to-img homograph, and vice versa
         grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), theta.transpose(1, 2))
         grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape([self.N, self.H, self.W, 2])
+        # TODO: grid in [0, 1] range need to scale up with input size?
+        grid[:, :, :, 0] = grid[:, :, :, 0]*self.im_w
+        grid[:, :, :, 1] = grid[:, :, :, 1]*self.im_h
         return grid
 
 
@@ -192,7 +201,7 @@ class TopViewPathway(nn.Module):
 #  Lane Prediction Head: through a series of convolutions with no padding in the y dimension, the feature maps are
 #  reduced in height, and finally the prediction layer size is N × 1 × 3 ·(2 · K + 1)
 class LanePredictionHead(nn.Module):
-    def __init__(self, anchor_dim):
+    def __init__(self, num_lane_type, anchor_dim):
         super(LanePredictionHead, self).__init__()
         layers = []
         conv2d = nn.Conv2d(512, 64, kernel_size=3, padding=(0, 1))
@@ -214,7 +223,7 @@ class LanePredictionHead(nn.Module):
 
         # reshape is needed before executing later layers
         self.dim_rt1 = nn.Conv2d(256, 64, kernel_size=1, padding=0)
-        self.dim_rt2 = nn.Conv2d(64, anchor_dim, kernel_size=1, padding=0)
+        self.dim_rt2 = nn.Conv2d(64, num_lane_type*anchor_dim, kernel_size=1, padding=0)
 
     def forward(self, x):
         x = self.features(x)
@@ -239,8 +248,8 @@ class Net(nn.Module):
         # size = torch.Size([args.batch_size, args.nclasses, args.resize, 2*args.resize])
 
         # M, M_inv = Init_Projective_transform(args.nclasses, args.batch_size, args.resize)
-        org_img_size = [args.org_h, args.org_w]
-        resize_img_size = [args.resize_h, args.resize_w]
+        org_img_size = np.array([args.org_h, args.org_w])
+        resize_img_size = np.array([args.resize_h, args.resize_w])
         pitch = np.pi / 180 * args.pitch
         M, M_inv = init_projective_transform(args.top_view_region, org_img_size,
                                              args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
@@ -252,38 +261,45 @@ class Net(nn.Module):
             self.M_inv = self.M_inv.cuda()
 
         if args.no_centerline:
-            num_lane_type = 1
+            self.num_lane_type = 1
         else:
-            num_lane_type = 3
+            self.num_lane_type = 3
 
         if args.no_3d:
-            self.anchor_dim = num_lane_type * (args.num_y_anchor + 1)
+            self.anchor_dim = args.num_y_anchor + 1
         else:
-            self.anchor_dim = num_lane_type * (2*args.num_y_anchor + 1)
+            self.anchor_dim = 2*args.num_y_anchor + 1
 
         # Define network
         output_layers = [8, 15, 22, 29]
         self.im_encoder = VggEncoder(output_layers, True)
+
         # the grid considers both src and dst grid normalized
-        self.size_top1 = torch.Size([args.batch_size, 128, args.ipm_h, args.ipm_w])
-        self.project_layer1 = ProjectiveGridGenerator(self.size_top1, M_inv, args.no_cuda)
-        self.size_top2 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
-        self.project_layer2 = ProjectiveGridGenerator(self.size_top2, M_inv, args.no_cuda)
-        self.size_top3 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
-        self.project_layer3 = ProjectiveGridGenerator(self.size_top3, M_inv, args.no_cuda)
-        self.size_top4 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
-        self.project_layer4 = ProjectiveGridGenerator(self.size_top4, M_inv, args.no_cuda)
+        resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
+        size_top1 = torch.Size([args.batch_size, 128, args.ipm_h, args.ipm_w])
+        self.project_layer1 = ProjectiveGridGenerator(size_top1, resize_img_size[0]/2, resize_img_size[1]/2,
+                                                      M_inv, args.no_cuda)
+        size_top2 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
+        self.project_layer2 = ProjectiveGridGenerator(size_top2, resize_img_size[0]/4, resize_img_size[1]/4,
+                                                      M_inv, args.no_cuda)
+        size_top3 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
+        self.project_layer3 = ProjectiveGridGenerator(size_top3, resize_img_size[0]/8, resize_img_size[1]/8,
+                                                      M_inv, args.no_cuda)
+        size_top4 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
+        self.project_layer4 = ProjectiveGridGenerator(size_top4, resize_img_size[0]/16, resize_img_size[1]/16,
+                                                      M_inv, args.no_cuda)
 
         self.dim_rt1 = nn.Conv2d(256, 128, kernel_size=1, padding=0)
         self.dim_rt2 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
         self.dim_rt3 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
 
         self.top_pathway = TopViewPathway()
-        self.lane_out = LanePredictionHead(self.anchor_dim)
+        self.lane_out = LanePredictionHead(self.num_lane_type, self.anchor_dim)
 
     def forward(self, input):
         x1, x2, x3, x4 = self.im_encoder(input)
 
+        # this need to be computed in run time for enabling back propagation?
         grid1 = self.project_layer1(self.M_inv)
         grid2 = self.project_layer2(self.M_inv)
         grid3 = self.project_layer3(self.M_inv)

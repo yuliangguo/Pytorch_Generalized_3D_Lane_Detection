@@ -222,8 +222,8 @@ class Laneline_3D_loss(nn.Module):
 
         # pred_class need to apply softmax to convert to (0,1) range, or the log of it will cause error
         # apply to gt_class for safe
-        pred_class = F.softmax(pred_class, dim=2)
-        gt_class = F.softmax(gt_class, dim=2)
+        pred_class = F.softmax(pred_class, dim=1)
+        gt_class = F.softmax(gt_class, dim=1)
         loss1 = -torch.sum(gt_class*torch.log(pred_class) +
                            (torch.ones_like(gt_class)-gt_class)*torch.log((torch.ones_like(pred_class)-pred_class)))
         # applying L1 norm does not need to separate X and Z
@@ -270,8 +270,8 @@ class Laneline_3D_loss_fix_cam(nn.Module):
 
         # pred_class need to apply softmax to convert to (0,1) range, or the log of it will cause error
         # apply to gt_class for safe
-        pred_class = F.softmax(pred_class, dim=2)
-        gt_class = F.softmax(gt_class, dim=2)
+        pred_class = F.softmax(pred_class, dim=1)
+        gt_class = F.softmax(gt_class, dim=1)
         loss1 = -torch.sum(gt_class*torch.log(pred_class) +
                            (torch.ones_like(gt_class)-gt_class)*torch.log((torch.ones_like(pred_class)-pred_class)))
         # applying L1 norm does not need to separate X and Z

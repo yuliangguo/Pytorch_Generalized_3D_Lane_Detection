@@ -53,7 +53,7 @@ class LaneDataset(Dataset):
         self.top_view_region = args.top_view_region
         # initialize the homography between image and IPM, this need to be exactly the same as network
         self.pitch = np.pi / 180 * args.pitch
-        H_g2c, H_c2g = compute_homograpthy(self.pitch, args.cam_height, args.K)
+        H_g2c, H_c2g = homograpthy_g2c(self.pitch, args.cam_height, args.K)
         self.H_c2g = H_c2g
         # compute y_ref in ground
         self.y_ref = args.y_ref
@@ -300,7 +300,7 @@ def resample_3d_laneline(gt_lane_3d, y_steps):
     return x_values, z_values
 
 
-def compute_homograpthy(pitch, cam_height, K):
+def homograpthy_g2c(pitch, cam_height, K):
     # transform top-view region to original image region
     R_g2c = np.array([[1, 0, 0],
                       [0, np.cos(np.pi / 2 + pitch), -np.sin(np.pi / 2 + pitch)],
@@ -402,7 +402,7 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # compute homography matrix
-    H_g2c, H_c2g = compute_homograpthy(pitch, args.cam_height, args.K)
+    H_g2c, H_c2g = homograpthy_g2c(pitch, args.cam_height, args.K)
     H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize_h, args.resize_w])
     M = np.matmul(H_crop, H_g2c)
 
