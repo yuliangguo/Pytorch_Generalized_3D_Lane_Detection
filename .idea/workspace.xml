@@ -2,11 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="931bcb41-9576-4916-a93a-66bee6e62088" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" beforeDir="false" afterPath="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Networks/LaneNet3D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/LaneNet3D.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Networks/Loss_crit.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/Loss_crit.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tools/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/utils.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -16,11 +14,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="391">
-              <caret line="226" column="47" lean-forward="true" selection-start-line="226" selection-start-column="47" selection-end-line="226" selection-end-column="47" />
+            <state relative-caret-position="387">
+              <caret line="207" column="81" lean-forward="true" selection-start-line="207" selection-start-column="81" selection-end-line="207" selection-end-column="81" />
               <folding>
                 <element signature="e#48#66#0" expanded="true" />
               </folding>
@@ -29,19 +27,10 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/matplotlib/backends/backend_agg.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="192">
-              <caret line="517" column="42" lean-forward="true" selection-start-line="517" selection-start-column="42" selection-end-line="517" selection-end-column="42" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="481">
-              <caret line="160" column="69" lean-forward="true" selection-start-line="160" selection-start-column="69" selection-end-line="160" selection-end-column="69" />
+            <state relative-caret-position="324">
+              <caret line="237" column="32" lean-forward="true" selection-start-line="237" selection-start-column="32" selection-end-line="237" selection-end-column="32" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -52,8 +41,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="324">
-              <caret line="312" column="26" selection-start-line="312" selection-start-column="4" selection-end-line="312" selection-end-column="26" />
+            <state relative-caret-position="844">
+              <caret line="419" column="27" selection-start-line="419" selection-start-column="21" selection-end-line="419" selection-end-column="30" />
               <folding>
                 <element signature="e#47#65#0" expanded="true" />
               </folding>
@@ -73,8 +62,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2007">
-              <caret line="271" column="36" selection-start-line="271" selection-start-column="36" selection-end-line="271" selection-end-column="36" />
+            <state relative-caret-position="1242">
+              <caret line="69" column="12" selection-start-line="69" selection-start-column="8" selection-end-line="69" selection-end-column="12" />
               <folding>
                 <element signature="e#24#36#0" expanded="true" />
               </folding>
@@ -85,8 +74,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/tools/utils.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="414">
-              <caret line="140" column="56" selection-start-line="140" selection-start-column="56" selection-end-line="140" selection-end-column="56" />
+            <state relative-caret-position="201">
+              <caret line="27" column="91" lean-forward="true" selection-start-line="27" selection-start-column="91" selection-end-line="27" selection-end-column="91" />
               <folding>
                 <element signature="e#25#40#0" expanded="true" />
               </folding>
@@ -105,36 +94,36 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>astype</find>
-      <find>border_net</find>
-      <find>init_projective_transform</find>
-      <find>validate</find>
-      <find>loss_policy</find>
-      <find>ipm</find>
-      <find>crite</find>
-      <find>args.no_cen</find>
-      <find>no_center</find>
-      <find>test_projective_transform</find>
-      <find>nwor</find>
-      <find>criter</find>
-      <find>resize</find>
-      <find>eval</find>
-      <find>tensor</find>
-      <find>back</find>
-      <find>VggEncoder</find>
-      <find>print_f</find>
-      <find>LanePredictionHead</find>
-      <find>print_fre</find>
-      <find>save_</find>
-      <find>anchor_dim</find>
-      <find>self.N</find>
-      <find>size_top1</find>
       <find>M_inv</find>
       <find>type</find>
-      <find>ProjectiveGridGenerator</find>
       <find>weight_seg</find>
       <find>save_vis_result_2d</find>
+      <find>lr_policy</find>
+      <find>save_id</find>
+      <find>data_time</find>
+      <find>ProjectiveGridGenerator</find>
+      <find>average</find>
+      <find>total_score</find>
+      <find>learning</find>
+      <find>learning_rate</find>
+      <find>LanePredictionHead</find>
+      <find>lr_po</find>
+      <find>make_layers</find>
+      <find>dim</find>
       <find>H_crop</find>
+      <find>lr</find>
+      <find>Sequential</find>
+      <find>numpy</find>
+      <find>nump</find>
+      <find>relu</find>
+      <find>init</find>
+      <find>autograd</find>
+      <find>clip</find>
+      <find>grad</find>
+      <find>grid</find>
+      <find>grid_sample</find>
+      <find>grid_samp</find>
+      <find>learnin</find>
     </findStrings>
     <replaceStrings>
       <replace>args.num_y_anchor</replace>
@@ -154,8 +143,8 @@
         <option value="$PROJECT_DIR$/Networks/Loss_crit.py" />
         <option value="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" />
         <option value="$PROJECT_DIR$/main.py" />
-        <option value="$PROJECT_DIR$/tools/utils.py" />
         <option value="$PROJECT_DIR$/Networks/LaneNet3D.py" />
+        <option value="$PROJECT_DIR$/tools/utils.py" />
       </list>
     </option>
   </component>
@@ -171,7 +160,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -198,6 +186,7 @@
           <select />
         </subPane>
       </pane>
+      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -354,9 +343,9 @@
     <recent_temporary>
       <list>
         <item itemvalue="Python.main" />
+        <item itemvalue="Python.Load_Data_3DLane" />
         <item itemvalue="Python.3DLaneNet" />
         <item itemvalue="Python.Loss_crit" />
-        <item itemvalue="Python.Load_Data_3DLane" />
         <item itemvalue="Python.prepare_data_split" />
       </list>
     </recent_temporary>
@@ -379,7 +368,7 @@
     <editor active="true" />
     <layout>
       <window_info id="Favorites" order="0" side_tool="true" />
-      <window_info content_ui="combo" id="Project" order="1" visible="true" weight="0.12702265" />
+      <window_info content_ui="combo" id="Project" order="1" visible="true" weight="0.093851134" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Terminal" order="0" weight="0.32960477" />
       <window_info anchor="bottom" id="Event Log" order="1" side_tool="true" />
@@ -388,7 +377,7 @@
       <window_info anchor="bottom" id="Find" order="4" weight="0.32960477" />
       <window_info anchor="bottom" id="Version Control" order="5" weight="0.32960477" />
       <window_info anchor="bottom" id="Run" order="6" weight="0.32960477" />
-      <window_info active="true" anchor="bottom" id="Debug" order="7" visible="true" weight="0.3385533" />
+      <window_info active="true" anchor="bottom" id="Debug" order="7" visible="true" weight="0.44891873" />
       <window_info anchor="bottom" id="Cvs" order="8" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="9" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="10" />
@@ -451,47 +440,47 @@ lane[:, 1] = gt_y_steps</expression-string>
     </expressions>
     <expressions id="evaluateExpression">
       <expression>
-        <expression-string>im_h, im_w, c = im.shape</expression-string>
+        <expression-string>print(np.sum(x4_proj.cpu().detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>gt_class[:,:, 0, 0]</expression-string>
+        <expression-string>print(np.sum(x.cpu().detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>pred_class[:,:, 0, 0]</expression-string>
+        <expression-string>print(np.sum(x[0,:,:,:].cpu().detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>pred_3D_lanes[:, :, :, -1].unsqueeze(-1)</expression-string>
+        <expression-string>print(np.sum(x4_proj[0,:,:,:].cpu().detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>torch.log((torch.ones_like(pred_class)-pred_class))</expression-string>
+        <expression-string>print(np.sum(x4[0,:,:,:].cpu().detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>(x_2d[k-1], y_2d[k-1])</expression-string>
+        <expression-string>print(np.sum(x[0,:,:,0].cpu().detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>img[y_2d.astype(np.int), x_2d.astype(np.int), :] = [0, 0, 255]</expression-string>
+        <expression-string>print(np.sum(x[0,:,:,0].cpu().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>img[np.int(y_2d), np.int(x_2d), :] = [0, 0, 255]</expression-string>
+        <expression-string>print(np.sum(x[0,:,:,0].detach().numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
       <expression>
-        <expression-string>y1 = gt_lane_3D[j, 1]</expression-string>
+        <expression-string>print(np.sum(x[0,:,:,0].numpy()))</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
@@ -530,13 +519,6 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="296">
-          <caret line="488" selection-start-line="488" selection-end-line="488" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torchvision/transforms/functional.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="36">
@@ -561,20 +543,8 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Networks/ERFNet.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="270">
-          <caret line="18" column="29" lean-forward="true" selection-start-line="18" selection-start-column="29" selection-end-line="18" selection-end-column="29" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/Networks/__init__.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="18">
-          <caret line="1" column="23" lean-forward="true" selection-start-line="1" selection-start-column="23" selection-end-line="1" selection-end-column="23" />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/Networks/ERFNet.py" />
+    <entry file="file://$PROJECT_DIR$/Networks/__init__.py" />
     <entry file="file://$APPLICATION_HOME_DIR$/helpers/pydev/pydevd.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="721">
@@ -606,6 +576,34 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/matplotlib/backends/backend_agg.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="48">
+          <caret line="509" column="6" lean-forward="true" selection-start-line="509" selection-start-column="6" selection-end-line="509" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/batchnorm.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="700">
+          <caret line="239" column="36" selection-start-line="239" selection-start-column="31" selection-end-line="239" selection-end-column="36" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="340">
+          <caret line="174" column="76" lean-forward="true" selection-start-line="174" selection-start-column="76" selection-end-line="174" selection-end-column="76" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/autograd/gradcheck.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="453">
+          <caret line="184" selection-start-line="184" selection-end-line="184" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/tools/prepare_data_split.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="288">
@@ -613,47 +611,27 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/matplotlib/backends/backend_agg.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="192">
-          <caret line="517" column="42" lean-forward="true" selection-start-line="517" selection-start-column="42" selection-end-line="517" selection-end-column="42" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/tools/utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="414">
-          <caret line="140" column="56" selection-start-line="140" selection-start-column="56" selection-end-line="140" selection-end-column="56" />
-          <folding>
-            <element signature="e#25#40#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Networks/Loss_crit.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2007">
-          <caret line="271" column="36" selection-start-line="271" selection-start-column="36" selection-end-line="271" selection-end-column="36" />
+        <state relative-caret-position="1242">
+          <caret line="69" column="12" selection-start-line="69" selection-start-column="8" selection-end-line="69" selection-end-column="12" />
           <folding>
             <element signature="e#24#36#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/main.py">
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/autograd/__init__.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="391">
-          <caret line="226" column="47" lean-forward="true" selection-start-line="226" selection-start-column="47" selection-end-line="226" selection-end-column="47" />
-          <folding>
-            <element signature="e#48#66#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="525">
+          <caret line="90" lean-forward="true" selection-start-line="90" selection-end-line="90" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="324">
-          <caret line="312" column="26" selection-start-line="312" selection-start-column="4" selection-end-line="312" selection-end-column="26" />
+        <state relative-caret-position="844">
+          <caret line="419" column="27" selection-start-line="419" selection-start-column="21" selection-end-line="419" selection-end-column="30" />
           <folding>
             <element signature="e#47#65#0" expanded="true" />
           </folding>
@@ -662,10 +640,30 @@ lane[:, 1] = gt_y_steps</expression-string>
     </entry>
     <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="481">
-          <caret line="160" column="69" lean-forward="true" selection-start-line="160" selection-start-column="69" selection-end-line="160" selection-end-column="69" />
+        <state relative-caret-position="324">
+          <caret line="237" column="32" lean-forward="true" selection-start-line="237" selection-start-column="32" selection-end-line="237" selection-end-column="32" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tools/utils.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="201">
+          <caret line="27" column="91" lean-forward="true" selection-start-line="27" selection-start-column="91" selection-end-line="27" selection-end-column="91" />
+          <folding>
+            <element signature="e#25#40#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/main.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="387">
+          <caret line="207" column="81" lean-forward="true" selection-start-line="207" selection-start-column="81" selection-end-line="207" selection-end-column="81" />
+          <folding>
+            <element signature="e#48#66#0" expanded="true" />
           </folding>
         </state>
       </provider>

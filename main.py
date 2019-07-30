@@ -33,7 +33,7 @@ def train_net():
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define save path
-    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain{}' \
+    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}' \
               .format(args.mod,
                       args.optimizer,
                       args.learning_rate,
@@ -192,6 +192,7 @@ def train_net():
                 input = input.float()
 
             # Run model
+            optimizer.zero_grad()
             try:
                 output_net = model(input)
             except RuntimeError as e:
@@ -214,7 +215,6 @@ def train_net():
                 nn.utils.clip_grad_norm(model.parameters(), args.clip_grad_norm)
 
             # Setup backward pass
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -369,7 +369,7 @@ if __name__ == '__main__':
     # seems some system bug only allows 0 nworker
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 50
-    args.save_freq = 50
+    args.print_freq = 100
+    args.save_freq = 100
 
     train_net()

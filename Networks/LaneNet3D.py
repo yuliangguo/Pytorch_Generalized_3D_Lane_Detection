@@ -158,9 +158,8 @@ class ProjectiveGridGenerator(nn.Module):
         # if base_grid is top-view, should theta be top-to-img homograph, and vice versa
         grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), theta.transpose(1, 2))
         grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape([self.N, self.H, self.W, 2])
-        # TODO: grid in [0, 1] range need to scale up with input size?
-        grid[:, :, :, 0] = grid[:, :, :, 0]*self.im_w
-        grid[:, :, :, 1] = grid[:, :, :, 1]*self.im_h
+        # output grid to be used for grid_sample. grid specifies the sampling pixel locations normalized by the
+        # input spatial dimensions.
         return grid
 
 
@@ -222,16 +221,17 @@ class LanePredictionHead(nn.Module):
         self.features = nn.Sequential(*layers)
 
         # reshape is needed before executing later layers
-        self.dim_rt1 = nn.Conv2d(256, 64, kernel_size=1, padding=0)
-        self.dim_rt2 = nn.Conv2d(64, num_lane_type*anchor_dim, kernel_size=1, padding=0)
+        dim_rt_layers = []
+        dim_rt_layers += [nn.Conv2d(256, 64, kernel_size=1, padding=0),nn.ReLU(inplace=True)]
+        dim_rt_layers += [nn.Conv2d(64, num_lane_type*anchor_dim, kernel_size=1, padding=0)]
+        self.dim_rt = nn.Sequential(*dim_rt_layers)
 
     def forward(self, x):
         x = self.features(x)
         # x suppose to be N X 64 X 4 X w_ipm/8, reshape to N X 256 X w_ipm/8 X 1
         sizes = x.shape
         x = x.reshape(sizes[0], sizes[1]*sizes[2], sizes[3], 1)
-        x = self.dim_rt1(x)
-        x = self.dim_rt2(x)
+        x = self.dim_rt(x)
         x = x.squeeze(-1).transpose(1, 2)
         return x
 
@@ -289,9 +289,9 @@ class Net(nn.Module):
         self.project_layer4 = ProjectiveGridGenerator(size_top4, resize_img_size[0]/16, resize_img_size[1]/16,
                                                       M_inv, args.no_cuda)
 
-        self.dim_rt1 = nn.Conv2d(256, 128, kernel_size=1, padding=0)
-        self.dim_rt2 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
-        self.dim_rt3 = nn.Conv2d(512, 256, kernel_size=1, padding=0)
+        self.dim_rt1 = nn.Sequential(*[nn.Conv2d(256, 128, kernel_size=1, padding=0), nn.ReLU(inplace=True)])
+        self.dim_rt2 = nn.Sequential(*[nn.Conv2d(512, 256, kernel_size=1, padding=0), nn.ReLU(inplace=True)])
+        self.dim_rt3 = nn.Sequential(*[nn.Conv2d(512, 256, kernel_size=1, padding=0), nn.ReLU(inplace=True)])
 
         self.top_pathway = TopViewPathway()
         self.lane_out = LanePredictionHead(self.num_lane_type, self.anchor_dim)
