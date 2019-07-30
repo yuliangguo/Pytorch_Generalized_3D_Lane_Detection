@@ -17,12 +17,12 @@ import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane import get_loader, homograpthy_g2c, homography_crop_resize
+from Dataloader.Load_Data_3DLane import get_loader
 from Networks.Loss_crit import Laneline_3D_loss, Laneline_3D_loss_fix_cam
-from Networks.LaneNet3D import Net, init_projective_transform
+from Networks.LaneNet3D import Net
 from tools.utils import define_args, first_run,\
                            mkdir_if_missing, Logger, define_init_weights,\
-                           define_scheduler, define_optim, AverageMeter, save_vis_result_2d
+                           define_scheduler, define_optim, AverageMeter, VisualSaver
 
 
 def train_net():
@@ -41,19 +41,6 @@ def train_net():
                       args.resize_h,
                       args.resize_w,
                       args.pretrained)
-
-    # compute homography matrix
-    pitch = np.pi / 180 * args.pitch
-    M, M_inv = init_projective_transform(args.top_view_region, [args.org_h, args.org_w],
-                                         args.crop_size, [args.resize_h, args.resize_w], pitch, args.cam_height, args.K)
-    S_ipm = np.array([[args.ipm_w, 0, 0],
-                      [0, args.ipm_h, 0],
-                      [0, 0, 1]], dtype=np.float)
-    S_im = np.array([[args.resize_w, 0, 0],
-                     [0, args.resize_h, 0],
-                     [0, 0, 1]], dtype=np.float)
-    M_inv_scaledup = np.matmul(S_ipm, M)
-    M_inv_scaledup = np.matmul(M_inv_scaledup, np.linalg.inv(S_im))
 
     # Dataloader for training and validation set
     train_loader = get_loader(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args)
@@ -109,6 +96,10 @@ def train_net():
     if not args.no_tb:
         global writer
         writer = SummaryWriter(os.path.join(args.save_path, 'Tensorboard/'))
+
+    # initialize visual saver
+    vs_saver = VisualSaver(args)
+
     # Train, evaluate or resume
     args.resume = first_run(args.save_path)
     if args.resume and not args.test_mode and not args.evaluate:
@@ -143,7 +134,7 @@ def train_net():
             model.load_state_dict(checkpoint['state_dict'])
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
-        validate(valid_loader, model, criterion, M_inv_scaledup)
+        validate(valid_loader, model, criterion, vs_saver)
         return
 
     # Start training from clean slate
@@ -232,10 +223,9 @@ def train_net():
 
             # Plot curves in two views
             if (i + 1) % args.save_freq == 0:
-                save_vis_result_2d('train', M_inv_scaledup, gt, output_net, idx, i, input,
-                                   args.ipm_h, args.ipm_w, args.save_path)
+                vs_saver.save_result('train', epoch, i, idx, input, gt, output_net)
 
-        losses_valid = validate(valid_loader, model, criterion, M_inv_scaledup, epoch)
+        losses_valid = validate(valid_loader, model, criterion, vs_saver, epoch)
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
@@ -275,7 +265,7 @@ def train_net():
         writer.close()
 
 
-def validate(loader, model, criterion, M, epoch=0):
+def validate(loader, model, criterion, vs_saver, epoch=0):
 
     # Define container to keep track of metric and loss
     losses = AverageMeter()
@@ -313,8 +303,7 @@ def validate(loader, model, criterion, M, epoch=0):
 
             # Plot curves in two views
             if (i + 1) % args.save_freq == 0:
-                save_vis_result_2d('valid', M, gt, output_net, idx, i, input,
-                                   args.ipm_h, args.ipm_w, args.save_path)
+                vs_saver.save_result('valid', epoch, i, idx, input, gt, output_net)
 
         if args.evaluate:
             print("===> Average {}-loss on validation set is {:.8}".format(crit_string, 
@@ -369,7 +358,8 @@ if __name__ == '__main__':
     # seems some system bug only allows 0 nworker
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 100
-    args.save_freq = 100
+    args.print_freq = 50
+    args.save_freq = 50
+    # args.evaluate = True
 
     train_net()

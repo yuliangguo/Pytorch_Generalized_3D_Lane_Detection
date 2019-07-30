@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
-class polynomial():
+class polynomial:
     """
     Polynomial class with exact integral calculation according to the
     trapezium rule.

@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 warnings.simplefilter('ignore', np.RankWarning)
+from tools.utils import homogenous_transformation, homograpthy_g2c, homography_crop_resize
 
 
 class LaneDataset(Dataset):
@@ -300,50 +301,6 @@ def resample_3d_laneline(gt_lane_3d, y_steps):
     return x_values, z_values
 
 
-def homograpthy_g2c(pitch, cam_height, K):
-    # transform top-view region to original image region
-    R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(np.pi / 2 + pitch), -np.sin(np.pi / 2 + pitch)],
-                      [0, np.sin(np.pi / 2 + pitch), np.cos(np.pi / 2 + pitch)]])
-    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
-    H_c2g = np.linalg.inv(H_g2c)
-    return H_g2c, H_c2g
-
-
-def homography_crop_resize(org_img_size, crop_y, resize_img_size):
-    """
-        compute the homography matrix transform original image to cropped and resized image
-    :param org_img_size: [org_h, org_w]
-    :param crop_y:
-    :param resize_img_size: [resize_h, resize_w]
-    :return:
-    """
-    # transform original image region to network input region
-    ratio_x = resize_img_size[1] / org_img_size[1]
-    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
-    H_c = np.array([[ratio_x, 0, 0],
-                    [0, ratio_y, -ratio_y*crop_y],
-                    [0, 0, 1]])
-    return H_c
-
-
-def homogenous_transformation(Matrix, x, y):
-    """
-    Helper function to transform coordinates defined by transformation matrix
-
-    Args:
-            Matrix (multi dim - array): Transformation matrix
-            x (array): original x coordinates
-            y (array): original y coordinates
-    """
-    ones = np.ones((1, len(y)))
-    coordinates = np.vstack((x, y, ones))
-    trans = np.matmul(Matrix, coordinates)
-
-    x_vals = trans[0,:]/trans[2, :]
-    y_vals = trans[1,:]/trans[2, :]
-    return x_vals, y_vals
-
 # TODO: A series of data augmentation functions can be implemented here
 
 
@@ -416,20 +373,19 @@ if __name__ == '__main__':
         print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
         print(gt_tensor.shape)
 
-        images = image_tensor.numpy()
+        images = image_tensor.permute(0, 2, 3, 1).data.cpu().numpy()
         gt_anchors = gt_tensor.numpy()
         for i in range(args.batch_size):
-            img = images[i, :, :, :].transpose([1, 2, 0])[..., ::-1]*255
-            img = img.astype(np.uint8)
+            img = images[i]
 
             # visualize visual border for confirming calibration
             x_2d, y_2d = homogenous_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
             x_2d = x_2d.astype(np.int)
             y_2d = y_2d.astype(np.int)
-            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [255, 0, 0], 2)
-            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [255, 0, 0], 2)
-            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [255, 0, 0], 2)
-            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [255, 0, 0], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             gt_anchor = gt_anchors[i, :, :]
@@ -443,7 +399,7 @@ if __name__ == '__main__':
                     x_2d = pts_2d[0, :].astype(np.int)
                     y_2d = pts_2d[1, :].astype(np.int)
                     for k in range(1, x_2d.shape[0]):
-                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [0, 0, 255], 2)
+                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [0, 0, 1], 2)
             cv2.imshow('2D gt check', img)
             cv2.waitKey(500)
             print('image: {:d} in batch: {:d}'.format(i, batch_ndx))

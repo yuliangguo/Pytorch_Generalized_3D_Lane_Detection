@@ -6,74 +6,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
 import torchvision.models as models
-from tools.utils import define_args, define_init_weights
-
-
-# def Init_Projective_transform_test(nclasses, batch_size, resize):
-#     # M_orig: unnormalized Transformation matrix
-#     # M: normalized transformation matrix
-#     # M_inv: Inverted normalized transformation matrix --> Needed for grid sample
-#     # original aspect ratio: 720x1280 --> after 80 rows cropped: 640x1280 --> after resize: 256x512 (default) or resize x 2*resize (in general)
-#     size = torch.Size([batch_size, nclasses, resize, 2*resize])
-#     y_start = 0.3
-#     y_stop = 1
-#     xd1, xd2, xd3, xd4 = 0.45, 0.55, 0.45, 0.55
-#     src = np.float32([[0.45, y_start], [0.55, y_start], [0.1, y_stop], [0.9, y_stop]])
-#     dst = np.float32([[xd3, y_start], [xd4, y_start], [xd1, y_stop], [xd2, y_stop]])
-#     M = cv2.getPerspectiveTransform(src, dst)
-#     M_inv = cv2.getPerspectiveTransform(dst, src)
-#     M = torch.from_numpy(M).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-#     M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([batch_size, 3, 3]).type(torch.FloatTensor)
-#     return size, M, M_inv
-
-
-# compute normalized transformation matrix for a top-view region boundaries
-def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
-    """
-        Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
-        the top view image's 4 corners
-        Ground coordinates: x-right, y-forward, z-up
-        The purpose of applying normalized transformation is for invariance in scale change
-
-    :param top_view_region: a 4 X 2 list of (X, Y) indicating the top-view region corners in order:
-                            top-left, top-right, bottom-left, bottom-right
-    :param batch_size: number of samples for each batch
-    :param org_img_size: the size of original image size: (h, w)
-    :param crop_y: pixels croped from original img
-    :param resize_img_size: the size of image as network input: (h, w)
-    :param pitch: camera pitch angle wrt ground plane
-    :param cam_height: camera height wrt ground plane in meters
-    :param K: camera intrinsic parameters
-    :return: M: the normalized transformation from image to IPM image
-    """
-
-    # transform top-view region to original image region
-    R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(np.pi/2 + pitch), -np.sin(np.pi/2 + pitch)],
-                      [0, np.sin(np.pi/2 + pitch), np.cos(np.pi/2 + pitch)]])
-    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
-
-    X = np.concatenate([top_view_region, np.ones([4, 1])], 1)
-    img_region = np.matmul(X, H_g2c.T)
-    border_org = np.divide(img_region[:, :2], img_region[:, 2:3])
-
-    # transform original image region to network input region
-    ratio_x = resize_img_size[1] / org_img_size[1]
-    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
-    H_c = np.array([[ratio_x, 0, 0],
-                    [0, ratio_y, -ratio_y*crop_y]])
-    border_net = np.matmul(np.concatenate([border_org, np.ones([4, 1])], axis=1), H_c.T)
-    border_net[:, 0] = border_net[:, 0] / resize_img_size[1]
-    border_net[:, 1] = border_net[:, 1] / resize_img_size[0]
-    border_net = np.float32(border_net)
-
-    # compute the normalized transformation
-    dst = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
-    # img to ipm
-    M = cv2.getPerspectiveTransform(border_net, dst)
-    # ipm to im
-    M_inv = cv2.getPerspectiveTransform(dst, border_net)
-    return M, M_inv
+from tools.utils import define_args, define_init_weights, init_projective_transform
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):

@@ -113,271 +113,207 @@ def define_args():
     return parser
 
 
-def save_vis_result_2d(train_or_val, M_inv_scaledup, gt, pred, idx, i, images, ipm_h, ipm_w, save_path):
+class VisualSaver:
+    def __init__(self, args):
+        self.save_path = args.save_path
+        self.ipm_w = args.ipm_w
+        self.ipm_h = args.ipm_h
+
+        x_min = args.top_view_region[0, 0]
+        x_max = args.top_view_region[1, 0]
+        self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w / 8), endpoint=True)
+        self.anchor_y_steps = args.anchor_y_steps
+
+        # compute homography between normalized coordinates of network input image and ipm image
+        pitch = np.pi / 180 * args.pitch
+        M_c2g, M_g2c = init_projective_transform(args.top_view_region, [args.org_h, args.org_w],
+                                             args.crop_size, [args.resize_h, args.resize_w], pitch, args.cam_height,
+                                             args.K)
+        # scale up to homography from network input image to ipm image
+        S_ipm = np.array([[args.ipm_w, 0, 0],
+                          [0, args.ipm_h, 0],
+                          [0, 0, 1]], dtype=np.float)
+        S_im = np.array([[args.resize_w, 0, 0],
+                         [0, args.resize_h, 0],
+                         [0, 0, 1]], dtype=np.float)
+        M_im2ipm_scaledup = np.matmul(S_ipm, M_c2g)
+
+        self.M_im2ipm = np.matmul(M_im2ipm_scaledup, np.linalg.inv(S_im))
+
+        # transformation from ipm to ground region
+        M_ipm2g = cv2.getPerspectiveTransform(np.float32([[0, 0],
+                                                          [self.ipm_w-1, 0],
+                                                          [0, self.ipm_h-1],
+                                                          [self.ipm_w-1, self.ipm_h-1]]),
+                                              np.float32(args.top_view_region))
+        M_im2g = np.matmul(M_ipm2g, self.M_im2ipm)
+        self.M_g2im = np.linalg.inv(M_im2g)
+        self.M_g2ipm = np.linalg.inv(M_ipm2g)
+
+    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred):
+        # just visualize the first sample of this batch
+        im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
+        im_inverse = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
+        im_inverse = np.clip(im_inverse, 0, 1)
+        im = np.clip(im, 0, 1)
+
+        gt_anchor = gt.data.cpu().numpy()[0]
+        pred_anchor = pred.data.cpu().numpy()[0]
+
+        # draw ground-truth lanelines
+        for j in range(gt_anchor.shape[0]):
+            if gt_anchor[j, -1] > 0:
+                x_offsets = gt_anchor[j, :-1]
+                x_g = x_offsets + self.anchor_x_steps[j]
+
+                # compute lanelines in image view
+                x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                # compute lanelines in ipm view
+                x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm = x_ipm.astype(np.int)
+                y_ipm = y_ipm.astype(np.int)
+                # draw lanelines in both views
+                for k in range(1, x_2d.shape[0]):
+                    im = cv2.line(im,
+                                  (x_2d[k - 1], y_2d[k - 1]),
+                                  (x_2d[k], y_2d[k]),
+                                  [0, 0, 1], 2)
+                    im_inverse = cv2.line(im_inverse,
+                                          (x_ipm[k - 1], y_ipm[k - 1]),
+                                          (x_ipm[k], y_ipm[k]),
+                                          [0, 0, 1], 2)
+
+        # draw predicted lanelines
+        for j in range(pred_anchor.shape[0]):
+            # may need to choose another probability threshold
+            # TODO: no NMS has been applied so that there could be redundent lanes close to each other
+            if pred_anchor[j, -1] > 0.5:
+                x_offsets = pred_anchor[j, :-1]
+                x_g = x_offsets + self.anchor_x_steps[j]
+
+                # compute lanelines in image view
+                x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                # compute lanelines in ipm view
+                x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm = x_ipm.astype(np.int)
+                y_ipm = y_ipm.astype(np.int)
+                # draw lanelines in both views
+                for k in range(1, x_2d.shape[0]):
+                    im = cv2.line(im,
+                                  (x_2d[k - 1], y_2d[k - 1]),
+                                  (x_2d[k], y_2d[k]),
+                                  [1, 0, 0], 2)
+                    im_inverse = cv2.line(im_inverse,
+                                          (x_ipm[k - 1], y_ipm[k - 1]),
+                                          (x_ipm[k], y_ipm[k]),
+                                          [1, 0, 0], 2)
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        ax1.imshow(im)
+        ax2.imshow(im_inverse)
+
+        fig.savefig(self.save_path + '/example/{}/epoch-{}_batch-{}_idx-{}'.format(train_or_val, epoch, batch_i, idx[0]))
+        plt.clf()
+        plt.close(fig)
+
+
+# compute normalized transformation matrix for a top-view region boundaries
+def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
+    """
+        Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
+        the top view image's 4 corners
+        Ground coordinates: x-right, y-forward, z-up
+        The purpose of applying normalized transformation is for invariance in scale change
+
+    :param top_view_region: a 4 X 2 list of (X, Y) indicating the top-view region corners in order:
+                            top-left, top-right, bottom-left, bottom-right
+    :param batch_size: number of samples for each batch
+    :param org_img_size: the size of original image size: (h, w)
+    :param crop_y: pixels croped from original img
+    :param resize_img_size: the size of image as network input: (h, w)
+    :param pitch: camera pitch angle wrt ground plane
+    :param cam_height: camera height wrt ground plane in meters
+    :param K: camera intrinsic parameters
+    :return: M: the normalized transformation from image to IPM image
     """
 
-    :param train_or_val:
-    :param M: img to ipm transformation in between normalized coordinates
-    :param gt:
-    :param pred:
-    :param idx:
-    :param i:
-    :param images:
-    :param ipm_h:
-    :param ipm_w:
-    :param save_path:
+    # transform top-view region to original image region
+    R_g2c = np.array([[1, 0, 0],
+                      [0, np.cos(np.pi/2 + pitch), -np.sin(np.pi/2 + pitch)],
+                      [0, np.sin(np.pi/2 + pitch), np.cos(np.pi/2 + pitch)]])
+    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
+
+    X = np.concatenate([top_view_region, np.ones([4, 1])], 1)
+    img_region = np.matmul(X, H_g2c.T)
+    border_org = np.divide(img_region[:, :2], img_region[:, 2:3])
+
+    # transform original image region to network input region
+    ratio_x = resize_img_size[1] / org_img_size[1]
+    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
+    H_c = np.array([[ratio_x, 0, 0],
+                    [0, ratio_y, -ratio_y*crop_y]])
+    border_net = np.matmul(np.concatenate([border_org, np.ones([4, 1])], axis=1), H_c.T)
+    border_net[:, 0] = border_net[:, 0] / resize_img_size[1]
+    border_net[:, 1] = border_net[:, 1] / resize_img_size[0]
+    border_net = np.float32(border_net)
+
+    # compute the normalized transformation
+    dst = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
+    # img to ipm
+    M = cv2.getPerspectiveTransform(border_net, dst)
+    # ipm to im
+    M_inv = cv2.getPerspectiveTransform(dst, border_net)
+    return M, M_inv
+
+
+def homograpthy_g2c(pitch, cam_height, K):
+    # transform top-view region to original image region
+    R_g2c = np.array([[1, 0, 0],
+                      [0, np.cos(np.pi / 2 + pitch), -np.sin(np.pi / 2 + pitch)],
+                      [0, np.sin(np.pi / 2 + pitch), np.cos(np.pi / 2 + pitch)]])
+    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
+    H_c2g = np.linalg.inv(H_g2c)
+    return H_g2c, H_c2g
+
+
+def homography_crop_resize(org_img_size, crop_y, resize_img_size):
+    """
+        compute the homography matrix transform original image to cropped and resized image
+    :param org_img_size: [org_h, org_w]
+    :param crop_y:
+    :param resize_img_size: [resize_h, resize_w]
     :return:
     """
-    # M = M.data.cpu().numpy()[0]
-    x = np.zeros(3)
-
-    im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
-
-    # im, M_scaledup = test_projective_transform(im, resize, M)
-    im_inverse = cv2.warpPerspective(im, M_inv_scaledup, (ipm_w, ipm_h))
-    im_inverse = np.clip(im_inverse, 0, 1)
-    im = np.clip(im, 0, 1)
-
-    # TODO: implement drawing of lanelines in both views
-
-    fig = plt.figure()
-    ax1 = fig.add_subplot(121)
-    ax2 = fig.add_subplot(122)
-    ax1.imshow(im)
-    ax2.imshow(im_inverse)
-
-    fig.savefig(save_path + '/example/{}/weight_idx-{}_batch-{}'.format(train_or_val, idx, i))
-    plt.clf()
-    plt.close(fig)
-
-def save_weightmap(train_or_val, M, M_inv, weightmap_zeros,
-                   beta0, beta1, beta2, beta3, gt_params_lhs, 
-                   gt_params_rhs, gt_params_llhs, gt_params_rrhs, line_class,
-                   gt, idx, i, images, no_ortho, resize, save_path):
-    M = M.data.cpu().numpy()[0]
-    x = np.zeros(3)
-
-    line_class = line_class[0].cpu().numpy()
-    left_lane = True if line_class[0] != 0 else False
-    right_lane = True if line_class[3] != 0 else False
-
-    wm0_zeros = weightmap_zeros.data.cpu()[0, 0].numpy()
-    wm1_zeros = weightmap_zeros.data.cpu()[0, 1].numpy()
-
-    im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
-    im_orig = np.copy(im)
-    gt_orig = gt.permute(0, 2, 3, 1).data.cpu().numpy()[0, :, :, 0]
-    im_orig = draw_homography_points(im_orig, x, resize)
-
-    im, M_scaledup = test_projective_transform(im, resize, M)
-
-    im, _ = draw_fitted_line(im, gt_params_rhs[0], resize, (0, 255, 0))
-    im, _ = draw_fitted_line(im, gt_params_lhs[0], resize, (0, 255, 0))
-    im, lane0 = draw_fitted_line(im, beta0[0], resize, (255, 0, 0))
-    im, lane1 = draw_fitted_line(im, beta1[0], resize, (0, 0, 255))
-    if beta2 is not None:
-        im, _ = draw_fitted_line(im, gt_params_llhs[0], resize, (0, 255, 0))
-        im, _ = draw_fitted_line(im, gt_params_rrhs[0], resize, (0, 255, 0))
-        if left_lane:
-            im, lane2 = draw_fitted_line(im, beta2[0], resize, (255, 255, 0))
-        if right_lane:
-            im, lane3 = draw_fitted_line(im, beta3[0], resize, (255, 128, 0))
+    # transform original image region to network input region
+    ratio_x = resize_img_size[1] / org_img_size[1]
+    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
+    H_c = np.array([[ratio_x, 0, 0],
+                    [0, ratio_y, -ratio_y*crop_y],
+                    [0, 0, 1]])
+    return H_c
 
 
-    if not no_ortho:
-        im_inverse = cv2.warpPerspective(im, np.linalg.inv(M_scaledup), (2*resize, resize))
-    else:
-        im_inverse = im_orig
-
-    im_orig = np.clip(im_orig, 0, 1)
-    im_inverse = np.clip(im_inverse, 0, 1)
-    im = np.clip(im, 0, 1)
-
-    fig = plt.figure()
-    ax1 = fig.add_subplot(421)
-    ax2 = fig.add_subplot(422)
-    ax3 = fig.add_subplot(423)
-    ax4 = fig.add_subplot(424)
-    ax5 = fig.add_subplot(425)
-    ax6 = fig.add_subplot(426)
-    ax7 = fig.add_subplot(427)
-    ax1.imshow(im)
-    ax2.imshow(wm0_zeros)
-    ax3.imshow(im_inverse)
-    ax4.imshow(wm1_zeros)
-    ax5.imshow(wm0_zeros/np.max(wm0_zeros)+wm1_zeros/np.max(wm1_zeros))
-    ax6.imshow(im_orig)
-    ax7.imshow(gt_orig)
-    fig.savefig(save_path + '/example/{}/weight_idx-{}_batch-{}'.format(train_or_val, idx, i))
-    plt.clf()
-    plt.close(fig)
-
-
-def test_projective_transform(input, resize, M):
-    # test grid using built in F.grid_sampler method.
-    M_scaledup = np.array([[M[0,0],M[0,1]*2,M[0,2]*(2*resize-1)],[0,M[1,1],M[1,2]*(resize-1)],[0,M[2,1]/(resize-1),M[2,2]]])
-    inp = cv2.warpPerspective(np.asarray(input), M_scaledup, (2*resize,resize))
-    return inp, M_scaledup
-
-
-def draw_fitted_line(img, params, resize, color=(255,0,0)):
-    params = params.data.cpu().tolist()
-    y_stop = 0.7
-    y_prime = np.linspace(0, y_stop, 20)
-    params = [0] * (4 - len(params)) + params
-    d, a, b, c = [*params]
-    x_pred = d*(y_prime**3) + a*(y_prime)**2 + b*(y_prime) + c
-    x_pred = x_pred*(2*resize-1)
-    y_prime = (1-y_prime)*(resize-1)
-    lane = [(xcord, ycord) for (xcord, ycord) in zip(x_pred, y_prime)] 
-    img = cv2.polylines(img, [np.int32(lane)], isClosed = False, color = color,thickness = 1)
-    return img, lane
-
-
-def draw_horizon(img, horizon, resize=256, color=(255,0,0)):
-    x = np.arange(2*resize-1)
-    horizon_line = [(x_cord, horizon+1) for x_cord in x]
-    img = cv2.polylines(img.copy(), [np.int32(horizon_line)], isClosed = False, color = color,thickness = 1)
-    return img
-
-
-def draw_homography_points(img, x, resize=256, color=(255,0,0)):
-    y_start1 = (0.3+x[2])*(resize-1)
-    y_start = 0.3*(resize-1)
-    y_stop = resize-1
-    src = np.float32([[0.45*(2*resize-1),y_start],[0.55*(2*resize-1), y_start],[0.1*(2*resize-1),y_stop],[0.9*(2*resize-1), y_stop]])
-    dst = np.float32([[(0.45+x[0])*(2*resize-1), y_start1],[(0.55+x[1])*(2*resize-1), y_start1],[(0.45+x[0])*(2*resize-1), y_stop],[(0.55+x[1])*(2*resize-1),y_stop]])
-    dst_ideal = np.float32([[0.45*(2*resize-1), y_start],[0.55*(2*resize-1), y_start],[0.45*(2*resize-1), y_stop],[0.55*(2*resize-1),y_stop]])
-    for idx in src:
-        img = cv2.circle(img, tuple(idx), radius=5, thickness=-1, color=(255,0,0))
-    for idx in dst_ideal:
-        img = cv2.circle(img, tuple(idx), radius=5, thickness=-1, color=(0,255,0))
-    for idx in dst:
-        img = cv2.circle(img, tuple(idx), radius=5, thickness=-1, color=(0,0,255))
-    return img
-
-
-def save_image(output, gt_params, i=1, resize=320):
-    outputs_seg = output.permute(0,2,3,1)
-    im = np.asarray(outputs_seg.data.cpu()[0])
-    im = draw_fitted_line(im,gt_params[0],resize)
-    im = Image.fromarray(im.astype('uint8'), 'RGB')
-    im.save('simple_net/simple_net_train/{}.png'.format(i[0]))
-
-
-def save_output(output,gt_params, i=1):
-    output = output*255/(torch.max(output))
-    output = output.permute(0,2,3,1)
-    im = np.asarray(output.data.cpu()[0]).squeeze(2)
-    
-#    im = draw_fitted_line(im,gt_params[0],resize)
-    im = Image.fromarray(im.astype('uint8'), 'P')
-    im.save('simple_net/simple_net_output/{}.png'.format(i[0]))
-
-
-def line_right_eq(x):
-    y = 0.438/0.7*x + 0.56 #0.7/0.438*(x-0.56)
-    return y
-
-
-def line_left_eq(x):
-    y = -x*0.438/0.7 + 0.44#-0.7/0.438*(x-0.44)
-    return y
-
-
-def f(x, *params):
-    '''
-    Constructs objective function which will be solved iteratively
-    '''
-    a, b, c, left_or_right = params
-    if left_or_right == 'left':
-        funct = a*x**2 + b*x + c - line_left_eq(x)
-    else:
-        funct = a*x**2 + b*x + c - line_right_eq(x)
-    return funct
-
-
-def draw_mask_line(im, beta0, beta1, beta2, beta3, resize):
-    beta0 = beta0.data.cpu().tolist()
-    beta1 = beta1.data.cpu().tolist()
-    beta2 = beta2.data.cpu().tolist()
-    beta3 = beta3.data.cpu().tolist()
-    params0 = *beta0, 'left'
-    params1 = *beta1, 'right'
-    params2 = *beta2, 'left'
-    params3 = *beta3, 'right'
-    x, y, order = [], [], []
-    max_lhs = fsolve(f, 0.05, args=params0)
-    if max_lhs > 0:
-        x.append(line_left_eq(max_lhs[0]))
-        y.append(1-max_lhs[0])
-        order.append(0)
-    else:
-        max_lhs = 0
-    max_rhs = fsolve(f, 0.05, args=params1)
-    if max_rhs > 0:
-        x.append(line_right_eq(max_rhs[0]))
-        y.append(1-max_rhs[0])
-        order.append(1)
-    else:
-        max_rhs = 0 
-    max_left = fsolve(f, 0.05, args=params2)
-    if max_left > 0:
-        x.append(line_left_eq(max_left[0]))
-        y.append(1-max_left[0])
-        order.append(2)
-    else:
-        max_left = 0
-    max_right = fsolve(f, 0.05, args=params3)
-    if max_right > 0:
-        x.append(line_right_eq(max_right[0]))
-        y.append(1-max_right[0])
-        order.append(3)
-    else:
-        max_right = 0 
-    y_stop = 1
-    y_prime = np.linspace(0, y_stop, 40)
-    x_prime_right = line_right_eq(y_prime)
-    x_prime_left = line_left_eq(y_prime)
-    y_prime, x_prime_lft, x_prime_rght = (1-y_prime)*(resize-1), x_prime_left*(2*resize-1), x_prime_right*(2*resize-1)
-    line_right = [(xcord, ycord) for (xcord, ycord) in zip(x_prime_rght, y_prime)] 
-    line_left = [(xcord, ycord) for (xcord, ycord) in zip(x_prime_lft, y_prime)] 
-    im = cv2.polylines(im, [np.int32(line_right)], isClosed = False, color = (255,0,0),thickness = 1)
-    im = cv2.polylines(im, [np.int32(line_left)], isClosed = False, color = (255,0,0),thickness = 1)
-    x = np.array(x)
-    y = np.array(y)
-    x_left, x_right = line_left_eq(max_left)*(2*resize-1), line_right_eq(max_right)*(2*resize-1)
-    y_left, y_right = (1-max_left)*(resize-1), (1-max_right)*(resize-1)
-    cv2.circle(np.asarray(im), (x_left,y_left), radius=3, thickness=-1, color=(0,0,255))
-    cv2.circle(np.asarray(im), (x_right,y_right), radius=3, thickness=-1, color=(0,0,255))
-    x_prime, y_prime = homogenous_transformation(x,y)
-    maxima = np.zeros(4)
-    for i, idx in enumerate(order):
-        maxima[idx] = y_prime[i]
-    return im, np.int_(np.round(x_prime*(2*resize-1))), np.int_(np.round(y_prime*(resize-1)))
-
-
-def homogenous_transformation(x,y):
+def homogenous_transformation(Matrix, x, y):
     """
-    Helper function to transform coordionates defined by transformation matrix
-    
+    Helper function to transform coordinates defined by transformation matrix
+
     Args:
             Matrix (multi dim - array): Transformation matrix
             x (array): original x coordinates
             y (array): original y coordinates
     """
-    y_start = 0.3
-    y_stop = 1
-    src = np.float32([[0.45,y_start],[0.55, y_start],[0.1,y_stop],[0.9, y_stop]])
-    dst = np.float32([[0.45, y_start],[0.55, y_start],[0.45, y_stop],[0.55,y_stop]])
-    M_inv = cv2.getPerspectiveTransform(dst,src)
-    
-    ones = np.ones((1,len(y)))
+    ones = np.ones((1, len(y)))
     coordinates = np.vstack((x, y, ones))
-    trans = np.matmul(M_inv, coordinates)
-            
-    x_vals = trans[0,:]/trans[2,:]
-    y_vals = trans[1,:]/trans[2,:]
+    trans = np.matmul(Matrix, coordinates)
+
+    x_vals = trans[0,:]/trans[2, :]
+    y_vals = trans[1,:]/trans[2, :]
     return x_vals, y_vals
 
 
