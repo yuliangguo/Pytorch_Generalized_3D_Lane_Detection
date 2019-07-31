@@ -24,13 +24,27 @@ def make_layers(cfg, in_channels=3, batch_norm=False):
     return nn.Sequential(*layers)
 
 
+def make_one_layer(in_channels, out_channels, kernel_size=3, padding=1, stride=1, batch_norm=False):
+    conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, stride=stride)
+    if batch_norm:
+        layers = [conv2d, nn.BatchNorm2d(out_channels), nn.ReLU(inplace=True)]
+    else:
+        layers = [conv2d, nn.ReLU(inplace=True)]
+    return layers
+
+
 class VggEncoder(nn.Module):
 
-    def __init__(self, output_layers, pretrained=False, init_weights=True):
+    def __init__(self, pretrained=False, batch_norm=False, init_weights=True):
         super(VggEncoder, self).__init__()
         if pretrained:
             init_weights = False
-        model_org = models.vgg16(pretrained)
+        if batch_norm:
+            model_org = models.vgg16_bn(pretrained)
+            output_layers = [12, 22, 32, 42]
+        else:
+            model_org = models.vgg16(pretrained)
+            output_layers = [8, 15, 22, 29]
         self.features1 = nn.Sequential(
                     *list(model_org.features.children())[:output_layers[0]+1])
         self.features2 = nn.Sequential(
@@ -98,11 +112,11 @@ class ProjectiveGridGenerator(nn.Module):
 
 # Sub-network corresponding to the top view pathway
 class TopViewPathway(nn.Module):
-    def __init__(self, init_weights=True):
+    def __init__(self, batch_norm=False, init_weights=True):
         super(TopViewPathway, self).__init__()
-        self.features1 = make_layers(['M', 128, 128, 128], 128)
-        self.features2 = make_layers(['M', 256, 256, 256], 256)
-        self.features3 = make_layers(['M', 256, 256, 256], 512)
+        self.features1 = make_layers(['M', 128, 128, 128], 128, batch_norm)
+        self.features2 = make_layers(['M', 256, 256, 256], 256, batch_norm)
+        self.features3 = make_layers(['M', 256, 256, 256], 512, batch_norm)
 
         if init_weights:
             self._initialize_weights()
@@ -133,29 +147,22 @@ class TopViewPathway(nn.Module):
 #  Lane Prediction Head: through a series of convolutions with no padding in the y dimension, the feature maps are
 #  reduced in height, and finally the prediction layer size is N × 1 × 3 ·(2 · K + 1)
 class LanePredictionHead(nn.Module):
-    def __init__(self, num_lane_type, anchor_dim):
+    def __init__(self, batch_norm=False, num_lane_type=3, anchor_dim=5):
         super(LanePredictionHead, self).__init__()
         layers = []
-        conv2d = nn.Conv2d(512, 64, kernel_size=3, padding=(0, 1))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=3, padding=(0, 1))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=3, padding=(0, 1))
-        layers += [conv2d, nn.ReLU(inplace=True)]
+        layers += make_one_layer(512, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
+        layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
+        layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
 
-        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
-        layers += [conv2d, nn.ReLU(inplace=True)]
-        conv2d = nn.Conv2d(64, 64, kernel_size=5, padding=(0, 2))
-        layers += [conv2d, nn.ReLU(inplace=True)]
+        layers += make_one_layer(64, 64, kernel_size=5, padding=(0, 2), batch_norm=batch_norm)
+        layers += make_one_layer(64, 64, kernel_size=5, padding=(0, 2), batch_norm=batch_norm)
+        layers += make_one_layer(64, 64, kernel_size=5, padding=(0, 2), batch_norm=batch_norm)
+        layers += make_one_layer(64, 64, kernel_size=5, padding=(0, 2), batch_norm=batch_norm)
         self.features = nn.Sequential(*layers)
 
         # reshape is needed before executing later layers
         dim_rt_layers = []
-        dim_rt_layers += [nn.Conv2d(256, 64, kernel_size=1, padding=0),nn.ReLU(inplace=True)]
+        dim_rt_layers += make_one_layer(256, 64, kernel_size=1, padding=0, batch_norm=batch_norm)
         dim_rt_layers += [nn.Conv2d(64, num_lane_type*anchor_dim, kernel_size=1, padding=0)]
         self.dim_rt = nn.Sequential(*dim_rt_layers)
 
@@ -176,17 +183,14 @@ class Net(nn.Module):
     def __init__(self, args):
         super().__init__()
 
-        # define sizes and perspective transformation
-        # resize = args.resize
-        # size = torch.Size([args.batch_size, args.nclasses, args.resize, 2*args.resize])
+        # define homographic transformation between image and ipm
 
-        # M, M_inv = Init_Projective_transform(args.nclasses, args.batch_size, args.resize)
         org_img_size = np.array([args.org_h, args.org_w])
         resize_img_size = np.array([args.resize_h, args.resize_w])
         pitch = np.pi / 180 * args.pitch
         M, M_inv = init_projective_transform(args.top_view_region, org_img_size,
                                              args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
-        M = torch.from_numpy(M).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
+        # M = torch.from_numpy(M).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
         M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
         # self.M = M
         self.M_inv = M_inv
@@ -204,8 +208,7 @@ class Net(nn.Module):
             self.anchor_dim = 2*args.num_y_anchor + 1
 
         # Define network
-        output_layers = [8, 15, 22, 29]
-        self.im_encoder = VggEncoder(output_layers, True)
+        self.im_encoder = VggEncoder(pretrained=args.pretrained, batch_norm=args.batch_norm)
 
         # the grid considers both src and dst grid normalized
         resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
@@ -222,12 +225,12 @@ class Net(nn.Module):
         self.project_layer4 = ProjectiveGridGenerator(size_top4, resize_img_size[0]/16, resize_img_size[1]/16,
                                                       M_inv, args.no_cuda)
 
-        self.dim_rt1 = nn.Sequential(*[nn.Conv2d(256, 128, kernel_size=1, padding=0), nn.ReLU(inplace=True)])
-        self.dim_rt2 = nn.Sequential(*[nn.Conv2d(512, 256, kernel_size=1, padding=0), nn.ReLU(inplace=True)])
-        self.dim_rt3 = nn.Sequential(*[nn.Conv2d(512, 256, kernel_size=1, padding=0), nn.ReLU(inplace=True)])
+        self.dim_rt1 = nn.Sequential(*make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=args.batch_norm))
+        self.dim_rt2 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
+        self.dim_rt3 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
 
-        self.top_pathway = TopViewPathway()
-        self.lane_out = LanePredictionHead(self.num_lane_type, self.anchor_dim)
+        self.top_pathway = TopViewPathway(args.batch_norm)
+        self.lane_out = LanePredictionHead(args.batch_norm, self.num_lane_type, self.anchor_dim)
 
     def forward(self, input):
         x1, x2, x3, x4 = self.im_encoder(input)
@@ -253,18 +256,20 @@ class Net(nn.Module):
 # unit test
 if __name__ == '__main__':
     from PIL import Image
-    from torchvision import transforms, utils
+    from torchvision import transforms
     import torchvision.transforms.functional as F2
 
     global args
     parser = define_args()
     args = parser.parse_args()
-    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.top_view_region = np.array([[-10, 80], [10, 80], [-10, 5], [10, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
     args.num_y_anchor = len(args.anchor_y_steps)
     # current test only considers no_centerline, no 3d case
     args.no_centerline = True
     args.no_3d = True
+    args.pretrained = True
+    args.batch_norm = True
 
     # set camera parameters for the test dataset
     args.K = np.array([[1000, 0, 640],
@@ -286,7 +291,7 @@ if __name__ == '__main__':
     with open(img_name, 'rb') as f:
         image = (Image.open(f).convert('RGB'))
     w, h = image.size
-    image = F2.crop(image, h-640, 0, 640, w)
+    image = F2.crop(image, args.crop_size, 0, args.org_h - args.crop_size, w)
     image = F2.resize(image, size=(args.resize_h, args.resize_w), interpolation=Image.BILINEAR)
     image = transforms.ToTensor()(image).float()
     image.unsqueeze_(0)

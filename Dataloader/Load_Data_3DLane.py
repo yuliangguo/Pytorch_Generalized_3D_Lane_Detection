@@ -345,8 +345,8 @@ if __name__ == '__main__':
     pitch = np.pi / 180 * args.pitch
 
     # set anchor grid
-    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.top_view_region = np.array([[-10, 80], [10, 80], [-10, 5], [10, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
     args.num_y_anchor = len(args.anchor_y_steps)
     x_min = args.top_view_region[0, 0]
     x_max = args.top_view_region[1, 0]

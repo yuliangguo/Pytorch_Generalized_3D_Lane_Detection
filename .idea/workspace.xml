@@ -4,7 +4,6 @@
     <list default="true" id="931bcb41-9576-4916-a93a-66bee6e62088" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" beforeDir="false" afterPath="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Networks/LaneNet3D.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/LaneNet3D.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Networks/Loss_crit.py" beforeDir="false" afterPath="$PROJECT_DIR$/Networks/Loss_crit.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tools/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/utils.py" afterDir="false" />
     </list>
@@ -16,11 +15,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="692">
-              <caret line="331" column="26" selection-start-line="331" selection-start-column="26" selection-end-line="331" selection-end-column="26" />
+            <state relative-caret-position="547">
+              <caret line="366" column="27" selection-start-line="366" selection-start-column="27" selection-end-line="366" selection-end-column="27" />
               <folding>
                 <element signature="e#48#66#0" expanded="true" />
               </folding>
@@ -31,8 +30,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-4543">
-              <caret line="10" selection-start-line="10" selection-end-line="10" />
+            <state relative-caret-position="108">
+              <caret line="33" selection-start-line="33" selection-end-line="33" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -41,10 +40,22 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
+        <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torchvision/models/vgg.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="1224">
+              <caret line="80" column="6" selection-start-line="80" selection-start-column="5" selection-end-line="80" selection-end-column="6" />
+              <folding>
+                <element signature="e#0#21#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="288">
-              <caret line="16" column="17" selection-start-line="16" selection-start-column="17" selection-end-line="16" selection-end-column="17" />
+            <state relative-caret-position="241">
+              <caret line="387" column="85" selection-start-line="387" selection-start-column="85" selection-end-line="387" selection-end-column="85" />
               <folding>
                 <element signature="e#47#65#0" expanded="true" />
               </folding>
@@ -73,11 +84,11 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/tools/utils.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2808">
-              <caret line="156" column="46" lean-forward="true" selection-start-line="156" selection-start-column="46" selection-end-line="156" selection-end-column="46" />
+            <state relative-caret-position="-5708">
+              <caret line="95" column="37" selection-start-line="95" selection-start-column="27" selection-end-line="95" selection-end-column="37" />
               <folding>
                 <element signature="e#25#40#0" expanded="true" />
               </folding>
@@ -96,24 +107,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>numpy</find>
-      <find>nump</find>
-      <find>relu</find>
-      <find>init</find>
-      <find>autograd</find>
-      <find>clip</find>
-      <find>grad</find>
-      <find>grid</find>
-      <find>grid_sample</find>
-      <find>learnin</find>
-      <find>scaledup</find>
-      <find>pitch</find>
-      <find>M_inv_scaledup</find>
-      <find>init_projective_transform</find>
-      <find>M_c2g</find>
-      <find>M_im2ipm</find>
-      <find>args.save_path</find>
-      <find>grid_samp</find>
       <find>evalu</find>
       <find>anchor_y_steps</find>
       <find>anchor_x_steps</find>
@@ -123,9 +116,27 @@
       <find>save_output</find>
       <find>homogenous_transformation</find>
       <find>args.save</find>
-      <find>vis_border_3d</find>
       <find>vs_saver</find>
+      <find>schedu</find>
+      <find>define_op</find>
+      <find>weight_decay</find>
+      <find>lr_decay</find>
+      <find>crop</find>
       <find>homograp</find>
+      <find>lr_pol</find>
+      <find>VggEncoder</find>
+      <find>dim_rt3</find>
+      <find>conv2d</find>
+      <find>batchnorm</find>
+      <find>LanePredictionHead</find>
+      <find>padding</find>
+      <find>make_layers</find>
+      <find>TopViewPathway</find>
+      <find>pretrain</find>
+      <find>define_ini</find>
+      <find>vis_border_3d</find>
+      <find>pretrained</find>
+      <find>batch_norm</find>
     </findStrings>
     <replaceStrings>
       <replace>args.num_y_anchor</replace>
@@ -143,9 +154,9 @@
         <option value="$PROJECT_DIR$/Dataloader/Load_Data_new.py" />
         <option value="$PROJECT_DIR$/tools/prepare_data_split.py" />
         <option value="$PROJECT_DIR$/Networks/Loss_crit.py" />
-        <option value="$PROJECT_DIR$/Networks/LaneNet3D.py" />
         <option value="$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py" />
         <option value="$PROJECT_DIR$/tools/utils.py" />
+        <option value="$PROJECT_DIR$/Networks/LaneNet3D.py" />
         <option value="$PROJECT_DIR$/main.py" />
       </list>
     </option>
@@ -345,8 +356,8 @@
     <recent_temporary>
       <list>
         <item itemvalue="Python.main" />
-        <item itemvalue="Python.Load_Data_3DLane" />
         <item itemvalue="Python.3DLaneNet" />
+        <item itemvalue="Python.Load_Data_3DLane" />
         <item itemvalue="Python.Loss_crit" />
         <item itemvalue="Python.prepare_data_split" />
       </list>
@@ -379,7 +390,7 @@
       <window_info anchor="bottom" id="Find" order="4" weight="0.32960477" />
       <window_info anchor="bottom" id="Version Control" order="5" weight="0.32960477" />
       <window_info anchor="bottom" id="Run" order="6" weight="0.32960477" />
-      <window_info active="true" anchor="bottom" id="Debug" order="7" visible="true" weight="0.393736" />
+      <window_info active="true" anchor="bottom" id="Debug" order="7" visible="true" weight="0.41014168" />
       <window_info anchor="bottom" id="Cvs" order="8" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="9" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="10" />
@@ -387,6 +398,17 @@
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
     </layout>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/Networks/LaneNet3D.py</url>
+          <line>285</line>
+          <option name="timeStamp" value="14" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
   <component name="debuggerHistoryManager">
     <expressions id="evaluateCodeFragment">
@@ -458,6 +480,16 @@ lane[:, 1] = gt_y_steps</expression-string>
     </expressions>
     <expressions id="evaluateExpression">
       <expression>
+        <expression-string>model._modules['im_encoder']._modules['features1']</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
+        <expression-string>model._modules['im_encoder']</expression-string>
+        <language-id>Python</language-id>
+        <evaluation-mode>EXPRESSION</evaluation-mode>
+      </expression>
+      <expression>
         <expression-string>M_ipm2g = cv2.getPerspectiveTransform(
     np.float32([[0, 0], [self.ipm_w - 1, 0], [0, self.ipm_h - 1], [self.ipm_w - 1, self.ipm_h - 1]]),
     np.float32(args.top_view_region))</expression-string>
@@ -494,30 +526,10 @@ lane[:, 1] = gt_y_steps</expression-string>
         <language-id>Python</language-id>
         <evaluation-mode>EXPRESSION</evaluation-mode>
       </expression>
-      <expression>
-        <expression-string>print(np.sum(x4[0,:,:,:].cpu().detach().numpy()))</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
-      <expression>
-        <expression-string>print(np.sum(x[0,:,:,0].cpu().detach().numpy()))</expression-string>
-        <language-id>Python</language-id>
-        <evaluation-mode>EXPRESSION</evaluation-mode>
-      </expression>
     </expressions>
   </component>
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/Networks/BaseNet.py" />
-    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torchvision/models/vgg.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="293">
-          <caret line="61" selection-start-line="61" selection-end-line="74" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#21#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$APPLICATION_HOME_DIR$/helpers/pydev/_pydevd_bundle/pydevd_breakpoints.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="292">
@@ -529,13 +541,6 @@ lane[:, 1] = gt_y_steps</expression-string>
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="559">
           <caret line="2596" selection-start-line="2596" selection-end-line="2596" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/conv.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="296">
-          <caret line="319" selection-start-line="319" selection-end-line="319" />
         </state>
       </provider>
     </entry>
@@ -610,13 +615,6 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
-    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="340">
-          <caret line="174" column="76" lean-forward="true" selection-start-line="174" selection-start-column="76" selection-end-line="174" selection-end-column="76" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/autograd/gradcheck.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="453">
@@ -655,42 +653,75 @@ lane[:, 1] = gt_y_steps</expression-string>
         </state>
       </provider>
     </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/init.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <folding>
+            <element signature="e#0#11#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="291">
+          <caret line="172" selection-start-line="172" selection-end-line="172" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torch/nn/modules/conv.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="561">
+          <caret line="319" selection-start-line="319" selection-end-line="319" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tools/utils.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-5708">
+          <caret line="95" column="37" selection-start-line="95" selection-start-column="27" selection-end-line="95" selection-end-column="37" />
+          <folding>
+            <element signature="e#25#40#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/Dataloader/Load_Data_3DLane.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="288">
-          <caret line="16" column="17" selection-start-line="16" selection-start-column="17" selection-end-line="16" selection-end-column="17" />
+        <state relative-caret-position="241">
+          <caret line="387" column="85" selection-start-line="387" selection-start-column="85" selection-end-line="387" selection-end-column="85" />
           <folding>
             <element signature="e#47#65#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/main.py">
+    <entry file="file://$USER_HOME$/anaconda3/lib/python3.7/site-packages/torchvision/models/vgg.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="692">
-          <caret line="331" column="26" selection-start-line="331" selection-start-column="26" selection-end-line="331" selection-end-column="26" />
+        <state relative-caret-position="1224">
+          <caret line="80" column="6" selection-start-line="80" selection-start-column="5" selection-end-line="80" selection-end-column="6" />
           <folding>
-            <element signature="e#48#66#0" expanded="true" />
+            <element signature="e#0#21#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/Networks/LaneNet3D.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-4543">
-          <caret line="10" selection-start-line="10" selection-end-line="10" />
+        <state relative-caret-position="108">
+          <caret line="33" selection-start-line="33" selection-end-line="33" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/tools/utils.py">
+    <entry file="file://$PROJECT_DIR$/main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2808">
-          <caret line="156" column="46" lean-forward="true" selection-start-line="156" selection-start-column="46" selection-end-line="156" selection-end-column="46" />
+        <state relative-caret-position="547">
+          <caret line="366" column="27" selection-start-line="366" selection-start-column="27" selection-end-line="366" selection-end-column="27" />
           <folding>
-            <element signature="e#25#40#0" expanded="true" />
+            <element signature="e#48#66#0" expanded="true" />
           </folding>
         </state>
       </provider>

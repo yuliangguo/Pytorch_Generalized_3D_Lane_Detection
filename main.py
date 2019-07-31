@@ -351,8 +351,8 @@ if __name__ == '__main__':
     args.pitch = 9
 
     # set ipm and anchor parameters
-    args.top_view_region = np.array([[-20, 100], [20, 100], [-20, 5], [20, 5]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.top_view_region = np.array([[-10, 80], [10, 80], [-10, 5], [10, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
     args.num_y_anchor = len(args.anchor_y_steps)
 
     # seems some system bug only allows 0 nworker
@@ -361,5 +361,9 @@ if __name__ == '__main__':
     args.print_freq = 50
     args.save_freq = 50
     # args.evaluate = True
+
+    # initialize with pretrained vgg weights
+    args.pretrained = False
+    args.batch_norm = False
 
     train_net()
