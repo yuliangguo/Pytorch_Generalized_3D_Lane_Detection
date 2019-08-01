@@ -1,7 +1,8 @@
 # Directories
 data
 Saved
-.idea
+.*
+!/.gitignore
 # temporary files
 *~
 *.pyc
