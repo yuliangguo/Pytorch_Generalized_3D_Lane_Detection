@@ -26,7 +26,7 @@ def define_args():
     parser.add_argument('--dataset', default='lane_detection', help='dataset images to train on')
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
     parser.add_argument('--nepochs', type=int, default=350, help='total numbers of epochs')
-    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate')
+    parser.add_argument('--learning_rate', type=float, default=5*1e-4, help='learning rate')
     parser.add_argument('--no_cuda', action='store_true', help='if gpu available')
     parser.add_argument('--nworkers', type=int, default=8, help='num of threads')
     parser.add_argument('--no_dropout', action='store_true', help='no dropout in network')
@@ -90,6 +90,8 @@ def define_args():
     parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
     parser.add_argument('--save_path', type=str, default='Saved/', help='directory to save output')
     # parser.add_argument('--weights_path', type=str, help='The pretrained weights path')
+    parser.add_argument('--vgg_mean', type=float, default=[0.485, 0.456, 0.406], help='Mean values of rgb used in pretrained model on ImageNet')
+    parser.add_argument('--vgg_std', type=float, default=[0.229, 0.224, 0.225], help='Mean values of rgb used in pretrained model on ImageNet')
     # 3D LaneNet
     parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
@@ -116,6 +118,8 @@ def define_args():
 
 class VisualSaver:
     def __init__(self, args):
+        self.vgg_mean = args.vgg_mean
+        self.vgg_std = args.vgg_std
         self.save_path = args.save_path
         self.ipm_w = args.ipm_w
         self.ipm_h = args.ipm_h
@@ -154,6 +158,10 @@ class VisualSaver:
     def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred):
         # just visualize the first sample of this batch
         im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
+        im = im * np.array(self.vgg_std)
+        im = im + np.array(self.vgg_mean)
+        im = np.clip(im, 0, 1)
+
         im_inverse = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
         im_inverse = np.clip(im_inverse, 0, 1)
         im = np.clip(im, 0, 1)

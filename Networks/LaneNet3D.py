@@ -35,15 +35,13 @@ def make_one_layer(in_channels, out_channels, kernel_size=3, padding=1, stride=1
 
 class VggEncoder(nn.Module):
 
-    def __init__(self, pretrained=False, batch_norm=False, init_weights=True):
+    def __init__(self, batch_norm=False, init_weights=True):
         super(VggEncoder, self).__init__()
-        if pretrained:
-            init_weights = False
         if batch_norm:
-            model_org = models.vgg16_bn(pretrained)
+            model_org = models.vgg16_bn()
             output_layers = [12, 22, 32, 42]
         else:
-            model_org = models.vgg16(pretrained)
+            model_org = models.vgg16()
             output_layers = [8, 15, 22, 29]
         self.features1 = nn.Sequential(
                     *list(model_org.features.children())[:output_layers[0]+1])
@@ -208,7 +206,7 @@ class Net(nn.Module):
             self.anchor_dim = 2*args.num_y_anchor + 1
 
         # Define network
-        self.im_encoder = VggEncoder(pretrained=args.pretrained, batch_norm=args.batch_norm)
+        self.im_encoder = VggEncoder(batch_norm=args.batch_norm)
 
         # the grid considers both src and dst grid normalized
         resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
@@ -252,12 +250,42 @@ class Net(nn.Module):
         out = self.lane_out(x)
         return out
 
+    def load_pretrained_vgg(self, batch_norm):
+        if batch_norm:
+            vgg = models.vgg16_bn(pretrained=True)
+            output_layers = [12, 22, 32, 42]
+        else:
+            vgg = models.vgg16(pretrained=True)
+            output_layers = [8, 15, 22, 29]
+
+        layer_ids_list = [range(0, output_layers[0]+1),
+                          range(output_layers[0]+1, output_layers[1]+1),
+                          range(output_layers[1] + 1, output_layers[2] + 1),
+                          range(output_layers[2]+1, output_layers[3]+1)]
+        features_list = [self.im_encoder.features1,
+                        self.im_encoder.features2,
+                        self.im_encoder.features3,
+                        self.im_encoder.features4]
+
+        for j in range(4):
+            layer_ids = layer_ids_list[j]
+            features = features_list[j]
+            for i, lid in enumerate(layer_ids):
+                classname = features[i].__class__.__name__
+                if classname.find('Conv') != -1:
+                    features[i].weight.data.copy_(vgg.features[lid].weight.data)
+                    features[i].bias.data.copy_(vgg.features[lid].bias.data)
+                elif classname.find('BatchNorm2d') != -1:
+                    features[i].weight.data.copy_(vgg.features[lid].weight.data)
+                    features[i].bias.data.copy_(vgg.features[lid].bias.data)
 
 # unit test
 if __name__ == '__main__':
+    import os
     from PIL import Image
     from torchvision import transforms
     import torchvision.transforms.functional as F2
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global args
     parser = define_args()
@@ -284,10 +312,16 @@ if __name__ == '__main__':
 
     # initialize model weights
     define_init_weights(model, args.weight_init)
+
+    # load in vgg pretrained weights on ImageNet
+    if args.pretrained:
+        model.load_pretrained_vgg(args.batch_norm)
+        print('vgg weights pretrained on ImageNet loaded!')
+
     # put model on gpu
     model = model.cuda()
     # load input
-    img_name = '/home/yuliangguo/Projects/3DLaneNet/1.jpg'
+    img_name = '../1.jpg'
     with open(img_name, 'rb') as f:
         image = (Image.open(f).convert('RGB'))
     w, h = image.size

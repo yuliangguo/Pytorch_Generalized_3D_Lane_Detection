@@ -33,14 +33,15 @@ def train_net():
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define save path
-    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}' \
+    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}' \
               .format(args.mod,
                       args.optimizer,
                       args.learning_rate,
                       args.batch_size,
                       args.resize_h,
                       args.resize_w,
-                      args.pretrained)
+                      args.pretrained,
+                      args.batch_norm)
 
     # Dataloader for training and validation set
     train_loader = get_loader(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args)
@@ -49,6 +50,11 @@ def train_net():
     # Define network
     model = Net(args)
     define_init_weights(model, args.weight_init)
+
+    # load in vgg pretrained weights on ImageNet
+    if args.pretrained:
+        model.load_pretrained_vgg(args.batch_norm)
+        print('vgg weights pretrained on ImageNet loaded!')
 
     if not args.no_cuda:
         # Load model on gpu before passing params to optimizer
@@ -330,6 +336,8 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
     global args
     parser = define_args()
     args = parser.parse_args()
@@ -337,7 +345,7 @@ if __name__ == '__main__':
     # set dataset parameters
     args.dataset_name = 'tusimple'
     args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled'
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.save_path = ops.join(args.save_path, args.dataset_name)
     args.no_centerline = True
     args.no_3d = True
@@ -358,12 +366,15 @@ if __name__ == '__main__':
     # seems some system bug only allows 0 nworker
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 50
-    args.save_freq = 50
-    # args.evaluate = True
+    args.print_freq = 40
+    args.save_freq = 40
 
     # initialize with pretrained vgg weights
-    args.pretrained = False
-    args.batch_norm = False
+    args.pretrained = True
+    # apply batch norm in network
+    args.batch_norm = True
+
+    # only run evaluation
+    args.evaluate = False
 
     train_net()

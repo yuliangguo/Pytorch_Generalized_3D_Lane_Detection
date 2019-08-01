@@ -37,6 +37,7 @@ class LaneDataset(Dataset):
         :param dataset_info_file: json file list
         """
         self.totensor = transforms.ToTensor()
+        self.normalize = transforms.Normalize(args.vgg_mean, args.vgg_std)
         self.no_3d = args.no_3d
         self.no_centerline = args.no_centerline
 
@@ -244,6 +245,7 @@ class LaneDataset(Dataset):
         # TODO: implement centerlines case when avaliable
 
         image = self.totensor(image).float()
+        image = self.normalize(image)
         gt_anchor = gt_anchor.reshape([np.int32(self.w_ipm / 8), -1])
         gt_anchor = torch.from_numpy(gt_anchor)
         return image, gt_anchor, idx
@@ -329,7 +331,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # set dataset ground-truth path
-    dataset_base_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
+    dataset_base_dir = '/home/yuliangguo/Datasets/tusimple/'
     json_file_path = ops.join(dataset_base_dir, 'label_data_0601.json')
 
     # set flags to indicate centerline and 3D attributes availability
@@ -373,19 +375,23 @@ if __name__ == '__main__':
         print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
         print(gt_tensor.shape)
 
+        # convert to BGR and numpy for visualization in opencv
         images = image_tensor.permute(0, 2, 3, 1).data.cpu().numpy()
         gt_anchors = gt_tensor.numpy()
         for i in range(args.batch_size):
             img = images[i]
+            img = img * np.array(args.vgg_std)
+            img = img + np.array(args.vgg_mean)
+            img = np.clip(img, 0, 1)
 
             # visualize visual border for confirming calibration
             x_2d, y_2d = homogenous_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
             x_2d = x_2d.astype(np.int)
             y_2d = y_2d.astype(np.int)
-            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [1, 0, 0], 2)
-            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
-            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [1, 0, 0], 2)
-            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [0, 0, 1], 2)
+            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [0, 0, 1], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [0, 0, 1], 2)
+            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [0, 0, 1], 2)
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             gt_anchor = gt_anchors[i, :, :]
@@ -399,8 +405,9 @@ if __name__ == '__main__':
                     x_2d = pts_2d[0, :].astype(np.int)
                     y_2d = pts_2d[1, :].astype(np.int)
                     for k in range(1, x_2d.shape[0]):
-                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [0, 0, 1], 2)
-            cv2.imshow('2D gt check', img)
+                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [1, 0, 0], 2)
+            # convert image to BGR for opencv imshow
+            cv2.imshow('2D gt check', np.flip(img, axis=2))
             cv2.waitKey(500)
             print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
 
