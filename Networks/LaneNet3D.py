@@ -263,9 +263,9 @@ class Net(nn.Module):
                           range(output_layers[1] + 1, output_layers[2] + 1),
                           range(output_layers[2]+1, output_layers[3]+1)]
         features_list = [self.im_encoder.features1,
-                        self.im_encoder.features2,
-                        self.im_encoder.features3,
-                        self.im_encoder.features4]
+                         self.im_encoder.features2,
+                         self.im_encoder.features3,
+                         self.im_encoder.features4]
 
         for j in range(4):
             layer_ids = layer_ids_list[j]
@@ -278,6 +278,7 @@ class Net(nn.Module):
                 elif classname.find('BatchNorm2d') != -1:
                     features[i].weight.data.copy_(vgg.features[lid].weight.data)
                     features[i].bias.data.copy_(vgg.features[lid].bias.data)
+
 
 # unit test
 if __name__ == '__main__':
@@ -297,7 +298,7 @@ if __name__ == '__main__':
     args.no_centerline = True
     args.no_3d = True
     args.pretrained = True
-    args.batch_norm = True
+    args.batch_norm = False
 
     # set camera parameters for the test dataset
     args.K = np.array([[1000, 0, 640],

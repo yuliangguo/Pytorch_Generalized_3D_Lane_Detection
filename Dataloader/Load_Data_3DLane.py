@@ -380,8 +380,10 @@ if __name__ == '__main__':
         gt_anchors = gt_tensor.numpy()
         for i in range(args.batch_size):
             img = images[i]
-            img = img * np.array(args.vgg_std)
-            img = img + np.array(args.vgg_mean)
+            img = img * np.array(args.vgg_std).astype(np.float32)
+            img = img + np.array(args.vgg_mean).astype(np.float32)
+            if img.min() < 0. or img.max() > 1.0:
+                print('found an invalid normalized sample')
             img = np.clip(img, 0, 1)
 
             # visualize visual border for confirming calibration

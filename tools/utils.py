@@ -90,8 +90,8 @@ def define_args():
     parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
     parser.add_argument('--save_path', type=str, default='Saved/', help='directory to save output')
     # parser.add_argument('--weights_path', type=str, help='The pretrained weights path')
-    parser.add_argument('--vgg_mean', type=float, default=[0.485, 0.456, 0.406], help='Mean values of rgb used in pretrained model on ImageNet')
-    parser.add_argument('--vgg_std', type=float, default=[0.229, 0.224, 0.225], help='Mean values of rgb used in pretrained model on ImageNet')
+    parser.add_argument('--vgg_mean', type=float, default=[0.485, 0.456, 0.406], help='Mean of rgb used in pretrained model on ImageNet')
+    parser.add_argument('--vgg_std', type=float, default=[0.229, 0.224, 0.225], help='Std of rgb used in pretrained model on ImageNet')
     # 3D LaneNet
     parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")

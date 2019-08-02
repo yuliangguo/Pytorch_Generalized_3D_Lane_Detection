@@ -167,11 +167,8 @@ def train_net():
         batch_time = AverageMeter()
         data_time = AverageMeter()
         losses = AverageMeter()
-        # avg_area = AverageMeter()
-        # exact_area = AverageMeter()
 
         # Specify operation modules
-        # TODO: check this later
         model.train()
 
         # compute timing
@@ -336,7 +333,7 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
@@ -369,12 +366,15 @@ if __name__ == '__main__':
     args.print_freq = 40
     args.save_freq = 40
 
+    # learning rate
+    # args.learning_rate = 1e-2
     # initialize with pretrained vgg weights
-    args.pretrained = True
+    args.pretrained = False
     # apply batch norm in network
     args.batch_norm = True
 
-    # only run evaluation
+    # for the case only running evaluation
     args.evaluate = False
 
+    # run the training
     train_net()
