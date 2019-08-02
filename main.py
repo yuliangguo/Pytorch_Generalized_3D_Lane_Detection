@@ -17,12 +17,13 @@ import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane import get_loader
+from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes
 from Networks.Loss_crit import Laneline_3D_loss, Laneline_3D_loss_fix_cam
 from Networks.LaneNet3D import Net
-from tools.utils import define_args, first_run,\
-                           mkdir_if_missing, Logger, define_init_weights,\
-                           define_scheduler, define_optim, AverageMeter, VisualSaver
+from tools.utils import define_args, first_run, homograpthy_g2c,\
+                        mkdir_if_missing, Logger, define_init_weights,\
+                        define_scheduler, define_optim, AverageMeter, VisualSaver
+from tools.eval_lane import LaneEval
 
 
 def train_net():
@@ -44,8 +45,19 @@ def train_net():
                       args.batch_norm)
 
     # Dataloader for training and validation set
-    train_loader = get_loader(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args)
-    valid_loader = get_loader(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args)
+    val_gt_file = ops.join(args.data_dir, 'val.json')
+    train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args)
+    train_loader = get_loader(train_dataset, args)
+    valid_dataset = LaneDataset(args.dataset_dir, val_gt_file, args)
+    valid_loader = get_loader(valid_dataset, args)
+
+    # extract valid set labels for evaluation later
+    global valid_set_labels
+    valid_set_labels = [json.loads(line) for line in open(val_gt_file).readlines()]
+    global H_g2c
+    H_g2c = valid_dataset.H_g2c
+    global anchor_x_steps
+    anchor_x_steps = valid_dataset.anchor_x_steps
 
     # Define network
     model = Net(args)
@@ -140,7 +152,8 @@ def train_net():
             model.load_state_dict(checkpoint['state_dict'])
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
-        validate(valid_loader, model, criterion, vs_saver)
+        loss_valid, eval_acc = validate(valid_loader, model, criterion, vs_saver, val_gt_file)
+        print('evaluation accuracy: {:3f}'.format(eval_acc))
         return
 
     # Start training from clean slate
@@ -228,7 +241,7 @@ def train_net():
             if (i + 1) % args.save_freq == 0:
                 vs_saver.save_result('train', epoch, i, idx, input, gt, output_net)
 
-        losses_valid = validate(valid_loader, model, criterion, vs_saver, epoch)
+        losses_valid, eval_acc = validate(valid_loader, model, criterion, vs_saver, val_gt_file, epoch)
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
@@ -268,14 +281,16 @@ def train_net():
         writer.close()
 
 
-def validate(loader, model, criterion, vs_saver, epoch=0):
+def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
 
     # Define container to keep track of metric and loss
     losses = AverageMeter()
+    lane_pred_file = ops.join(args.save_path, 'val_pred_file.json')
 
     # Evaluate model
     model.eval()
 
+    f_out = open(lane_pred_file, 'w')
     # Only forward pass, hence no gradients needed
     with torch.no_grad():
         
@@ -308,10 +323,28 @@ def validate(loader, model, criterion, vs_saver, epoch=0):
             if (i + 1) % args.save_freq == 0:
                 vs_saver.save_result('valid', epoch, i, idx, input, gt, output_net)
 
+            # write results and evaluate
+            output_net = output_net.data.cpu().numpy()
+            num_el = input.size(0)
+            with open(lane_pred_file, 'a') as jsonFile:
+                for j in range(num_el):
+                    im_id = idx[j]
+                    json_line = valid_set_labels[im_id]
+                    h_samples = json_line["h_samples"]
+                    lanes_pred = compute_tusimple_lanes(output_net[0], h_samples, H_g2c,
+                                                        anchor_x_steps, args.anchor_y_steps, 0, args.org_w)
+                    json_line["lanes"] = lanes_pred
+                    json.dump(json_line, jsonFile)
+                    jsonFile.write('\n')
+
+        acc_eval = LaneEval.bench_one_submit(lane_pred_file, val_gt_file)
+
         if args.evaluate:
-            print("===> Average {}-loss on validation set is {:.8}".format(crit_string, 
-                                                                           losses.avg))
-        return losses.avg
+            print("===> Average {}-loss on validation set is {:.8}".format(crit_string, losses.avg))
+            print("===> Evaluation accuracy on validation set is {:.8}".format(acc_eval[0]))
+
+        f_out.close()
+        return losses.avg, acc_eval
 
 
 def save_checkpoint(state, to_copy, epoch):
@@ -342,7 +375,7 @@ if __name__ == '__main__':
     # set dataset parameters
     args.dataset_name = 'tusimple'
     args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
     args.save_path = ops.join(args.save_path, args.dataset_name)
     args.no_centerline = True
     args.no_3d = True
@@ -374,7 +407,7 @@ if __name__ == '__main__':
     args.batch_norm = True
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # run the training
     train_net()

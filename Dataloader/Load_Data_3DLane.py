@@ -15,12 +15,12 @@ import random
 import warnings
 from scipy.optimize import fsolve
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
-warnings.simplefilter('ignore', np.RankWarning)
 from tools.utils import homogenous_transformation, homograpthy_g2c, homography_crop_resize
+warnings.simplefilter('ignore', np.RankWarning)
+matplotlib.use('Agg')
 
 
 class LaneDataset(Dataset):
@@ -36,40 +36,44 @@ class LaneDataset(Dataset):
 
         :param dataset_info_file: json file list
         """
+        # define image pre-processor
         self.totensor = transforms.ToTensor()
         self.normalize = transforms.Normalize(args.vgg_mean, args.vgg_std)
+
+        # dataset parameters
         self.no_3d = args.no_3d
         self.no_centerline = args.no_centerline
 
         self.h_org = args.org_h
         self.w_org = args.org_w
         self.h_crop = args.crop_size
+
+        # parameters related to service network
         self.h_net = args.resize_h
         self.w_net = args.resize_w
         self.h_ipm = args.ipm_h
         self.w_ipm = args.ipm_w
         self.x_ratio = float(self.w_net) / float(self.w_org)
         self.y_ratio = float(self.h_net) / float(self.h_org - self.h_crop)
-        self.anchor_y_steps = args.anchor_y_steps
-        self.num_y_steps = len(self.anchor_y_steps)
         self.top_view_region = args.top_view_region
-        # initialize the homography between image and IPM, this need to be exactly the same as network
-        self.pitch = np.pi / 180 * args.pitch
-        H_g2c, H_c2g = homograpthy_g2c(self.pitch, args.cam_height, args.K)
-        self.H_c2g = H_c2g
-        # compute y_ref in ground
         self.y_ref = args.y_ref
-        # compute x_steps
+
+        # compute the homography between image and IPM, and crop transformation
+        self.pitch = np.pi / 180 * args.pitch
+        self.H_g2c,  self.H_c2g = homograpthy_g2c(self.pitch, args.cam_height, args.K)
+        self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize_h, args.resize_w])
+
+        # compute anchor steps
         x_min = self.top_view_region[0, 0]
         x_max = self.top_view_region[1, 0]
         self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
+        self.anchor_y_steps = args.anchor_y_steps
+        self.num_y_steps = len(self.anchor_y_steps)
 
-        # self._label_image_path, self._label_lane_pts_all, self._label_lane_types_all = \
-        #     self._init_dataset(dataset_base_dir, json_file_path)
+        # parse ground-truth file
         self._label_image_path, self._label_lane_pts_all = \
             self._init_dataset_tusimple(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
-        # self._random_dataset()
 
     def _init_dataset(self, dataset_base_dir, json_file_path):
         """
@@ -165,18 +169,6 @@ class LaneDataset(Dataset):
         label_image_path = np.array(label_image_path)
         return label_image_path, gt_lane_pts_all
 
-    # def _random_dataset(self):
-    #     """
-    #
-    #     :return:
-    #     """
-    #
-    #     random_idx = np.random.permutation(self._label_image_path.shape[0])
-    #     self._label_image_path = self._label_image_path[random_idx]
-    #     self._label_lane_types_all = [self._label_lane_types_all[i] for i in random_idx]
-    #     self._label_lane_pts_all = [self._label_lane_pts_all[i] for i in random_idx]
-    #     self._next_batch_loop_count = 0
-
     def __len__(self):
         """
         Conventional len method
@@ -232,7 +224,7 @@ class LaneDataset(Dataset):
                 continue
 
             # resample ground-truth laneline at anchor y steps
-            x_values, z_values = resample_3d_laneline(gt_lane_3d, self.anchor_y_steps)
+            x_values, z_values = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps)
 
             # decide association at r_ref
             min_idx = np.argmin((self.anchor_x_steps - x_values[1])**2)
@@ -250,52 +242,56 @@ class LaneDataset(Dataset):
         gt_anchor = torch.from_numpy(gt_anchor)
         return image, gt_anchor, idx
 
+    def proj_trainsforms(self):
+        return self.H_g2c, self.H_c2g, self.H_crop
 
-def resample_3d_laneline(gt_lane_3d, y_steps):
+
+def resample_laneline_in_y(input_lane, y_steps):
     """
-        Interpolate x, z values at each anchor grid, including those beyond the range of ground-truth y range
-    :param gt_lane_3d: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
-                       It requires the first point the closest.
-    :param y_steps: a vector of anchor steps in y-forward
+        Interpolate x, z values at each anchor grid, including those beyond the range of input lnae y range
+    :param input_lane: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
+                       It requires y values of input lane in ascending order
+    :param y_steps: a vector of steps in y
     :return:
     """
 
-    assert(gt_lane_3d.shape[0] >= 2)
+    # at least two points are included
+    assert(input_lane.shape[0] >= 2)
 
     x_values = np.zeros_like(y_steps, dtype=np.float32)
     z_values = np.zeros_like(y_steps, dtype=np.float32)
 
-    if gt_lane_3d.shape[1] < 3:
-        gt_lane_3d = np.concatenate([gt_lane_3d, np.zeros([gt_lane_3d.shape[0], 1], dtype=np.float32)], axis=1)
+    if input_lane.shape[1] < 3:
+        input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)
 
     j = 0
     for i, y_grid in enumerate(y_steps):
-        # search the next ground-truth point further than current y grid
-        while j < gt_lane_3d.shape[0] and gt_lane_3d[j, 1] < y_grid:
+        # search the next input point further than current y grid
+        while j < input_lane.shape[0] and input_lane[j, 1] < y_grid:
             j += 1
 
-        # locate the two ground-truth points for interpolating x, z values at current y grid
-        if j < gt_lane_3d.shape[0]:
-            y1 = gt_lane_3d[j, 1]
-            x1 = gt_lane_3d[j, 0]
-            z1 = gt_lane_3d[j, 2]
+        # locate the two input points for interpolating x, z values at current y grid
+        if j < input_lane.shape[0]:
+            y1 = input_lane[j, 1]
+            x1 = input_lane[j, 0]
+            z1 = input_lane[j, 2]
             if (j-1) >= 0:
-                y2 = gt_lane_3d[j - 1, 1]
-                x2 = gt_lane_3d[j - 1, 0]
-                z2 = gt_lane_3d[j - 1, 2]
-            elif (j+1) < gt_lane_3d.shape[0]:  # for a y grid closer than the closest ground-truth
-                y2 = gt_lane_3d[j + 1, 1]
-                x2 = gt_lane_3d[j + 1, 0]
-                z2 = gt_lane_3d[j + 1, 2]
+                y2 = input_lane[j - 1, 1]
+                x2 = input_lane[j - 1, 0]
+                z2 = input_lane[j - 1, 2]
+            elif (j+1) < input_lane.shape[0]:  # for a y grid closer than the closest ground-truth
+                y2 = input_lane[j + 1, 1]
+                x2 = input_lane[j + 1, 0]
+                z2 = input_lane[j + 1, 2]
             else:  # only a single ground-truth point existing
                 continue
         else:  # for the y_grid farther than the farthest ground-truth y range,
-            y1 = gt_lane_3d[-1, 1]
-            x1 = gt_lane_3d[-1, 0]
-            z1 = gt_lane_3d[-1, 2]
-            y2 = gt_lane_3d[-2, 1]
-            x2 = gt_lane_3d[-2, 0]
-            z2 = gt_lane_3d[-2, 2]
+            y1 = input_lane[-1, 1]
+            x1 = input_lane[-1, 0]
+            z1 = input_lane[-1, 2]
+            y2 = input_lane[-2, 1]
+            x2 = input_lane[-2, 0]
+            z2 = input_lane[-2, 2]
 
         # interpolate x value and z value at anchor grid
         x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
@@ -306,21 +302,50 @@ def resample_3d_laneline(gt_lane_3d, y_steps):
 # TODO: A series of data augmentation functions can be implemented here
 
 
-def get_loader(dataset_base_dir, json_file_path, args):
+def get_loader(transformed_dataset, args):
     """
         create dataset from ground-truth
         return a batch sampler based ont the dataset
     """
 
-    transformed_dataset = LaneDataset(dataset_base_dir, json_file_path, args)
-    train_idx = range(transformed_dataset.n_samples)
-    train_idx = train_idx[0:len(train_idx)//args.batch_size*args.batch_size]
-    train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
-    train_loader = DataLoader(transformed_dataset,
-                              batch_size=args.batch_size, sampler=train_sampler,
-                              num_workers=args.nworkers, pin_memory=True) #, collate_fn=my_collate)
+    # transformed_dataset = LaneDataset(dataset_base_dir, json_file_path, args)
+    sample_idx = range(transformed_dataset.n_samples)
+    sample_idx = sample_idx[0:len(sample_idx)//args.batch_size*args.batch_size]
+    data_sampler = torch.utils.data.sampler.SubsetRandomSampler(sample_idx)
+    data_loader = DataLoader(transformed_dataset,
+                             batch_size=args.batch_size, sampler=data_sampler,
+                             num_workers=args.nworkers, pin_memory=True)
 
-    return train_loader
+    return data_loader
+
+
+# TODO: convert anchor lanes to image lanes in tusimple format
+def compute_tusimple_lanes(lane_tensor, h_samples, H_g2c, anchor_x_steps, anchor_y_steps, x_min, x_max):
+    """
+
+    :return:
+    """
+    lanes_out = []
+    # TODO: apply nms to output lanes
+
+    # need to resample network lane results at h_samples
+    for j in range(lane_tensor.shape[0]):
+        if lane_tensor[j, -1] > 0.5:
+            x_offsets = lane_tensor[j, :-1]
+            x_3d = x_offsets + anchor_x_steps[j]
+            # compute x, y in original image coordinates
+            x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
+            # reverse the order such that y_2d is ascending
+            x_2d = x_2d[::-1]
+            y_2d = y_2d[::-1]
+            # resample at h_samples
+            x_values, z_values = resample_laneline_in_y(np.vstack([x_2d, y_2d]).T, h_samples)
+            # assign out-of-range values to be -2
+            x_values = x_values.astype(np.int)
+            x_values[np.where(np.logical_or(x_values < x_min, x_values >= x_max))] = -2
+
+            lanes_out.append(x_values.data.tolist())
+    return lanes_out
 
 
 # unit test
@@ -331,7 +356,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # set dataset ground-truth path
-    dataset_base_dir = '/home/yuliangguo/Datasets/tusimple/'
+    dataset_base_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
     json_file_path = ops.join(dataset_base_dir, 'label_data_0601.json')
 
     # set flags to indicate centerline and 3D attributes availability
@@ -344,29 +369,24 @@ if __name__ == '__main__':
                        [0, 0, 1]])
     args.cam_height = 1.6
     args.pitch = 9
-    pitch = np.pi / 180 * args.pitch
 
     # set anchor grid
     args.top_view_region = np.array([[-10, 80], [10, 80], [-10, 5], [10, 5]])
     args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
     args.num_y_anchor = len(args.anchor_y_steps)
-    x_min = args.top_view_region[0, 0]
-    x_max = args.top_view_region[1, 0]
-    anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
-    anchor_y_steps = args.anchor_y_steps
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
     print('visual area border:')
     print(vis_border_3d)
 
-    # compute homography matrix
-    H_g2c, H_c2g = homograpthy_g2c(pitch, args.cam_height, args.K)
-    H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize_h, args.resize_w])
-    M = np.matmul(H_crop, H_g2c)
-
     # load data
-    test_loader = get_loader(dataset_base_dir, json_file_path, args)
+    test_dataset = LaneDataset(dataset_base_dir, json_file_path, args)
+    test_loader = get_loader(test_dataset, args)
+
+    H_g2c, H_c2g, H_crop = test_dataset.proj_trainsforms()
+    M = np.matmul(H_crop, H_g2c)
+    anchor_x_steps = test_dataset.anchor_x_steps
 
     # get a batch of data/label pairs from loader
     for batch_ndx, (image_tensor, gt_tensor, idx) in enumerate(test_loader):
@@ -402,7 +422,7 @@ if __name__ == '__main__':
                     x_offsets = gt_anchor[j, :-1]
                     x_3d = x_offsets + anchor_x_steps[j]
                     # x_3d[:] = anchor_x_steps[j]
-                    x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
+                    x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, args.anchor_y_steps)
                     pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
                     x_2d = pts_2d[0, :].astype(np.int)
                     y_2d = pts_2d[1, :].astype(np.int)
