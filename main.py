@@ -390,7 +390,7 @@ if __name__ == '__main__':
     args.pitch = 9
 
     # set ipm and anchor parameters
-    args.top_view_region = np.array([[-10, 80], [10, 80], [-10, 5], [10, 5]])
+    args.top_view_region = np.array([[-10, 83], [10, 83], [-10, 3], [10, 3]])
     args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
     args.num_y_anchor = len(args.anchor_y_steps)
 
@@ -405,10 +405,10 @@ if __name__ == '__main__':
     # initialize with pretrained vgg weights
     args.pretrained = False
     # apply batch norm in network
-    args.batch_norm = True
+    args.batch_norm = False
 
     # for the case only running evaluation
-    args.evaluate = True
+    args.evaluate = False
 
     # run the training
     train_net()
