@@ -290,48 +290,47 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
     # Evaluate model
     model.eval()
 
-    f_out = open(lane_pred_file, 'w')
     # Only forward pass, hence no gradients needed
     with torch.no_grad():
-        
-        # Start validation loop
-        for i, (input, gt, idx) in tqdm(enumerate(loader)):
-            if not args.no_cuda:
-                input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
-                input = input.float()
+        with open(lane_pred_file, 'w') as jsonFile:
+            # Start validation loop
+            for i, (input, gt, idx) in tqdm(enumerate(loader)):
+                if not args.no_cuda:
+                    input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
+                    input = input.float()
 
-            # Evaluate model
-            try:
-                output_net = model(input)
-            except RuntimeError as e:
-                print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
-                print(e)
-                continue
+                # Evaluate model
+                try:
+                    output_net = model(input)
+                except RuntimeError as e:
+                    print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
+                    print(e)
+                    continue
 
-            # Compute losses on parameters or segmentation
-            gt = gt.cuda(non_blocking=True)
-            loss = criterion(output_net, gt)
-            losses.update(loss.item(), input.size(0))
+                # Compute losses on parameters or segmentation
+                gt = gt.cuda(non_blocking=True)
+                loss = criterion(output_net, gt)
+                losses.update(loss.item(), input.size(0))
 
-            # Print info
-            if (i + 1) % args.print_freq == 0:
-                    print('Test: [{0}/{1}]\t'
-                          'Loss {loss.val:.8f} ({loss.avg:.8f})'.format(
-                           i+1, len(loader), loss=losses))
+                # Print info
+                if (i + 1) % args.print_freq == 0:
+                        print('Test: [{0}/{1}]\t'
+                              'Loss {loss.val:.8f} ({loss.avg:.8f})'.format(
+                               i+1, len(loader), loss=losses))
 
-            # Plot curves in two views
-            if (i + 1) % args.save_freq == 0:
-                vs_saver.save_result('valid', epoch, i, idx, input, gt, output_net)
+                # Plot curves in two views
+                if (i + 1) % args.save_freq == 0:
+                    vs_saver.save_result('valid', epoch, i, idx, input, gt, output_net)
 
-            # write results and evaluate
-            output_net = output_net.data.cpu().numpy()
-            num_el = input.size(0)
-            with open(lane_pred_file, 'a') as jsonFile:
+                # write results and evaluate
+                output_net = output_net.data.cpu().numpy()
+                num_el = input.size(0)
+
                 for j in range(num_el):
                     im_id = idx[j]
                     json_line = valid_set_labels[im_id]
                     h_samples = json_line["h_samples"]
-                    lanes_pred = compute_tusimple_lanes(output_net[0], h_samples, H_g2c,
+                    lanes_pred = compute_tusimple_lanes(output_net[j], h_samples, H_g2c,
                                                         anchor_x_steps, args.anchor_y_steps, 0, args.org_w)
                     json_line["lanes"] = lanes_pred
                     json_line["run_time"] = 0
@@ -339,12 +338,10 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
                     jsonFile.write('\n')
 
         acc_eval = LaneEval.bench_one_submit(lane_pred_file, val_gt_file)
-
         if args.evaluate:
             print("===> Average {}-loss on validation set is {:.8}".format(crit_string, losses.avg))
             print("===> Evaluation accuracy on validation set is {:.8}".format(acc_eval[0]))
 
-        # f_out.close()
         return losses.avg, acc_eval
 
 
@@ -376,7 +373,7 @@ if __name__ == '__main__':
     # set dataset parameters
     args.dataset_name = 'tusimple'
     args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.save_path = ops.join(args.save_path, args.dataset_name)
     args.no_centerline = True
     args.no_3d = True
@@ -390,8 +387,8 @@ if __name__ == '__main__':
     args.pitch = 9
 
     # set ipm and anchor parameters
-    args.top_view_region = np.array([[-10, 83], [10, 83], [-10, 3], [10, 3]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
+    args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
+    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     args.num_y_anchor = len(args.anchor_y_steps)
 
     # seems some system bug only allows 0 nworker

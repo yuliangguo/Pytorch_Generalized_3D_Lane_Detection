@@ -18,7 +18,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
-from tools.utils import homogenous_transformation, homograpthy_g2c, homography_crop_resize
+from tools.utils import homogenous_transformation, homograpthy_g2c, homography_crop_resize, nms_1d
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -320,19 +320,21 @@ def get_loader(transformed_dataset, args):
 
 
 # TODO: convert anchor lanes to image lanes in tusimple format
-def compute_tusimple_lanes(lane_tensor, h_samples, H_g2c, anchor_x_steps, anchor_y_steps, x_min, x_max):
+def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor_y_steps, x_min, x_max):
     """
 
     :return:
     """
     prob_th = 0.5
     lanes_out = []
-    # TODO: apply nms to output lanes
+
+    # apply nms to output lanes
+    pred_anchor[:, -1] = nms_1d(pred_anchor[:, -1])
 
     # need to resample network lane results at h_samples
-    for j in range(lane_tensor.shape[0]):
-        if lane_tensor[j, -1] > prob_th:
-            x_offsets = lane_tensor[j, :-1]
+    for j in range(pred_anchor.shape[0]):
+        if pred_anchor[j, -1] > prob_th:
+            x_offsets = pred_anchor[j, :-1]
             x_3d = x_offsets + anchor_x_steps[j]
             # compute x, y in original image coordinates
             x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
@@ -341,9 +343,11 @@ def compute_tusimple_lanes(lane_tensor, h_samples, H_g2c, anchor_x_steps, anchor
             y_2d = y_2d[::-1]
             # resample at h_samples
             x_values, z_values = resample_laneline_in_y(np.vstack([x_2d, y_2d]).T, h_samples)
-            # assign out-of-range values to be -2
+            # assign out-of-range x values to be -2
             x_values = x_values.astype(np.int)
             x_values[np.where(np.logical_or(x_values < x_min, x_values >= x_max))] = -2
+            # assign far side y values to be -2
+            x_values[np.where(h_samples < y_2d[0])] = -2
 
             lanes_out.append(x_values.data.tolist())
     return lanes_out

@@ -155,6 +155,9 @@ class VisualSaver:
         self.M_g2im = np.linalg.inv(M_im2g)
         self.M_g2ipm = np.linalg.inv(M_ipm2g)
 
+        # probability threshold for choosing visualize lanes
+        self.prob_th = 0.5
+
     def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred):
         # just visualize the first sample of this batch
         im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
@@ -194,11 +197,12 @@ class VisualSaver:
                                           (x_ipm[k], y_ipm[k]),
                                           [0, 0, 1], 2)
 
+        # apply nms to avoid output directly neighbored lanes
+        pred_anchor[:, -1] = nms_1d(pred_anchor[:, -1])
+
         # draw predicted lanelines
         for j in range(pred_anchor.shape[0]):
-            # may need to choose another probability threshold
-            # TODO: no NMS has been applied so that there could be redundent lanes close to each other
-            if pred_anchor[j, -1] > 0.5:
+            if pred_anchor[j, -1] > self.prob_th:
                 x_offsets = pred_anchor[j, :-1]
                 x_g = x_offsets + self.anchor_x_steps[j]
 
@@ -325,6 +329,22 @@ def homogenous_transformation(Matrix, x, y):
     y_vals = trans[1,:]/trans[2, :]
     return x_vals, y_vals
 
+def nms_1d(v):
+    """
+
+    :param v: a 1D numpy array
+    :return:
+    """
+    v_out = v.copy()
+    len = v.shape[0]
+    if len < 2:
+        return v
+    for i in range(len):
+        if i is not 0 and v[i - 1] > v[i]:
+            v_out[i] = 0.
+        elif i is not len-1 and v[i+1] > v[i]:
+            v_out[i] = 0.
+    return v_out
 
 def first_run(save_path):
     txt_file = os.path.join(save_path,'first_run.txt')

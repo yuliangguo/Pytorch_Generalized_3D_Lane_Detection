@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 # code for TuSimple evaluation (based on the code provided by TuSimple)
 
+import os.path as ops
 import numpy as np
 from sklearn.linear_model import LinearRegression
 import ujson as json
+import cv2
+
+global dataset_base
+dataset_base = '/home/yuliangguo/Datasets/tusimple'
 
 
 class LaneEval(object):
@@ -86,6 +91,10 @@ class LaneEval(object):
             accuracy += a
             fp += p
             fn += n
+            # ################### debug ###################
+            # print('Accuracy: {:3f}'.format(a))
+            # draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes)
+            # #############################################
         num = len(gts)
         # the first return parameter is the default ranking parameter
 #        return json.dumps([
@@ -94,6 +103,22 @@ class LaneEval(object):
 #            {'name': 'FN', 'value': fn / num, 'order': 'asc'}
 #        ])
         return [accuracy / num, fp / num, fn / num]
+
+
+def draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes):
+    img = cv2.imread(ops.join(dataset_base, raw_file))
+
+    gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, y_samples) if x >= 0] for lane in gt_lanes]
+    pred_lanes_vis = [[(x, y) for (x, y) in zip(lane, y_samples) if x >= 0] for lane in pred_lanes]
+    img_vis = img.copy()
+
+    for lane in gt_lanes_vis:
+        cv2.polylines(img_vis, np.int32([lane]), isClosed=False, color=(255, 0, 0), thickness=5)
+    for lane in pred_lanes_vis:
+        cv2.polylines(img_vis, np.int32([lane]), isClosed=False, color=(0, 0, 255), thickness=2)
+
+    cv2.imshow("resize", img_vis)
+    cv2.waitKey(500)
 
 
 if __name__ == '__main__':
