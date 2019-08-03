@@ -171,6 +171,7 @@ class LanePredictionHead(nn.Module):
         x = x.reshape(sizes[0], sizes[1]*sizes[2], sizes[3], 1)
         x = self.dim_rt(x)
         x = x.squeeze(-1).transpose(1, 2)
+        # TODO: need to apply sigmoid to the probability term to make it in (0, 1)
         return x
 
 # TODO: implement homography net

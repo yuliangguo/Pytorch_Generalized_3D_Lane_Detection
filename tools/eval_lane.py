@@ -67,7 +67,8 @@ class LaneEval(object):
         gts = {l['raw_file']: l for l in json_gt}
         accuracy, fp, fn = 0., 0., 0.
         for pred in json_pred:
-            if 'raw_file' not in pred or 'lanes' not in pred or 'run_time' not in pred:
+            # if 'raw_file' not in pred or 'lanes' not in pred or 'run_time' not in pred:
+            if 'raw_file' not in pred or 'lanes' not in pred:
                 # raise Exception('raw_file or lanes or run_time not in some predictions.')
                 continue
             raw_file = pred['raw_file']

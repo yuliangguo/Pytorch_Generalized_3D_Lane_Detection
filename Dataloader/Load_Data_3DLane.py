@@ -325,12 +325,13 @@ def compute_tusimple_lanes(lane_tensor, h_samples, H_g2c, anchor_x_steps, anchor
 
     :return:
     """
+    prob_th = 0.5
     lanes_out = []
     # TODO: apply nms to output lanes
 
     # need to resample network lane results at h_samples
     for j in range(lane_tensor.shape[0]):
-        if lane_tensor[j, -1] > 0.5:
+        if lane_tensor[j, -1] > prob_th:
             x_offsets = lane_tensor[j, :-1]
             x_3d = x_offsets + anchor_x_steps[j]
             # compute x, y in original image coordinates

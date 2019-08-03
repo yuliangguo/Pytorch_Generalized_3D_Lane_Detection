@@ -153,7 +153,6 @@ def train_net():
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
         loss_valid, eval_acc = validate(valid_loader, model, criterion, vs_saver, val_gt_file)
-        print('evaluation accuracy: {:3f}'.format(eval_acc))
         return
 
     # Start training from clean slate
@@ -245,6 +244,7 @@ def train_net():
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
+        print("===> Evaluation accuracy: {:3f}".format(eval_acc[0]))
 
         print("===> Last best {}-loss was {:.8f} in epoch {}".format(
             crit_string, lowest_loss, best_epoch))
@@ -252,7 +252,7 @@ def train_net():
         if not args.no_tb:
             writer.add_scalars('3D-Lane-Loss', {'Training': losses.avg}, epoch)
             writer.add_scalars('3D-Lane-Loss', {'Validation': losses_valid}, epoch)
-
+            writer.add_scalars('Evaluation', {'Accuracy': eval_acc[0]}, epoch)
         total_score = losses.avg
 
         # Adjust learning_rate if loss plateaued
@@ -334,6 +334,7 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
                     lanes_pred = compute_tusimple_lanes(output_net[0], h_samples, H_g2c,
                                                         anchor_x_steps, args.anchor_y_steps, 0, args.org_w)
                     json_line["lanes"] = lanes_pred
+                    json_line["run_time"] = 0
                     json.dump(json_line, jsonFile)
                     jsonFile.write('\n')
 
@@ -343,7 +344,7 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
             print("===> Average {}-loss on validation set is {:.8}".format(crit_string, losses.avg))
             print("===> Evaluation accuracy on validation set is {:.8}".format(acc_eval[0]))
 
-        f_out.close()
+        # f_out.close()
         return losses.avg, acc_eval
 
 
