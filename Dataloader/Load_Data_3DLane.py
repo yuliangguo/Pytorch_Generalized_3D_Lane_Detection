@@ -320,12 +320,11 @@ def get_loader(transformed_dataset, args):
 
 
 # TODO: convert anchor lanes to image lanes in tusimple format
-def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor_y_steps, x_min, x_max):
+def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor_y_steps, x_min, x_max, prob_th=0.5):
     """
 
     :return:
     """
-    prob_th = 0.5
     lanes_out = []
 
     # apply nms to output lanes

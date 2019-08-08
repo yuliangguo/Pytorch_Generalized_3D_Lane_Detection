@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # code for TuSimple evaluation (based on the code provided by TuSimple)
-
+import os
 import os.path as ops
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -61,7 +61,17 @@ class LaneEval(object):
         return s / max(min(4.0, len(gt)), 1.), fp / len(pred) if len(pred) > 0 else 0., fn / max(min(len(gt), 4.) , 1.)
 
     @staticmethod
-    def bench_one_submit(pred_file, gt_file):
+    def bench_one_submit(pred_file, gt_file, vis=False):
+        # ################### debug ###################
+        save_path = pred_file[:pred_file.rfind('/')]
+        save_path += '/example/eval_vis'
+        if vis and not os.path.exists(save_path):
+            try:
+                os.makedirs(save_path)
+            except OSError as e:
+                print(e.message)
+        # #############################################
+
         try:
             json_pred = [json.loads(line) for line in open(pred_file).readlines()]
         except BaseException as e:
@@ -70,6 +80,7 @@ class LaneEval(object):
         # if len(json_gt) != len(json_pred):
         #     raise Exception('We do not get the predictions of all the test tasks')
         gts = {l['raw_file']: l for l in json_gt}
+        gts_id = {l['raw_file']: i for i, l in enumerate(json_gt)}
         accuracy, fp, fn = 0., 0., 0.
         for pred in json_pred:
             # if 'raw_file' not in pred or 'lanes' not in pred or 'run_time' not in pred:
@@ -82,6 +93,7 @@ class LaneEval(object):
             if raw_file not in gts:
                 raise Exception('Some raw_file from your predictions do not exist in the test tasks.')
             gt = gts[raw_file]
+            gt_id = gts_id[raw_file]
             gt_lanes = gt['lanes']
             y_samples = gt['h_samples']
             try:
@@ -92,8 +104,9 @@ class LaneEval(object):
             fp += p
             fn += n
             # ################### debug ###################
-            # print('Accuracy: {:3f}'.format(a))
-            # draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes)
+            if vis:
+                print('Accuracy: {:3f}'.format(a))
+                draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes, save_path, gt_id)
             # #############################################
         num = len(gts)
         # the first return parameter is the default ranking parameter
@@ -105,7 +118,10 @@ class LaneEval(object):
         return [accuracy / num, fp / num, fn / num]
 
 
-def draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes):
+def draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes, save_path, gt_id):
+    # if gt_id is not 190:
+    #     return
+
     img = cv2.imread(ops.join(dataset_base, raw_file))
 
     gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, y_samples) if x >= 0] for lane in gt_lanes]
@@ -117,8 +133,11 @@ def draw_lanes(raw_file, y_samples, gt_lanes, pred_lanes):
     for lane in pred_lanes_vis:
         cv2.polylines(img_vis, np.int32([lane]), isClosed=False, color=(0, 0, 255), thickness=2)
 
-    cv2.imshow("resize", img_vis)
-    cv2.waitKey(500)
+    # cv2.imshow("resize", img_vis)
+    # cv2.waitKey()
+
+    save_file = ops.join(save_path, 'eval_'+str(gt_id)+'.jpg')
+    cv2.imwrite(save_file, img_vis)
 
 
 if __name__ == '__main__':
@@ -126,7 +145,7 @@ if __name__ == '__main__':
     try:
         if len(sys.argv) != 3:
             raise Exception('Invalid input arguments')
-        print (LaneEval.bench_one_submit(sys.argv[1], sys.argv[2]))
+        print(LaneEval.bench_one_submit(sys.argv[1], sys.argv[2], vis=True))
     except Exception as e:
-        print (e.message)
+        print(e.message)
         sys.exit(e.message)

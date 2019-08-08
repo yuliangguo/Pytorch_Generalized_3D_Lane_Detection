@@ -152,6 +152,7 @@ def train_net():
             model.load_state_dict(checkpoint['state_dict'])
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
+        mkdir_if_missing(os.path.join(args.save_path, 'example/eval_vis'))
         loss_valid, eval_acc = validate(valid_loader, model, criterion, vs_saver, val_gt_file)
         return
 
@@ -299,6 +300,9 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                     input = input.float()
 
+                # if 190 not in idx:
+                #     continue
+
                 # Evaluate model
                 try:
                     output_net = model(input)
@@ -319,8 +323,8 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
                                i+1, len(loader), loss=losses))
 
                 # Plot curves in two views
-                if (i + 1) % args.save_freq == 0:
-                    vs_saver.save_result('valid', epoch, i, idx, input, gt, output_net)
+                if (i + 1) % args.save_freq == 0 or args.evaluate:
+                    vs_saver.save_result('valid', epoch, i, idx, input, gt, output_net, args.evaluate)
 
                 # write results and evaluate
                 output_net = output_net.data.cpu().numpy()
@@ -364,7 +368,7 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global args
     parser = define_args()
@@ -387,8 +391,12 @@ if __name__ == '__main__':
     args.pitch = 9
 
     # set ipm and anchor parameters
-    args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    # args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
+    # args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
+    # args.anchor_y_steps = np.array([2, 3, 5, 10, 20, 40, 60, 80, 100])
+    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
+
     args.num_y_anchor = len(args.anchor_y_steps)
 
     # seems some system bug only allows 0 nworker
@@ -402,7 +410,7 @@ if __name__ == '__main__':
     # initialize with pretrained vgg weights
     args.pretrained = False
     # apply batch norm in network
-    args.batch_norm = False
+    args.batch_norm = True
 
     # for the case only running evaluation
     args.evaluate = False

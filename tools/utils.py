@@ -113,6 +113,7 @@ def define_args():
     parser.add_argument('--k_fy', type=int, default=1000, help='camera intrinsic parameter fx')
     parser.add_argument('--k_dx', type=int, default=640, help='camera intrinsic parameter fx')
     parser.add_argument('--k_dy', type=int, default=400, help='camera intrinsic parameter fx')
+    parser.add_argument('--prob_th', type=float, default=0.5, help='probability threshold for selecting output lanes')
     return parser
 
 
@@ -156,84 +157,90 @@ class VisualSaver:
         self.M_g2ipm = np.linalg.inv(M_ipm2g)
 
         # probability threshold for choosing visualize lanes
-        self.prob_th = 0.5
+        self.prob_th = args.prob_th
 
-    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred):
-        # just visualize the first sample of this batch
-        im = images.permute(0, 2, 3, 1).data.cpu().numpy()[0]
-        im = im * np.array(self.vgg_std)
-        im = im + np.array(self.vgg_mean)
-        im = np.clip(im, 0, 1)
+    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, evaluate=False):
+        for i in range(idx.shape[0]):
+            # during training, only visualize the first sample of this batch
+            if i > 0 and not evaluate:
+                break
+            # when in evaluation mode, visualize all samples
+            gt_anchor = gt.data.cpu().numpy()[i]
+            pred_anchor = pred.data.cpu().numpy()[i]
+            im = images.permute(0, 2, 3, 1).data.cpu().numpy()[i]
+            im = im * np.array(self.vgg_std)
+            im = im + np.array(self.vgg_mean)
+            im = np.clip(im, 0, 1)
 
-        im_inverse = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
-        im_inverse = np.clip(im_inverse, 0, 1)
-        im = np.clip(im, 0, 1)
+            im_inverse = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
+            im_inverse = np.clip(im_inverse, 0, 1)
+            im = np.clip(im, 0, 1)
 
-        gt_anchor = gt.data.cpu().numpy()[0]
-        pred_anchor = pred.data.cpu().numpy()[0]
+            # draw ground-truth lanelines
+            for j in range(gt_anchor.shape[0]):
+                if gt_anchor[j, -1] > 0:
+                    x_offsets = gt_anchor[j, :-1]
+                    x_g = x_offsets + self.anchor_x_steps[j]
 
-        # draw ground-truth lanelines
-        for j in range(gt_anchor.shape[0]):
-            if gt_anchor[j, -1] > 0:
-                x_offsets = gt_anchor[j, :-1]
-                x_g = x_offsets + self.anchor_x_steps[j]
+                    # compute lanelines in image view
+                    x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
+                    x_2d = x_2d.astype(np.int)
+                    y_2d = y_2d.astype(np.int)
+                    # compute lanelines in ipm view
+                    x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                    x_ipm = x_ipm.astype(np.int)
+                    y_ipm = y_ipm.astype(np.int)
+                    # draw lanelines in both views
+                    for k in range(1, x_2d.shape[0]):
+                        im = cv2.line(im,
+                                      (x_2d[k - 1], y_2d[k - 1]),
+                                      (x_2d[k], y_2d[k]),
+                                      [0, 0, 1], 1)
+                        im_inverse = cv2.line(im_inverse,
+                                              (x_ipm[k - 1], y_ipm[k - 1]),
+                                              (x_ipm[k], y_ipm[k]),
+                                              [0, 0, 1], 1)
 
-                # compute lanelines in image view
-                x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
-                x_2d = x_2d.astype(np.int)
-                y_2d = y_2d.astype(np.int)
-                # compute lanelines in ipm view
-                x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
-                x_ipm = x_ipm.astype(np.int)
-                y_ipm = y_ipm.astype(np.int)
-                # draw lanelines in both views
-                for k in range(1, x_2d.shape[0]):
-                    im = cv2.line(im,
-                                  (x_2d[k - 1], y_2d[k - 1]),
-                                  (x_2d[k], y_2d[k]),
-                                  [0, 0, 1], 2)
-                    im_inverse = cv2.line(im_inverse,
-                                          (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]),
-                                          [0, 0, 1], 2)
+            # apply nms to avoid output directly neighbored lanes
+            pred_anchor[:, -1] = nms_1d(pred_anchor[:, -1])
 
-        # apply nms to avoid output directly neighbored lanes
-        pred_anchor[:, -1] = nms_1d(pred_anchor[:, -1])
+            # draw predicted lanelines
+            for j in range(pred_anchor.shape[0]):
+                if pred_anchor[j, -1] > self.prob_th:
+                    x_offsets = pred_anchor[j, :-1]
+                    x_g = x_offsets + self.anchor_x_steps[j]
 
-        # draw predicted lanelines
-        for j in range(pred_anchor.shape[0]):
-            if pred_anchor[j, -1] > self.prob_th:
-                x_offsets = pred_anchor[j, :-1]
-                x_g = x_offsets + self.anchor_x_steps[j]
+                    # compute lanelines in image view
+                    x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
+                    x_2d = x_2d.astype(np.int)
+                    y_2d = y_2d.astype(np.int)
+                    # compute lanelines in ipm view
+                    x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                    x_ipm = x_ipm.astype(np.int)
+                    y_ipm = y_ipm.astype(np.int)
+                    # draw lanelines in both views
+                    for k in range(1, x_2d.shape[0]):
+                        im = cv2.line(im,
+                                      (x_2d[k - 1], y_2d[k - 1]),
+                                      (x_2d[k], y_2d[k]),
+                                      [1, 0, 0], 1)
+                        im_inverse = cv2.line(im_inverse,
+                                              (x_ipm[k - 1], y_ipm[k - 1]),
+                                              (x_ipm[k], y_ipm[k]),
+                                              [1, 0, 0], 1)
 
-                # compute lanelines in image view
-                x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
-                x_2d = x_2d.astype(np.int)
-                y_2d = y_2d.astype(np.int)
-                # compute lanelines in ipm view
-                x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
-                x_ipm = x_ipm.astype(np.int)
-                y_ipm = y_ipm.astype(np.int)
-                # draw lanelines in both views
-                for k in range(1, x_2d.shape[0]):
-                    im = cv2.line(im,
-                                  (x_2d[k - 1], y_2d[k - 1]),
-                                  (x_2d[k], y_2d[k]),
-                                  [1, 0, 0], 2)
-                    im_inverse = cv2.line(im_inverse,
-                                          (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]),
-                                          [1, 0, 0], 2)
-
-        fig = plt.figure()
-        ax1 = fig.add_subplot(121)
-        ax2 = fig.add_subplot(122)
-        ax1.imshow(im)
-        ax2.imshow(im_inverse)
-
-        fig.savefig(self.save_path + '/example/{}/epoch-{}_batch-{}_idx-{}'.format(train_or_val, epoch, batch_i, idx[0]))
-        plt.clf()
-        plt.close(fig)
+            fig = plt.figure()
+            ax1 = fig.add_subplot(121)
+            ax2 = fig.add_subplot(122)
+            ax1.imshow(im)
+            ax2.imshow(im_inverse)
+            if evaluate:
+                fig.savefig(self.save_path + '/example/eval_vis/infer_{}'.format(idx[i]))
+            else:
+                fig.savefig(self.save_path + '/example/{}/epoch-{}_batch-{}_idx-{}'.format(train_or_val,
+                                                                                           epoch, batch_i, idx[i]))
+            plt.clf()
+            plt.close(fig)
 
 
 # compute normalized transformation matrix for a top-view region boundaries
