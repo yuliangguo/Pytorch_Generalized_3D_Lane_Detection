@@ -367,12 +367,7 @@ def save_checkpoint(state, to_copy, epoch):
             os.remove(prev_checkpoint_filename)
 
 
-if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
-    global args
-    parser = define_args()
-    args = parser.parse_args()
+def TuSimple_config():
 
     # set dataset parameters
     args.dataset_name = 'tusimple'
@@ -391,29 +386,39 @@ if __name__ == '__main__':
     args.pitch = 9
 
     # set ipm and anchor parameters
-    # args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
-    # args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    """
+    paper presented params:
+        args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
+        args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    """
     args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
-    # args.anchor_y_steps = np.array([2, 3, 5, 10, 20, 40, 60, 80, 100])
     args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
-
     args.num_y_anchor = len(args.anchor_y_steps)
 
-    # seems some system bug only allows 0 nworker
-    args.nworkers = 0
-    args.no_tb = False
-    args.print_freq = 40
-    args.save_freq = 40
-
-    # learning rate
-    # args.learning_rate = 1e-2
-    # initialize with pretrained vgg weights
+    # initialize with pre-trained vgg weights: paper suggested true
     args.pretrained = False
     # apply batch norm in network
     args.batch_norm = True
 
+
+if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+    global args
+    parser = define_args()
+    args = parser.parse_args()
+
+    # load in configuration
+    TuSimple_config()
+
     # for the case only running evaluation
     args.evaluate = False
+
+    # save setting
+    args.nworkers = 0
+    args.no_tb = False
+    args.print_freq = 40
+    args.save_freq = 40
 
     # run the training
     train_net()
