@@ -12,7 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import json
-
+from json import encoder
+encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
 # color coding of different lane labels
 colors = np.array([[0, 0, 0], [60, 10, 0], [120, 20, 0], [180, 30, 0], [240, 40, 0],
@@ -91,7 +92,6 @@ def laneline_label_generator(base_folder, image_name, label_name, output_gt_file
                            (int(lane2D[j-1, 0]), int(lane2D[j-1, 1])),
                            (int(lane2D[j, 0]), int(lane2D[j, 1])),
                            color=[0, 255, 0])
-
 
     # generate json
     result = {}

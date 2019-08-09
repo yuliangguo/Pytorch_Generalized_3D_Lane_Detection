@@ -1,4 +1,5 @@
 import numpy as np
+import os.path as ops
 import torch
 import torch.optim
 import torch.nn as nn
@@ -6,7 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
 import torchvision.models as models
-from tools.utils import define_args, define_init_weights, init_projective_transform
+from tools.utils import define_args, define_init_weights, init_projective_transform, tusimple_config
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):
@@ -147,6 +148,7 @@ class TopViewPathway(nn.Module):
 class LanePredictionHead(nn.Module):
     def __init__(self, batch_norm=False, num_lane_type=3, anchor_dim=5):
         super(LanePredictionHead, self).__init__()
+        self.anchor_dim = anchor_dim
         layers = []
         layers += make_one_layer(512, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
         layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
@@ -172,8 +174,8 @@ class LanePredictionHead(nn.Module):
         x = self.dim_rt(x)
         x = x.squeeze(-1).transpose(1, 2)
         # apply sigmoid to the probability terms to make it in (0, 1)
-        # TODO: modify it to be adaptable to all setups
-        x[:, :, -1] = torch.sigmoid(x[:, :, -1])
+        # TODO: need to check 3D and centerline case
+        x[:, :, self.anchor_dim-1:self.anchor_dim:] = torch.sigmoid(x[:, :, self.anchor_dim-1:self.anchor_dim:])
         return x
 
 # TODO: implement homography net
@@ -294,21 +296,14 @@ if __name__ == '__main__':
     global args
     parser = define_args()
     args = parser.parse_args()
-    args.top_view_region = np.array([[-10, 80], [10, 80], [-10, 5], [10, 5]])
-    args.anchor_y_steps = np.array([5, 20, 40, 60, 80])
-    args.num_y_anchor = len(args.anchor_y_steps)
-    # current test only considers no_centerline, no 3d case
-    args.no_centerline = True
-    args.no_3d = True
-    args.pretrained = True
-    args.batch_norm = False
 
-    # set camera parameters for the test dataset
-    args.K = np.array([[1000, 0, 640],
-                       [0, 1000, 400],
-                       [0, 0, 1]])
-    args.cam_height = 1.6
-    args.pitch = 9
+    args.dataset_name = 'tusimple'
+    args.data_dir = ops.join('data', args.dataset_name)
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+
+    # load configuration for certain dataset
+    if args.dataset_name is 'tusimple':
+        tusimple_config(args)
 
     # construct model
     model = Net(args)

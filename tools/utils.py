@@ -13,6 +13,7 @@ import torch.nn.init as init
 import torch.optim
 from PIL import Image
 from torch.optim import lr_scheduler
+import os.path as ops
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -22,27 +23,46 @@ plt.rcParams['figure.figsize'] = (35, 30)
 
 def define_args():
     parser = argparse.ArgumentParser(description='Lane_detection_all_objectives')
-    # Segmentation model settings
-    parser.add_argument('--dataset', default='lane_detection', help='dataset images to train on')
+    # Paths settings
+    parser.add_argument('--dataset_name', type=str, help='the dataset name to be used in saving model names')
+    parser.add_argument('--data_dir', type=str, help='The path saving train.json and val.json files')
+    parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
+    parser.add_argument('--save_path', type=str, default='data/', help='directory to save output')
+    # Dataset settings
+    parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
+    parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
+    parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
+    parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
+    parser.add_argument('--pitch', type=float, default=9, help='pitch angle of camera to ground in centi degree')
+    parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
+    parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='directory to save output')
+    parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
+    parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
+    # 3DLaneNet settings
+    parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
+    parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
+    parser.add_argument("--batch_norm", type=str2bool, nargs='?', const=True, default=True, help="apply batch norm")
+    parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
+    parser.add_argument('--ipm_w', type=int, default=128, help='width of inverse projective map (IPM)')
+    parser.add_argument('--resize_h', type=int, default=360, help='height of the original image')
+    parser.add_argument('--resize_w', type=int, default=480, help='width of the original image')
+    parser.add_argument('--prob_th', type=float, default=0.5, help='probability threshold for selecting output lanes')
+    # General model settings
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
     parser.add_argument('--nepochs', type=int, default=350, help='total numbers of epochs')
     parser.add_argument('--learning_rate', type=float, default=5*1e-4, help='learning rate')
     parser.add_argument('--no_cuda', action='store_true', help='if gpu available')
     parser.add_argument('--nworkers', type=int, default=8, help='num of threads')
     parser.add_argument('--no_dropout', action='store_true', help='no dropout in network')
-    # parser.add_argument('--resize', type=int, default=256, help='resize image to resize x (ratio*resize)')
-    # parser.add_argument('--layers', type=int, default=18, help='amount of layers in model')
-    parser.add_argument("--pool", type=str2bool, nargs='?', const=True, default=True, help="use pooling")
     parser.add_argument('--pretrain_epochs', type=int, default=20, help='Number of epochs to perform segmentation pretraining')
     parser.add_argument('--channels_in', type=int, default=3, help='num channels of input image')
-    parser.add_argument('--norm', type=str, default='batch', help='normalisation layer you want to use')
     parser.add_argument('--flip_on', action='store_true', help='Random flip input images on?')
-    parser.add_argument('--num_train', type=int, default=2535, help='Train on how many images of trainset')
-    parser.add_argument('--split_percentage', type=float, default=0.2, help='where to split dataset in train and validationset')
     parser.add_argument('--test_mode', action='store_true', help='prevents loading latest saved model')
     parser.add_argument('--start_epoch', type=int, default=0, help='prevents loading latest saved model')
     parser.add_argument('--evaluate', action='store_true', help='only perform evaluation')
     parser.add_argument('--resume', type=str, default='', help='resume latest saved run')
+    parser.add_argument('--vgg_mean', type=float, default=[0.485, 0.456, 0.406], help='Mean of rgb used in pretrained model on ImageNet')
+    parser.add_argument('--vgg_std', type=float, default=[0.229, 0.224, 0.225], help='Std of rgb used in pretrained model on ImageNet')
     # Optimizer settings
     parser.add_argument('--optimizer', type=str, default='adam', help='adam or sgd')
     parser.add_argument('--weight_init', type=str, default='kaiming', help='normal, xavier, kaiming, orhtogonal weights initialisation')
@@ -53,27 +73,6 @@ def define_args():
     parser.add_argument('--lr_policy', default=None, help='learning rate policy: lambda|step|plateau')
     parser.add_argument('--lr_decay_iters', type=int, default=30, help='multiply by a gamma every lr_decay_iters iterations')
     parser.add_argument('--clip_grad_norm', type=int, default=0, help='performs gradient clipping')
-    # Fitting layer settings
-    parser.add_argument('--order', type=int, default=2, help='order of polynomial for curve fitting')
-    parser.add_argument('--activation_layer', type=str, default='square', help='Which activation after decoder do you want?')
-    parser.add_argument('--reg_ls', type=float, default=0, help='Regularization term for matrix inverse')
-    parser.add_argument('--no_ortho', action='store_true', help='if no ortho transformation is desired')
-    parser.add_argument('--mask_percentage', type=float, default=0.3, help='mask to apply where birds eye view is not defined')
-    parser.add_argument('--use_cholesky', action='store_true', help='use cholesky decomposition')
-    parser.add_argument('--activation_net', type=str, default='relu', help='activation in network used')
-    # Paths settings
-    # parser.add_argument('--image_dir', type=str, required=True, help='directory to image dir')
-    # parser.add_argument('--gt_dir', type=str, required=True, help='directory to gt')
-    parser.add_argument('--json_file', type=str, default='Labels/Curve_parameters.json', help='directory to json input')
-    # LOSS settings
-    parser.add_argument('--weight_seg', type=int, default=30, help='weight in loss criterium for segmentation')
-    parser.add_argument('--weight_class', type=float, default=1, help='weight in loss criterium for classification branch')
-    parser.add_argument('--weight_fit', type=float, default=1, help='weight in loss criterium for fit')
-    # parser.add_argument('--loss_policy', type=str, default='area', help='use area_loss, homography_mse or classical mse in birds eye view')
-    parser.add_argument('--weight_funct', type=str, default='none', help='apply weight function in birds eye when computing area loss')
-    parser.add_argument("--end_to_end", type=str2bool, nargs='?', const=True, default=True, help="regression towards curve params by network or postprocessing")
-    parser.add_argument('--gamma', type=float, default=0., help='factor to decay learning rate every lr_decay_iters with')
-    parser.add_argument("--clas", type=str2bool, nargs='?', const=True, default=False, help="Horizon and line classification tasks")
     # CUDNN usage
     parser.add_argument("--cudnn", type=str2bool, nargs='?', const=True, default=True, help="cudnn optimization active")
     # Tensorboard settings
@@ -84,37 +83,41 @@ def define_args():
     # Skip batch
     parser.add_argument('--list', type=int, nargs='+', default=[954, 2789], help='Images you want to skip')
 
-    # dataset setting
-    parser.add_argument('--dataset_name', type=str, help='the dataset name to be used in saving model names')
-    parser.add_argument('--data_dir', type=str, help='The path saving train.json and val.json files')
-    parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
-    parser.add_argument('--save_path', type=str, default='Saved/', help='directory to save output')
-    # parser.add_argument('--weights_path', type=str, help='The pretrained weights path')
-    parser.add_argument('--vgg_mean', type=float, default=[0.485, 0.456, 0.406], help='Mean of rgb used in pretrained model on ImageNet')
-    parser.add_argument('--vgg_std', type=float, default=[0.229, 0.224, 0.225], help='Std of rgb used in pretrained model on ImageNet')
-    # 3D LaneNet
-    parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
-    parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
-    parser.add_argument("--batch_norm", type=str2bool, nargs='?', const=True, default=True, help="apply batch norm")
-    parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
-    parser.add_argument('--ipm_w', type=int, default=128, help='width of inverse projective map (IPM)')
-    parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
-    parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
-    parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
-    parser.add_argument('--resize_h', type=int, default=360, help='height of the original image')
-    parser.add_argument('--resize_w', type=int, default=480, help='width of the original image')
-    parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
-    parser.add_argument('--pitch', type=float, default=9, help='pitch angle of camera to ground in centi degree')
-    parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
-    parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='directory to save output')
-    parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
-    parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
-    parser.add_argument('--k_fx', type=int, default=1000, help='camera intrinsic parameter fx')
-    parser.add_argument('--k_fy', type=int, default=1000, help='camera intrinsic parameter fx')
-    parser.add_argument('--k_dx', type=int, default=640, help='camera intrinsic parameter fx')
-    parser.add_argument('--k_dy', type=int, default=400, help='camera intrinsic parameter fx')
-    parser.add_argument('--prob_th', type=float, default=0.5, help='probability threshold for selecting output lanes')
     return parser
+
+
+def tusimple_config(args):
+
+    # set dataset parameters
+    args.save_path = ops.join(args.save_path, args.dataset_name)
+    args.org_h = 720
+    args.org_w = 1280
+    args.crop_size = 80
+    args.no_centerline = True
+    args.no_3d = True
+    args.fix_cam = True
+
+    # set camera parameters for the test dataset
+    args.K = np.array([[1000, 0, 640],
+                       [0, 1000, 400],
+                       [0, 0, 1]])
+    args.cam_height = 1.6
+    args.pitch = 9
+
+    # specify model settings
+    """
+    paper presented params:
+        args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
+        args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    """
+    args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
+    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
+    args.num_y_anchor = len(args.anchor_y_steps)
+
+    # initialize with pre-trained vgg weights: paper suggested true
+    args.pretrained = False
+    # apply batch norm in network
+    args.batch_norm = False
 
 
 class VisualSaver:

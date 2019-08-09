@@ -20,7 +20,7 @@ from tensorboardX import SummaryWriter
 from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes
 from Networks.Loss_crit import Laneline_3D_loss, Laneline_3D_loss_fix_cam
 from Networks.LaneNet3D import Net
-from tools.utils import define_args, first_run, homograpthy_g2c,\
+from tools.utils import define_args, first_run, tusimple_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, VisualSaver
 from tools.eval_lane import LaneEval
@@ -188,7 +188,7 @@ def train_net():
         end = time.time()
 
         # Start training loop
-        for i, (input, gt, idx) in tqdm(enumerate(train_loader)):
+        for i, (input, gt, idx, gt_cam_height, gt_cam_pitch) in tqdm(enumerate(train_loader)):
 
             # Time dataloader
             data_time.update(time.time() - end)
@@ -295,7 +295,7 @@ def validate(loader, model, criterion, vs_saver, val_gt_file, epoch=0):
     with torch.no_grad():
         with open(lane_pred_file, 'w') as jsonFile:
             # Start validation loop
-            for i, (input, gt, idx) in tqdm(enumerate(loader)):
+            for i, (input, gt, idx, gt_cam_height, gt_cam_pitch) in tqdm(enumerate(loader)):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                     input = input.float()
@@ -367,40 +367,6 @@ def save_checkpoint(state, to_copy, epoch):
             os.remove(prev_checkpoint_filename)
 
 
-def TuSimple_config():
-
-    # set dataset parameters
-    args.dataset_name = 'tusimple'
-    args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args.save_path = ops.join(args.save_path, args.dataset_name)
-    args.no_centerline = True
-    args.no_3d = True
-
-    # set camera parameters for the test dataset
-    args.fix_cam = True
-    args.K = np.array([[1000, 0, 640],
-                       [0, 1000, 400],
-                       [0, 0, 1]])
-    args.cam_height = 1.6
-    args.pitch = 9
-
-    # set ipm and anchor parameters
-    """
-    paper presented params:
-        args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
-        args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
-    """
-    args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
-    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
-    args.num_y_anchor = len(args.anchor_y_steps)
-
-    # initialize with pre-trained vgg weights: paper suggested true
-    args.pretrained = False
-    # apply batch norm in network
-    args.batch_norm = True
-
-
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -408,13 +374,18 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    # load in configuration
-    TuSimple_config()
+    args.dataset_name = 'tusimple'
+    args.data_dir = ops.join('data', args.dataset_name)
+    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
+
+    # load configuration for certain dataset
+    if args.dataset_name is 'tusimple':
+        tusimple_config(args)
 
     # for the case only running evaluation
     args.evaluate = False
 
-    # save setting
+    # settings for save and visualize
     args.nworkers = 0
     args.no_tb = False
     args.print_freq = 40
