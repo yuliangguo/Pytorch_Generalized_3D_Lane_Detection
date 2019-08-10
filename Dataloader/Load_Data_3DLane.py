@@ -445,6 +445,7 @@ if __name__ == '__main__':
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':
         tusimple_config(args)
+    # TODO: implement unit test for apollo sim 3D lane case
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])

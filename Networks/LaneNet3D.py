@@ -174,12 +174,10 @@ class LanePredictionHead(nn.Module):
         x = self.dim_rt(x)
         x = x.squeeze(-1).transpose(1, 2)
         # apply sigmoid to the probability terms to make it in (0, 1)
-        # TODO: need to check 3D and centerline case
         x[:, :, self.anchor_dim-1:self.anchor_dim:] = torch.sigmoid(x[:, :, self.anchor_dim-1:self.anchor_dim:])
         return x
 
 # TODO: implement homography net
-
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):

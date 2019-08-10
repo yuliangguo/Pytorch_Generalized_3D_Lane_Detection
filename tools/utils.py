@@ -31,10 +31,9 @@ def define_args():
     # Dataset settings
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
-    parser.add_argument('--crop_size', type=int, default=80, help='crop from image')
-    parser.add_argument('--cam_height', type=float, default=1.6, help='height of camera in meters')
-    parser.add_argument('--pitch', type=float, default=9, help='pitch angle of camera to ground in centi degree')
-    parser.add_argument('--y_ref', type=float, default=20.0, help='the ref Y distance in meter from where lane association is determined')
+    parser.add_argument('--crop_size', type=int, default=0, help='crop from image')
+    parser.add_argument('--cam_height', type=float, default=1.5, help='height of camera in meters')
+    parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='directory to save output')
     parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
     parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
@@ -46,6 +45,7 @@ def define_args():
     parser.add_argument('--ipm_w', type=int, default=128, help='width of inverse projective map (IPM)')
     parser.add_argument('--resize_h', type=int, default=360, help='height of the original image')
     parser.add_argument('--resize_w', type=int, default=480, help='width of the original image')
+    parser.add_argument('--y_ref', type=float, default=20.0, help='the reference Y distance in meters from where lane association is determined')
     parser.add_argument('--prob_th', type=float, default=0.5, help='probability threshold for selecting output lanes')
     # General model settings
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
@@ -117,7 +117,39 @@ def tusimple_config(args):
     # initialize with pre-trained vgg weights: paper suggested true
     args.pretrained = False
     # apply batch norm in network
-    args.batch_norm = False
+    args.batch_norm = True
+
+
+def apollo_sim_config(args):
+
+    # set dataset parameters
+    args.save_path = ops.join(args.save_path, args.dataset_name)
+    args.org_h = 1080
+    args.org_w = 1920
+    args.crop_size = 240
+    args.no_centerline = False
+    args.no_3d = False
+    args.fix_cam = False
+
+    # set camera parameters for the test dataset
+    args.K = np.array([[1000, 0, 640],
+                       [0, 1000, 400],
+                       [0, 0, 1]])
+
+    # specify model settings
+    """
+    paper presented params:
+        args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
+        args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
+    """
+    args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
+    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
+    args.num_y_anchor = len(args.anchor_y_steps)
+
+    # initialize with pre-trained vgg weights: paper suggested true
+    args.pretrained = False
+    # apply batch norm in network
+    args.batch_norm = True
 
 
 class VisualSaver:
