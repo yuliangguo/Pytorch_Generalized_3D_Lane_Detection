@@ -112,7 +112,7 @@ def tusimple_config(args):
     """
     args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
     args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
-    args.num_y_anchor = len(args.anchor_y_steps)
+    args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
     args.pretrained = False
@@ -126,15 +126,15 @@ def apollo_sim_config(args):
     args.save_path = ops.join(args.save_path, args.dataset_name)
     args.org_h = 1080
     args.org_w = 1920
-    args.crop_size = 240
+    args.crop_size = 0
     args.no_centerline = False
     args.no_3d = False
     args.fix_cam = False
 
     # set camera parameters for the test dataset
-    args.K = np.array([[1000, 0, 640],
-                       [0, 1000, 400],
-                       [0, 0, 1]])
+    args.K = np.array([[2015., 0., 960.],
+                       [0., 2015., 540.],
+                       [0., 0., 1.]])
 
     # specify model settings
     """
@@ -144,7 +144,7 @@ def apollo_sim_config(args):
     """
     args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
     args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
-    args.num_y_anchor = len(args.anchor_y_steps)
+    args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
     args.pretrained = False
@@ -218,11 +218,11 @@ class VisualSaver:
                     x_g = x_offsets + self.anchor_x_steps[j]
 
                     # compute lanelines in image view
-                    x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
+                    x_2d, y_2d = homographic_transformation(self.M_g2im, x_g, self.anchor_y_steps)
                     x_2d = x_2d.astype(np.int)
                     y_2d = y_2d.astype(np.int)
                     # compute lanelines in ipm view
-                    x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                    x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
                     x_ipm = x_ipm.astype(np.int)
                     y_ipm = y_ipm.astype(np.int)
                     # draw lanelines in both views
@@ -246,11 +246,11 @@ class VisualSaver:
                     x_g = x_offsets + self.anchor_x_steps[j]
 
                     # compute lanelines in image view
-                    x_2d, y_2d = homogenous_transformation(self.M_g2im, x_g, self.anchor_y_steps)
+                    x_2d, y_2d = homographic_transformation(self.M_g2im, x_g, self.anchor_y_steps)
                     x_2d = x_2d.astype(np.int)
                     y_2d = y_2d.astype(np.int)
                     # compute lanelines in ipm view
-                    x_ipm, y_ipm = homogenous_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                    x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
                     x_ipm = x_ipm.astype(np.int)
                     y_ipm = y_ipm.astype(np.int)
                     # draw lanelines in both views
@@ -327,14 +327,22 @@ def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_
     return M, M_inv
 
 
-def homograpthy_g2c(pitch, cam_height, K):
+def homograpthy_g2im(cam_pitch, cam_height, K):
     # transform top-view region to original image region
     R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(np.pi / 2 + pitch), -np.sin(np.pi / 2 + pitch)],
-                      [0, np.sin(np.pi / 2 + pitch), np.cos(np.pi / 2 + pitch)]])
-    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
-    H_c2g = np.linalg.inv(H_g2c)
-    return H_g2c, H_c2g
+                      [0, np.cos(np.pi / 2 + cam_pitch), -np.sin(np.pi / 2 + cam_pitch)],
+                      [0, np.sin(np.pi / 2 + cam_pitch), np.cos(np.pi / 2 + cam_pitch)]])
+    H_g2im = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
+    H_im2g = np.linalg.inv(H_g2im)
+    return H_g2im, H_im2g
+
+
+def projection_g2im(cam_pitch, cam_height, K):
+    P_g2c = np.array([[1,                             0,                              0,          0],
+                         [0, np.cos(np.pi / 2 + cam_pitch), -np.sin(np.pi / 2 + cam_pitch), cam_height],
+                         [0, np.sin(np.pi / 2 + cam_pitch),  np.cos(np.pi / 2 + cam_pitch),          0]])
+    P_g2im = np.matmul(K, P_g2c)
+    return P_g2im
 
 
 def homography_crop_resize(org_img_size, crop_y, resize_img_size):
@@ -354,12 +362,12 @@ def homography_crop_resize(org_img_size, crop_y, resize_img_size):
     return H_c
 
 
-def homogenous_transformation(Matrix, x, y):
+def homographic_transformation(Matrix, x, y):
     """
     Helper function to transform coordinates defined by transformation matrix
 
     Args:
-            Matrix (multi dim - array): Transformation matrix
+            Matrix (multi dim - array): 3x3 homography matrix
             x (array): original x coordinates
             y (array): original y coordinates
     """
@@ -367,8 +375,27 @@ def homogenous_transformation(Matrix, x, y):
     coordinates = np.vstack((x, y, ones))
     trans = np.matmul(Matrix, coordinates)
 
-    x_vals = trans[0,:]/trans[2, :]
-    y_vals = trans[1,:]/trans[2, :]
+    x_vals = trans[0, :]/trans[2, :]
+    y_vals = trans[1, :]/trans[2, :]
+    return x_vals, y_vals
+
+
+def projective_transformation(Matrix, x, y, z):
+    """
+    Helper function to transform coordinates defined by transformation matrix
+
+    Args:
+            Matrix (multi dim - array): 3x4 projection matrix
+            x (array): original x coordinates
+            y (array): original y coordinates
+            z (array): original z coordinates
+    """
+    ones = np.ones((1, len(z)))
+    coordinates = np.vstack((x, y, z, ones))
+    trans = np.matmul(Matrix, coordinates)
+
+    x_vals = trans[0, :]/trans[2, :]
+    y_vals = trans[1, :]/trans[2, :]
     return x_vals, y_vals
 
 def nms_1d(v):

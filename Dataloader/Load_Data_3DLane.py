@@ -18,7 +18,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
-from tools.utils import homogenous_transformation, homograpthy_g2c, homography_crop_resize, nms_1d, tusimple_config
+from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
+    homography_crop_resize, nms_1d, tusimple_config, apollo_sim_config
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -53,8 +54,8 @@ class LaneDataset(Dataset):
         self.w_net = args.resize_w
         self.h_ipm = args.ipm_h
         self.w_ipm = args.ipm_w
-        self.x_ratio = float(self.w_net) / float(self.w_org)
-        self.y_ratio = float(self.h_net) / float(self.h_org - self.h_crop)
+        # self.x_ratio = float(self.w_net) / float(self.w_org)
+        # self.y_ratio = float(self.h_net) / float(self.h_org - self.h_crop)
         self.top_view_region = args.top_view_region
         self.y_ref = args.y_ref
 
@@ -64,7 +65,7 @@ class LaneDataset(Dataset):
             # compute the homography between image and IPM, and crop transformation
             self.cam_height = args.cam_height
             self.cam_pitch = np.pi / 180 * args.pitch
-            self.H_g2c,  self.H_c2g = homograpthy_g2c(self.cam_pitch, args.cam_height, args.K)
+            self.H_g2im, self.H_im2g = homograpthy_g2im(self.cam_pitch, args.cam_height, args.K)
             self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize_h, args.resize_w])
         else:
             self.fix_cam = False
@@ -205,12 +206,12 @@ class LaneDataset(Dataset):
         image = F.crop(image, self.h_crop, 0, self.h_org-self.h_crop, self.w_org)
         image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
 
-        if self.no_3d:
+        if self.no_centerline:
             num_types = 1
         else:
             num_types = 3
 
-        if self.no_centerline:
+        if self.no_3d:
             dim_anchor = self.num_y_steps + 1
         else:
             dim_anchor = 2*self.num_y_steps + 1
@@ -223,7 +224,7 @@ class LaneDataset(Dataset):
             if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
                 gt_lane_2d = gt_lanes[i]
                 # project to ground coordinates
-                gt_lane_grd_x, gt_lane_grd_y = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
+                gt_lane_grd_x, gt_lane_grd_y = homographic_transformation(self.H_im2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
                 gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
                 gt_lane_3d[:, 0] = gt_lane_grd_x
                 gt_lane_3d[:, 1] = gt_lane_grd_y
@@ -235,8 +236,9 @@ class LaneDataset(Dataset):
             if gt_lane_3d.shape[0] < 2:
                 continue
 
-            # reverse the order of 3d pints to make the first point the closest
-            gt_lane_3d = gt_lane_3d[::-1, :]
+            if self.no_centerline:
+                # reverse the order of 3d pints to make the first point the closest
+                gt_lane_3d = gt_lane_3d[::-1, :]
 
             # ignore GT does not pass y_ref
             if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -256,12 +258,12 @@ class LaneDataset(Dataset):
 
         # fetch centerlines when available
         if not self.no_centerline:
-            gt_lanes = self._label_laneline_pts_all[idx]
+            gt_lanes = self._label_centerline_pts_all[idx]
             for i in range(len(gt_lanes)):
                 if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
                     gt_lane_2d = gt_lanes[i]
                     # project to ground coordinates
-                    gt_lane_grd_x, gt_lane_grd_y = homogenous_transformation(self.H_c2g, gt_lane_2d[:, 0],
+                    gt_lane_grd_x, gt_lane_grd_y = homographic_transformation(self.H_im2g, gt_lane_2d[:, 0],
                                                                              gt_lane_2d[:, 1])
                     gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
                     gt_lane_3d[:, 0] = gt_lane_grd_x
@@ -274,9 +276,9 @@ class LaneDataset(Dataset):
                 if gt_lane_3d.shape[0] < 2:
                     continue
 
-                # TODO: decide whether to reverse the order later
+                # TODO: Assume the use of apollo sim samples which are recorded from close to far. No need to reverse
                 # reverse the order of 3d pints to make the first point the closest
-                gt_lane_3d = gt_lane_3d[::-1, :]
+                # gt_lane_3d = gt_lane_3d[::-1, :]
 
                 # ignore GT does not pass y_ref
                 if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -318,12 +320,18 @@ class LaneDataset(Dataset):
 
     def proj_trainsforms(self, idx):
         if not self.fix_cam:
-            H_g2c, H_c2g = homograpthy_g2c(self._label_cam_pitch_all[idx],
-                                           self._label_cam_height_all[idx], self.K)
+            H_g2im, H_im2g = homograpthy_g2im(self._label_cam_pitch_all[idx],
+                                              self._label_cam_height_all[idx], self.K)
+            P_g2im = projection_g2im(self._label_cam_pitch_all[idx],
+                                     self._label_cam_height_all[idx], self.K)
             H_crop = homography_crop_resize([self.h_org, self.w_org], self.h_crop, [self.h_net, self.w_net])
-            return H_g2c, H_c2g, H_crop
+
+            if self.no_3d:
+                return H_g2im, H_im2g, H_crop
+            else:
+                return P_g2im, H_crop
         else:
-            return self.H_g2c, self.H_c2g, self.H_crop
+            return self.H_g2im, self.H_im2g, self.H_crop
 
 
 def resample_laneline_in_y(input_lane, y_steps):
@@ -379,7 +387,13 @@ def resample_laneline_in_y(input_lane, y_steps):
     return x_values, z_values
 
 
-# TODO: A series of data augmentation functions can be implemented here
+"""
+    Data Augmentation: 1. It is more complicated to apply data augmentation for this network because 
+                          the spatial transformation would be changed after applying data augmentation.
+                       2. It is still doable because any rotation, cropping augmentation can be described in
+                          projection matrix, which can be dynamically applied. Provide an additional
+                          transformation matrix just like online calibration.
+"""
 
 
 def get_loader(transformed_dataset, args):
@@ -415,7 +429,7 @@ def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor
             x_offsets = pred_anchor[j, :-1]
             x_3d = x_offsets + anchor_x_steps[j]
             # compute x, y in original image coordinates
-            x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, anchor_y_steps)
+            x_2d, y_2d = homographic_transformation(H_g2c, x_3d, anchor_y_steps)
             # reverse the order such that y_2d is ascending
             x_2d = x_2d[::-1]
             y_2d = y_2d[::-1]
@@ -438,17 +452,28 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'tusimple'
+    args.dataset_name = 'apollosim'
     args.data_dir = ops.join('../data', args.dataset_name)
-    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled/'
+    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_lane/'
 
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':
         tusimple_config(args)
-    # TODO: implement unit test for apollo sim 3D lane case
+    elif args.dataset_name is 'apollosim':
+        apollo_sim_config(args)
+
+    if args.no_centerline:
+        num_types = 1
+    else:
+        num_types = 3
+
+    if args.no_3d:
+        dim_anchor = args.num_y_steps + 1
+    else:
+        dim_anchor = 2*args.num_y_steps + 1
 
     # set 3D ground area for visualization
-    vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
+    vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 3.], [1.75, 3.]])
     print('visual area border:')
     print(vis_border_3d)
 
@@ -467,6 +492,9 @@ if __name__ == '__main__':
         # convert to BGR and numpy for visualization in opencv
         images = image_tensor.permute(0, 2, 3, 1).data.cpu().numpy()
         gt_anchors = gt_tensor.numpy()
+        idx = idx.numpy()
+        gt_cam_height = gt_cam_height.numpy()
+        gt_cam_pitch = gt_cam_pitch.numpy()
         for i in range(args.batch_size):
             img = images[i]
             img = img * np.array(args.vgg_std).astype(np.float32)
@@ -475,33 +503,70 @@ if __name__ == '__main__':
                 print('found an invalid normalized sample')
             img = np.clip(img, 0, 1)
 
-            H_g2c, H_c2g, H_crop = test_dataset.proj_trainsforms(idx[i])
-            M = np.matmul(H_crop, H_g2c)
+            if args.no_3d:
+                H_g2im, H_im2g, H_crop = test_dataset.proj_trainsforms(idx[i])
+                M = np.matmul(H_crop, H_g2im)
+                x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
+            else:
+                P_g2im, H_crop = test_dataset.proj_trainsforms(idx[i])
+                M = np.matmul(H_crop, P_g2im)
+                x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
+                                                       vis_border_3d[:, 1], np.ones(vis_border_3d.shape[0]))
             # visualize visual border for confirming calibration
-            x_2d, y_2d = homogenous_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
             x_2d = x_2d.astype(np.int)
             y_2d = y_2d.astype(np.int)
-            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [0, 0, 1], 2)
-            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [0, 0, 1], 2)
-            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [0, 0, 1], 2)
-            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [0, 0, 1], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[1], y_2d[1]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[2], y_2d[2]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [1, 0, 0], 2)
+            img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             gt_anchor = gt_anchors[i, :, :]
             for j in range(gt_anchor.shape[0]):
-                if gt_anchor[j, -1] > 0:
-                    x_offsets = gt_anchor[j, :-1]
+                # draw laneline
+                if gt_anchor[j, dim_anchor-1] > 0:
+                    x_offsets = gt_anchor[j, :args.num_y_steps]
                     x_3d = x_offsets + anchor_x_steps[j]
-                    # x_3d[:] = anchor_x_steps[j]
-                    x_2d, y_2d = homogenous_transformation(H_g2c, x_3d, args.anchor_y_steps)
-                    pts_2d = np.matmul(H_crop, np.vstack([x_2d, y_2d, np.ones_like(x_2d)]))
-                    x_2d = pts_2d[0, :].astype(np.int)
-                    y_2d = pts_2d[1, :].astype(np.int)
+                    if args.no_3d:
+                        x_2d, y_2d = homographic_transformation(M, x_3d, args.anchor_y_steps)
+                    else:
+                        z_3d = gt_anchor[j, args.num_y_steps:dim_anchor-1]
+                        x_2d, y_2d = projective_transformation(M, x_3d, args.anchor_y_steps, z_3d)
+                    x_2d = x_2d.astype(np.int)
+                    y_2d = y_2d.astype(np.int)
                     for k in range(1, x_2d.shape[0]):
-                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [1, 0, 0], 2)
+                        img = cv2.line(img, (x_2d[k-1], y_2d[k-1]), (x_2d[k], y_2d[k]), [0, 0, 1], 2)
+
+                # draw centerline
+                if not args.no_centerline and gt_anchor[j, 2*dim_anchor-1] > 0:
+                    x_offsets = gt_anchor[j, dim_anchor:dim_anchor+args.num_y_steps]
+                    x_3d = x_offsets + anchor_x_steps[j]
+                    if args.no_3d:
+                        x_2d, y_2d = homographic_transformation(M, x_3d, args.anchor_y_steps)
+                    else:
+                        z_3d = gt_anchor[j, dim_anchor+args.num_y_steps:2*dim_anchor-1]
+                        x_2d, y_2d = projective_transformation(M, x_3d, args.anchor_y_steps, z_3d)
+                    x_2d = x_2d.astype(np.int)
+                    y_2d = y_2d.astype(np.int)
+                    for k in range(1, x_2d.shape[0]):
+                        img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 1, 0], 2)
+
+                # draw the additional centerline for the merging case
+                if not args.no_centerline and gt_anchor[j, 3*dim_anchor-1] > 0:
+                    x_offsets = gt_anchor[j, 2*dim_anchor:2*dim_anchor+args.num_y_steps]
+                    x_3d = x_offsets + anchor_x_steps[j]
+                    if args.no_3d:
+                        x_2d, y_2d = homographic_transformation(M, x_3d, args.anchor_y_steps)
+                    else:
+                        z_3d = gt_anchor[j, 2*dim_anchor + args.num_y_steps:3*dim_anchor-1]
+                        x_2d, y_2d = projective_transformation(M, x_3d, args.anchor_y_steps, z_3d)
+                    x_2d = x_2d.astype(np.int)
+                    y_2d = y_2d.astype(np.int)
+                    for k in range(1, x_2d.shape[0]):
+                        img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 1, 0], 2)
             # convert image to BGR for opencv imshow
             cv2.imshow('2D gt check', np.flip(img, axis=2))
-            cv2.waitKey(500)
+            cv2.waitKey()
             print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
 
     print('done')

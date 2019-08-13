@@ -55,7 +55,7 @@ def train_net():
     global valid_set_labels
     valid_set_labels = [json.loads(line) for line in open(val_gt_file).readlines()]
     global H_g2c
-    H_g2c = valid_dataset.H_g2c
+    H_g2c = valid_dataset.H_g2im
     global anchor_x_steps
     anchor_x_steps = valid_dataset.anchor_x_steps
 
@@ -83,9 +83,9 @@ def train_net():
         num_lane_type = 3
 
     if args.no_3d:
-        anchor_dim = args.num_y_anchor + 1
+        anchor_dim = args.num_y_steps + 1
     else:
-        anchor_dim = 2 * args.num_y_anchor + 1
+        anchor_dim = 2 * args.num_y_steps + 1
 
     # Define loss criteria for multiple tasks
     if args.fix_cam:

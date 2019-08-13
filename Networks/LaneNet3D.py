@@ -204,9 +204,9 @@ class Net(nn.Module):
             self.num_lane_type = 3
 
         if args.no_3d:
-            self.anchor_dim = args.num_y_anchor + 1
+            self.anchor_dim = args.num_y_steps + 1
         else:
-            self.anchor_dim = 2*args.num_y_anchor + 1
+            self.anchor_dim = 2*args.num_y_steps + 1
 
         # Define network
         self.im_encoder = VggEncoder(batch_norm=args.batch_norm)
