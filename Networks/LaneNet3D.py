@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
 import torchvision.models as models
-from tools.utils import define_args, define_init_weights, init_projective_transform, tusimple_config
+from tools.utils import define_args, define_init_weights, init_projective_transform, tusimple_config, apollo_sim_config
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):
@@ -79,7 +79,15 @@ class VggEncoder(nn.Module):
 
 # initialize base_grid with different sizes can adapt to different sizes
 class ProjectiveGridGenerator(nn.Module):
-    def __init__(self, size_ipm, im_h, im_w, theta, no_cuda):
+    def __init__(self, size_ipm, im_h, im_w, M, no_cuda):
+        """
+
+        :param size_ipm: size of ipm tensor NCHW
+        :param im_h: height of image tensor
+        :param im_w: width of image tensor
+        :param M: normalized transformation matrix between image view and IPM
+        :param no_cuda:
+        """
         super().__init__()
         self.N, self.C, self.H, self.W = size_ipm
         self.im_h = im_h
@@ -87,7 +95,8 @@ class ProjectiveGridGenerator(nn.Module):
         linear_points_W = torch.linspace(0, 1 - 1/self.W, self.W)
         linear_points_H = torch.linspace(0, 1 - 1/self.H, self.H)
 
-        self.base_grid = theta.new(self.N, self.H, self.W, 3)
+        # use M only to decide the type not value
+        self.base_grid = M.new(self.N, self.H, self.W, 3)
         self.base_grid[:, :, :, 0] = torch.ger(
                 torch.ones(self.H), linear_points_W).expand_as(self.base_grid[:, :, :, 0])
         self.base_grid[:, :, :, 1] = torch.ger(
@@ -100,9 +109,10 @@ class ProjectiveGridGenerator(nn.Module):
             self.im_h = self.im_h.cuda()
             self.im_w = self.im_w.cuda()
 
-    def forward(self, theta):
-        # if base_grid is top-view, should theta be top-to-img homograph, and vice versa
-        grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), theta.transpose(1, 2))
+    def forward(self, M):
+        # compute the grid mapping based on the input transformation matrix M
+        # if base_grid is top-view, M should be ipm-to-img homography transformation, and vice versa
+        grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), M.transpose(1, 2))
         grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape([self.N, self.H, self.W, 2])
         # output grid to be used for grid_sample. grid specifies the sampling pixel locations normalized by the
         # input spatial dimensions.
@@ -177,7 +187,7 @@ class LanePredictionHead(nn.Module):
         x[:, :, self.anchor_dim-1:self.anchor_dim:] = torch.sigmoid(x[:, :, self.anchor_dim-1:self.anchor_dim:])
         return x
 
-# TODO: implement homography net
+# TODO: implement network estimating height and pitch
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
@@ -234,9 +244,12 @@ class Net(nn.Module):
         self.lane_out = LanePredictionHead(args.batch_norm, self.num_lane_type, self.anchor_dim)
 
     def forward(self, input):
+        # compute image features from multiple layers
         x1, x2, x3, x4 = self.im_encoder(input)
 
-        # this need to be computed in run time for enabling back propagation?
+        # TODO: update M_inv when camera_height camera_pitch are estimated online
+
+        # spatial transfer image features to IPM features
         grid1 = self.project_layer1(self.M_inv)
         grid2 = self.project_layer2(self.M_inv)
         grid3 = self.project_layer3(self.M_inv)
@@ -249,9 +262,21 @@ class Net(nn.Module):
         x3_proj = self.dim_rt2(x3_proj)
         x4_proj = F.grid_sample(x4, grid4)
         x4_proj = self.dim_rt3(x4_proj)
+
+        # process features from top view
         x = self.top_pathway(x1_proj, x2_proj, x3_proj, x4_proj)
+
+        # convert top-view features to anchor output
         out = self.lane_out(x)
+
         return out
+
+    def update_projection(self, args, cam_height, cam_pitch):
+        for i in range(args.batch_size):
+            M, M_inv = init_projective_transform(args.top_view_region,  np.array([args.org_h, args.org_w]),
+                                                 args.crop_size, np.array([args.resize_h, args.resize_w]),
+                                                 cam_pitch[i], cam_height[i], args.K)
+            self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
 
     def load_pretrained_vgg(self, batch_norm):
         if batch_norm:
@@ -289,19 +314,16 @@ if __name__ == '__main__':
     from PIL import Image
     from torchvision import transforms
     import torchvision.transforms.functional as F2
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'tusimple'
-    args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-
-    # load configuration for certain dataset
-    if args.dataset_name is 'tusimple':
-        tusimple_config(args)
+    # args.dataset_name = 'tusimple'
+    # tusimple_config(args)
+    args.dataset_name = 'apollosim'
+    apollo_sim_config(args)
 
     # construct model
     model = Net(args)
@@ -328,6 +350,13 @@ if __name__ == '__main__':
     image.unsqueeze_(0)
     image = torch.cat(list(torch.split(image, 1, dim=0))*args.batch_size)
     image = image.cuda()
+
+    # test update of camera height and pitch
+    cam_height = torch.tensor(1.65).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
+    cam_pitch = torch.tensor(0.1).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
+    model.update_projection(args, cam_height, cam_pitch)
+
+    # inference the model
     output_net = model(image)
 
     print(output_net.shape)

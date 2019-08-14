@@ -35,12 +35,14 @@ def get_lists(test_file):
 
     image_list = []
     label_list = []
+    name_list = []
     for line in test_list:
         line = line.replace("\n", "")
+        line = line.replace("./", "")
         image_list.append("images/" + line)
         label_list.append("labels/" + line[:-4] + ".txt")
-
-    return image_list, label_list
+        name_list.append(line[:-4].replace("/", "_"))
+    return image_list, label_list, name_list
 
 
 def laneline_label_generator(base_folder, image_name, label_name, output_gt_file):
@@ -146,7 +148,7 @@ if __name__ == '__main__':
     base_folder = "/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_lane/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
-    image_list, label_list = get_lists(input_file)
+    image_list, label_list, name_list = get_lists(input_file)
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:
         os.mkdir(vis_folder)
@@ -158,8 +160,8 @@ if __name__ == '__main__':
         if vis:
             img_name = image_list[i].split('/')
             img_name = img_name[-1]
-            print(img_name)
+            print(name_list[i])
             # cv2.imshow('gt visualize', img)
             # cv2.waitKey()
-            cv2.imwrite(vis_folder + img_name, img_vis)
+            cv2.imwrite(vis_folder + name_list[i] + '.jpg', img_vis)
     f_out.close()

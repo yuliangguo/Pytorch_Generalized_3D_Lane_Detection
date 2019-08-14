@@ -23,7 +23,7 @@ from Networks.LaneNet3D import Net
 from tools.utils import define_args, first_run, tusimple_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, VisualSaver
-from tools.eval_lane import LaneEval
+from tools.eval_lane_tusimple import LaneEval
 
 
 def train_net():

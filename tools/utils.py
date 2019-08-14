@@ -32,7 +32,7 @@ def define_args():
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
     parser.add_argument('--crop_size', type=int, default=0, help='crop from image')
-    parser.add_argument('--cam_height', type=float, default=1.5, help='height of camera in meters')
+    parser.add_argument('--cam_height', type=float, default=1.55, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='directory to save output')
     parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
@@ -151,7 +151,7 @@ def apollo_sim_config(args):
     # apply batch norm in network
     args.batch_norm = True
 
-
+# TODO: implement the case for centerline and 3D
 class VisualSaver:
     def __init__(self, args):
         self.vgg_mean = args.vgg_mean

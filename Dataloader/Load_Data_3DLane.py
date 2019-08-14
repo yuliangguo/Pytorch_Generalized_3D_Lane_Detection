@@ -473,7 +473,7 @@ if __name__ == '__main__':
         dim_anchor = 2*args.num_y_steps + 1
 
     # set 3D ground area for visualization
-    vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 3.], [1.75, 3.]])
+    vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
     print('visual area border:')
     print(vis_border_3d)
 
@@ -511,7 +511,7 @@ if __name__ == '__main__':
                 P_g2im, H_crop = test_dataset.proj_trainsforms(idx[i])
                 M = np.matmul(H_crop, P_g2im)
                 x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
-                                                       vis_border_3d[:, 1], np.ones(vis_border_3d.shape[0]))
+                                                       vis_border_3d[:, 1], np.zeros(vis_border_3d.shape[0]))
             # visualize visual border for confirming calibration
             x_2d = x_2d.astype(np.int)
             y_2d = y_2d.astype(np.int)
@@ -564,6 +564,11 @@ if __name__ == '__main__':
                     y_2d = y_2d.astype(np.int)
                     for k in range(1, x_2d.shape[0]):
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 1, 0], 2)
+
+            cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
+                        (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
+                        (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
             # convert image to BGR for opencv imshow
             cv2.imshow('2D gt check', np.flip(img, axis=2))
             cv2.waitKey()
