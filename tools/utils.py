@@ -151,6 +151,7 @@ def apollo_sim_config(args):
     # apply batch norm in network
     args.batch_norm = True
 
+
 # TODO: implement the case for centerline and 3D
 class VisualSaver:
     def __init__(self, args):
@@ -168,8 +169,8 @@ class VisualSaver:
         # compute homography between normalized coordinates of network input image and ipm image
         pitch = np.pi / 180 * args.pitch
         M_c2g, M_g2c = init_projective_transform(args.top_view_region, [args.org_h, args.org_w],
-                                             args.crop_size, [args.resize_h, args.resize_w], pitch, args.cam_height,
-                                             args.K)
+                                                 args.crop_size, [args.resize_h, args.resize_w], pitch, args.cam_height,
+                                                 args.K)
         # scale up to homography from network input image to ipm image
         S_ipm = np.array([[args.ipm_w, 0, 0],
                           [0, args.ipm_h, 0],
@@ -279,7 +280,7 @@ class VisualSaver:
 
 
 # compute normalized transformation matrix for a top-view region boundaries
-def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_size, pitch, cam_height, K):
+def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_size, cam_pitch, cam_height, K):
     """
         Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
         the top view image's 4 corners
@@ -292,33 +293,27 @@ def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_
     :param org_img_size: the size of original image size: (h, w)
     :param crop_y: pixels croped from original img
     :param resize_img_size: the size of image as network input: (h, w)
-    :param pitch: camera pitch angle wrt ground plane
+    :param cam_pitch: camera pitch angle wrt ground plane
     :param cam_height: camera height wrt ground plane in meters
     :param K: camera intrinsic parameters
     :return: M: the normalized transformation from image to IPM image
     """
 
-    # transform top-view region to original image region
-    R_g2c = np.array([[1, 0, 0],
-                      [0, np.cos(np.pi/2 + pitch), -np.sin(np.pi/2 + pitch)],
-                      [0, np.sin(np.pi/2 + pitch), np.cos(np.pi/2 + pitch)]])
-    H_g2c = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
-
-    X = np.concatenate([top_view_region, np.ones([4, 1])], 1)
-    img_region = np.matmul(X, H_g2c.T)
-    border_org = np.divide(img_region[:, :2], img_region[:, 2:3])
+    # compute homography transformation from ground to image
+    H_g2im, H_im2g = homograpthy_g2im(cam_pitch, cam_height, K)
 
     # transform original image region to network input region
-    ratio_x = resize_img_size[1] / org_img_size[1]
-    ratio_y = resize_img_size[0] / (org_img_size[0] - crop_y)
-    H_c = np.array([[ratio_x, 0, 0],
-                    [0, ratio_y, -ratio_y*crop_y]])
-    border_net = np.matmul(np.concatenate([border_org, np.ones([4, 1])], axis=1), H_c.T)
+    H_c = homography_crop_resize(org_img_size, crop_y, resize_img_size)
+
+    # compute top-view corners' coordinates in image
+    P = np.matmul(H_c, H_g2im)
+    x_2d, y_2d = homographic_transformation(P, top_view_region[:, 0], top_view_region[:, 1])
+    border_net = np.concatenate([x_2d.reshape(-1, 1), y_2d.reshape(-1, 1)], axis=1)
+
+    # compute the normalized transformation
     border_net[:, 0] = border_net[:, 0] / resize_img_size[1]
     border_net[:, 1] = border_net[:, 1] / resize_img_size[0]
     border_net = np.float32(border_net)
-
-    # compute the normalized transformation
     dst = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
     # img to ipm
     M = cv2.getPerspectiveTransform(border_net, dst)
@@ -398,6 +393,7 @@ def projective_transformation(Matrix, x, y, z):
     y_vals = trans[1, :]/trans[2, :]
     return x_vals, y_vals
 
+
 def nms_1d(v):
     """
 
@@ -414,6 +410,7 @@ def nms_1d(v):
         elif i is not len-1 and v[i+1] > v[i]:
             v_out[i] = 0.
     return v_out
+
 
 def first_run(save_path):
     txt_file = os.path.join(save_path,'first_run.txt')

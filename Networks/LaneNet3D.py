@@ -189,6 +189,7 @@ class LanePredictionHead(nn.Module):
 
 # TODO: implement network estimating height and pitch
 
+
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
     def __init__(self, args):
