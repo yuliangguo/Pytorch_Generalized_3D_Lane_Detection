@@ -84,7 +84,7 @@ class LaneEval(object):
         gt_dst_map, gt_index_map = ndimage.distance_transform_edt(gt_binary_map, return_indices=True)
         # distance transform for prediction
         pred_dst_map, pred_index_map = ndimage.distance_transform_edt(pred_binary_map, return_indices=True)
-        gt_dist_map = gt_dst_map < LaneEval.pixel_thresh
+        gt_dst_map = gt_dst_map < LaneEval.pixel_thresh
         pred_dst_map = pred_dst_map < LaneEval.pixel_thresh
 
         # find recall-related GT lanes from matching prediction to ground-truth DT map
@@ -234,7 +234,7 @@ class LaneEval(object):
         gt_dst_map, gt_index_map = ndimage.distance_transform_edt(gt_binary_map, return_indices=True)
         # distance transform for prediction
         pred_dst_map, pred_index_map = ndimage.distance_transform_edt(pred_binary_map, return_indices=True)
-        gt_dist_map = gt_dst_map < LaneEval.pixel_thresh
+        gt_dst_map = gt_dst_map < LaneEval.pixel_thresh
         pred_dst_map = pred_dst_map < LaneEval.pixel_thresh
 
         # find recall-related GT lanes from matching prediction to ground-truth DT map

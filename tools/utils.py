@@ -153,6 +153,7 @@ def apollo_sim_config(args):
 
 
 # TODO: implement the case for centerline and 3D
+# for 3D, ipm view needs no change, but projection to image view needs to apply projective transformation
 class VisualSaver:
     def __init__(self, args):
         self.vgg_mean = args.vgg_mean
@@ -168,18 +169,17 @@ class VisualSaver:
 
         # compute homography between normalized coordinates of network input image and ipm image
         pitch = np.pi / 180 * args.pitch
-        M_c2g, M_g2c = init_projective_transform(args.top_view_region, [args.org_h, args.org_w],
-                                                 args.crop_size, [args.resize_h, args.resize_w], pitch, args.cam_height,
-                                                 args.K)
-        # scale up to homography from network input image to ipm image
+        M_im2g_norm, M_g2im_norm = init_projective_transform(args.top_view_region, [args.org_h, args.org_w],
+                                                             args.crop_size, [args.resize_h, args.resize_w],
+                                                             pitch, args.cam_height, args.K)
+        # scale up the normalized homographic transformation from network input image to ipm image
         S_ipm = np.array([[args.ipm_w, 0, 0],
                           [0, args.ipm_h, 0],
                           [0, 0, 1]], dtype=np.float)
         S_im = np.array([[args.resize_w, 0, 0],
                          [0, args.resize_h, 0],
                          [0, 0, 1]], dtype=np.float)
-        M_im2ipm_scaledup = np.matmul(S_ipm, M_c2g)
-
+        M_im2ipm_scaledup = np.matmul(S_ipm, M_im2g_norm)
         self.M_im2ipm = np.matmul(M_im2ipm_scaledup, np.linalg.inv(S_im))
 
         # transformation from ipm to ground region
@@ -204,13 +204,13 @@ class VisualSaver:
             gt_anchor = gt.data.cpu().numpy()[i]
             pred_anchor = pred.data.cpu().numpy()[i]
             im = images.permute(0, 2, 3, 1).data.cpu().numpy()[i]
+            # the vgg_std and vgg_mean are for images in [0, 1] range
             im = im * np.array(self.vgg_std)
             im = im + np.array(self.vgg_mean)
             im = np.clip(im, 0, 1)
 
-            im_inverse = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
-            im_inverse = np.clip(im_inverse, 0, 1)
-            im = np.clip(im, 0, 1)
+            im_ipm = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
+            im_ipm = np.clip(im_ipm, 0, 1)
 
             # draw ground-truth lanelines
             for j in range(gt_anchor.shape[0]):
@@ -232,7 +232,7 @@ class VisualSaver:
                                       (x_2d[k - 1], y_2d[k - 1]),
                                       (x_2d[k], y_2d[k]),
                                       [0, 0, 1], 1)
-                        im_inverse = cv2.line(im_inverse,
+                        im_ipm = cv2.line(im_ipm,
                                               (x_ipm[k - 1], y_ipm[k - 1]),
                                               (x_ipm[k], y_ipm[k]),
                                               [0, 0, 1], 1)
@@ -260,7 +260,7 @@ class VisualSaver:
                                       (x_2d[k - 1], y_2d[k - 1]),
                                       (x_2d[k], y_2d[k]),
                                       [1, 0, 0], 1)
-                        im_inverse = cv2.line(im_inverse,
+                        im_ipm = cv2.line(im_ipm,
                                               (x_ipm[k - 1], y_ipm[k - 1]),
                                               (x_ipm[k], y_ipm[k]),
                                               [1, 0, 0], 1)
@@ -269,7 +269,7 @@ class VisualSaver:
             ax1 = fig.add_subplot(121)
             ax2 = fig.add_subplot(122)
             ax1.imshow(im)
-            ax2.imshow(im_inverse)
+            ax2.imshow(im_ipm)
             if evaluate:
                 fig.savefig(self.save_path + '/example/eval_vis/infer_{}'.format(idx[i]))
             else:
