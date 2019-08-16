@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
 import torchvision.models as models
-from tools.utils import define_args, define_init_weights, init_projective_transform, tusimple_config, apollo_sim_config
+from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, tusimple_config, apollo_sim_config
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):
@@ -200,11 +200,10 @@ class Net(nn.Module):
         org_img_size = np.array([args.org_h, args.org_w])
         resize_img_size = np.array([args.resize_h, args.resize_w])
         pitch = np.pi / 180 * args.pitch
-        M, M_inv = init_projective_transform(args.top_view_region, org_img_size,
-                                             args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
-        # M = torch.from_numpy(M).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
+        M, M_inv = homography_im2ipm_norm(args.top_view_region, org_img_size,
+                                          args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
         M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
-        # self.M = M
+        # M_inv is the homography ipm2im in normalized coordinates
         self.M_inv = M_inv
         if not args.no_cuda:
             self.M_inv = self.M_inv.cuda()
@@ -274,9 +273,9 @@ class Net(nn.Module):
 
     def update_projection(self, args, cam_height, cam_pitch):
         for i in range(args.batch_size):
-            M, M_inv = init_projective_transform(args.top_view_region,  np.array([args.org_h, args.org_w]),
-                                                 args.crop_size, np.array([args.resize_h, args.resize_w]),
-                                                 cam_pitch[i], cam_height[i], args.K)
+            M, M_inv = homography_im2ipm_norm(args.top_view_region, np.array([args.org_h, args.org_w]),
+                                              args.crop_size, np.array([args.resize_h, args.resize_w]),
+                                              cam_pitch[i], cam_height[i], args.K)
             self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
 
     def load_pretrained_vgg(self, batch_norm):

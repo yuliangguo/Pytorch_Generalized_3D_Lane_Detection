@@ -5,9 +5,9 @@ import os
 import os.path as ops
 import math
 import ujson as json
-from tools.utils import define_args, init_projective_transform, \
+from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
-    homograpthy_g2im, projection_g2im, homography_crop_resize, nms_1d,\
+    homograpthy_g2im, projection_g2im, homography_crop_resize,\
     tusimple_config, apollo_sim_config
 
 color = [[0, 0, 255],  # red
@@ -28,6 +28,7 @@ class LaneEval(object):
         self.resize_h = args.resize_h
         self.resize_w = args.resize_w
         self.K = args.K
+        self.no_centerline = args.no_centerline
 
         # use ipm keeping the aspect ratio of top-view region
         top_view_w = args.top_view_region[1, 0] - args.top_view_region[0, 0]
@@ -102,9 +103,9 @@ class LaneEval(object):
         for i, pred_lane in enumerate(pred_lanes):
             # convert lane points from ground-coordinates to ipm coordinates
             pred_lane = np.array(pred_lane)
-            ########################### TODO: remove this debug section later
-            pred_lane[:, 0] = pred_lane[:, 0] + 0.1
-            #################################################################
+            # TODO: remove this debug line in training, need to check what was not matched right
+            # pred_lane[:, 0] = pred_lane[:, 0] + 0.1
+
             x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, pred_lane[:, 0], pred_lane[:, 1])
             x_ipm = x_ipm.astype(np.int)
             y_ipm = y_ipm.astype(np.int)
@@ -115,7 +116,6 @@ class LaneEval(object):
 
         gt_binary_ipm = np.ones((self.ipm_h, self.ipm_w), dtype=np.int8)
         gt_binary_ipm[np.where(gt_label_ipm > 0)] = 0
-
 
         pred_binary_ipm = np.ones((self.ipm_h, self.ipm_w), dtype=np.int8)
         pred_binary_ipm[np.where(pred_label_ipm > 0)] = 0
@@ -196,18 +196,13 @@ class LaneEval(object):
         cnt_pred_out = sum(cnt_pred_list > 0)
 
         # visualization
+        # TODO: implement visualization on image when necessary
         if vis:
             # compute homography between normalized coordinates of network input image and ipm image
-            M_im2g_norm, M_g2im_norm = init_projective_transform(self.top_view_region, [self.org_h, self.org_w],
-                                                                 self.crop_y, [self.resize_h, self.resize_w],
-                                                                 gt_cam_pitch, gt_cam_height, self.K)
-            M_im2ipm = np.matmul(np.matmul(self.S_ipm, M_im2g_norm), np.linalg.inv(self.S_im))
-
-            # TODO: need to implement when visualize on image
-            # should use projection rather than homography when lanes in 3D
-            # M_im2g = np.matmul(self.H_ipm2g, M_im2ipm)
-            # M_g2im = np.linalg.inv(M_im2g)
-            # compute IPM image
+            H_im2ipm_norm, H_ipm2im_norm = homography_im2ipm_norm(self.top_view_region, [self.org_h, self.org_w],
+                                                                  self.crop_y, [self.resize_h, self.resize_w],
+                                                                  gt_cam_pitch, gt_cam_height, self.K)
+            M_im2ipm = np.matmul(np.matmul(self.S_ipm, H_im2ipm_norm), np.linalg.inv(self.S_im))
 
             img = cv2.imread(ops.join(self.dataset_dir, raw_file))
             img = cv2.warpPerspective(img, self.H_crop, (self.resize_w, self.resize_h))
@@ -258,9 +253,8 @@ class LaneEval(object):
             raise Exception('We do not get the predictions of all the test tasks')
         gts = {l['raw_file']: l for l in json_gt}
 
-        P_pixel, R_pixel, GT_pixel, PRED_pixel, P_lane, R_lane = 0., 0., 0., 0., 0., 0.
-        num_gt_lane, num_pred_lane, num = 0., 0., 0.
-
+        laneline_stats = np.zeros(8)
+        centerline_stats = np.zeros(8)
         for i, pred in enumerate(json_pred):
             if 'raw_file' not in pred or 'laneLines' not in pred:
                 raise Exception('raw_file or lanelines not in some predictions.')
@@ -269,10 +263,11 @@ class LaneEval(object):
             if raw_file not in gts:
                 raise Exception('Some raw_file from your predictions do not exist in the test tasks.')
             gt = gts[raw_file]
-            gt_lanelines = gt['laneLines']
             gt_cam_height = gt['cam_height']
             gt_cam_pitch = gt['cam_pitch']
 
+            # evaluate lanelines
+            gt_lanelines = gt['laneLines']
             # N to N matching of lanelines
             r_pixel, p_pixel, gt_pixel, pred_pixel,\
                 r_lane, p_lane, cnt_gt, cnt_pred, vis_map = self.bench(pred_lanelines,
@@ -281,70 +276,66 @@ class LaneEval(object):
                                                                        gt_cam_height,
                                                                        gt_cam_pitch,
                                                                        vis)
-            # print p_pixel, r_pixel, fp_lane, fn_lane
-            R_pixel += r_pixel
-            P_pixel += p_pixel
-            GT_pixel += gt_pixel
-            PRED_pixel += pred_pixel
-            R_lane += r_lane
-            P_lane += p_lane
-
-            # TODO: need to consider centerline and laneline separately
-            # if not args.no_centerline:
-            #     pred_centerlines = pred['centerLines']
-            #     gt_centerlines = gt['centerLines']
-            #
-            #     global vis_map
-            #     # N to N matching of lanelines
-            #     r_pixel, p_pixel, gt_pixel, pred_pixel, r_lane, p_lane, vis_map = self.bench(pred_centerlines,
-            #                                                                                  gt_centerlines,
-            #                                                                                  raw_file,
-            #                                                                                  gt_cam_height,
-            #                                                                                  gt_cam_pitch)
-
+            # if math.isnan(p_pixel) or math.isnan(r_pixel) or math.isnan(p_lane) or math.isnan(r_pixel):
+            #     break
+            laneline_stats += np.array([r_pixel, p_pixel, gt_pixel, pred_pixel, r_lane, p_lane, cnt_gt, cnt_pred])
             # save visualize map
             if vis:
                 # img_name = raw_file.split('/')[-1]
                 img_name = raw_file.replace("/", "_")
-                cv2.imwrite(save_path + '/' + img_name, vis_map)
+                cv2.imwrite(save_path + '/laneline_' + img_name, vis_map)
 
-            # accumulate lane counts
-            num_gt_lane += cnt_gt
-            num_pred_lane += cnt_pred
+            # evaluate centerlines
+            if not self.no_centerline:
+                pred_centerlines = pred['centerLines']
+                gt_centerlines = gt['centerLines']
 
-            print('processed sample: {}'.format(num))
-            num += 1
+                # N to N matching of lanelines
+                r_pixel, p_pixel, gt_pixel, pred_pixel,\
+                    r_lane, p_lane, cnt_gt, cnt_pred, vis_map = self.bench(pred_centerlines,
+                                                                           gt_centerlines,
+                                                                           raw_file,
+                                                                           gt_cam_height,
+                                                                           gt_cam_pitch,
+                                                                           vis)
+                centerline_stats += np.array([r_pixel, p_pixel, gt_pixel, pred_pixel, r_lane, p_lane, cnt_gt, cnt_pred])
+                # save visualize map
+                if vis:
+                    # img_name = raw_file.split('/')[-1]
+                    img_name = raw_file.replace("/", "_")
+                    cv2.imwrite(save_path + '/centerline_' + img_name, vis_map)
 
-            # print r_pixel / max(gt_pixel, 0.000001), p_pixel / max(pred_pixel, 0.000001), r_lane / max(len(gt_lanelines), 0.000001), p_lane / max(len(pred_lanelines), 0.000001)
-            if math.isnan(p_pixel) or math.isnan(r_pixel) or math.isnan(p_lane) or math.isnan(r_pixel):
-                break
+            print('processed sample: {}'.format(i))
 
-        R_pixel /= GT_pixel
-        P_pixel /= PRED_pixel
+        output_stats = []
+        r_pixel, p_pixel, gt_pixel, pred_pixel,\
+            r_lane, p_lane, cnt_gt, cnt_pred = [stat for stat in laneline_stats]
+
+        R_pixel = r_pixel / gt_pixel
+        P_pixel = p_pixel / pred_pixel
         F_pixel = 2 * R_pixel * P_pixel / (R_pixel + P_pixel + 1e-6)
-        R_lane /= num_gt_lane
-        P_lane /= num_pred_lane
+        R_lane = r_lane / cnt_gt
+        P_lane = p_lane / cnt_pred
         F_lane = 2 * R_lane * P_lane / (R_lane + P_lane + 1e-6)
 
-        # with open(output_eval_file, "w") as outfile:
-        #     outfile.write(json.dumps([
-        #         {'name': 'R_pixel', 'value': R_pixel, 'order': 'desc'},
-        #         {'name': 'P_pixel', 'value': P_pixel, 'order': 'desc'},
-        #         {'name': 'F_pixel', 'value': F_pixel, 'order': 'desc'},
-        #         {'name': 'R_lane', 'value': R_lane, 'order': 'asc'},
-        #         {'name': 'P_lane', 'value': P_lane, 'order': 'asc'},
-        #         {'name': 'F_lane', 'value': F_lane, 'order': 'asc'},
-        #         {'name': 'R_pixel_IDCorr', 'value': R_pixel_IDCorr, 'order': 'desc'},
-        #         {'name': 'P_pixel_IDCorr', 'value': P_pixel_IDCorr, 'order': 'desc'},
-        #         {'name': 'F_pixel_l', 'value': F_pixel_l, 'order': 'desc'},
-        #         {'name': 'R_lane_IDCorr', 'value': R_lane_IDCorr, 'order': 'asc'},
-        #         {'name': 'P_lane_IDCorr', 'value': P_lane_IDCorr, 'order': 'asc'},
-        #         {'name': 'F_lane_l', 'value': F_lane_l, 'order': 'asc'}
-        #     ]))
-        #     outfile.write("\n")
-        #     outfile.close()
-        #     return
-        return F_pixel, F_lane
+        output_stats.append(F_pixel)
+        output_stats.append(F_lane)
+
+        if not self.no_centerline:
+            r_pixel, p_pixel, gt_pixel, pred_pixel, \
+            r_lane, p_lane, cnt_gt, cnt_pred = [stat for stat in centerline_stats]
+
+            R_pixel = r_pixel / gt_pixel
+            P_pixel = p_pixel / pred_pixel
+            F_pixel = 2 * R_pixel * P_pixel / (R_pixel + P_pixel + 1e-6)
+            R_lane = r_lane / cnt_gt
+            P_lane = p_lane / cnt_pred
+            F_lane = 2 * R_lane * P_lane / (R_lane + P_lane + 1e-6)
+
+            output_stats.append(F_pixel)
+            output_stats.append(F_lane)
+
+        return output_stats
 
 
 if __name__ == '__main__':

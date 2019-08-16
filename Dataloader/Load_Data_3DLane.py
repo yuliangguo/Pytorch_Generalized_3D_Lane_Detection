@@ -67,9 +67,7 @@ class LaneDataset(Dataset):
                                                                [0, self.ipm_h-1],
                                                                [self.ipm_w-1, self.ipm_h-1]]),
                                                    np.float32(args.top_view_region))
-        # M_im2g = np.matmul(H_ipm2g, self.M_im2ipm)
-        # self.M_g2im = np.linalg.inv(M_im2g)
-        # self.M_g2ipm = np.linalg.inv(H_ipm2g)
+        # self.H_g2ipm = np.linalg.inv(H_ipm2g)
 
         if args.fix_cam:
             self.fix_cam = True
@@ -242,8 +240,6 @@ class LaneDataset(Dataset):
             anchor_dim = 2*self.num_y_steps + 1
         gt_anchor = np.zeros([np.int32(self.ipm_w / 8), num_types, anchor_dim], dtype=np.float32)
 
-        # cv2.imshow('image', np.asarray(image))
-        # cv2.waitKey(50)
         gt_lanes = self._label_laneline_pts_all[idx]
         for i in range(len(gt_lanes)):
             if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)

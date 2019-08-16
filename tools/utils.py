@@ -34,9 +34,9 @@ def define_args():
     parser.add_argument('--crop_size', type=int, default=0, help='crop from image')
     parser.add_argument('--cam_height', type=float, default=1.55, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
-    parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='directory to save output')
+    parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='if to use fix camera')
     parser.add_argument('--no_3d', action='store_true', help='if a dataset include laneline 3D attributes')
-    parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline annotations')
+    parser.add_argument('--no_centerline', action='store_true', help='if a dataset include centerline')
     # 3DLaneNet settings
     parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
@@ -153,7 +153,6 @@ def apollo_sim_config(args):
 
 
 # TODO: decide whetehr put visualizer functions under dataset class
-# for 3D, ipm view needs no change, but projection to image view needs to apply projective transformation
 class Visualizer:
     def __init__(self, args):
         self.no_3d = args.no_3d
@@ -176,14 +175,12 @@ class Visualizer:
         self.anchor_y_steps = args.anchor_y_steps
 
         # transformation from ipm to ground region
-        M_ipm2g = cv2.getPerspectiveTransform(np.float32([[0, 0],
+        H_ipm2g = cv2.getPerspectiveTransform(np.float32([[0, 0],
                                                           [self.ipm_w-1, 0],
                                                           [0, self.ipm_h-1],
                                                           [self.ipm_w-1, self.ipm_h-1]]),
                                               np.float32(args.top_view_region))
-        # M_im2g = np.matmul(H_ipm2g, self.M_im2ipm)
-        # self.M_g2im = np.linalg.inv(M_im2g)
-        self.M_g2ipm = np.linalg.inv(M_ipm2g)
+        self.H_g2ipm = np.linalg.inv(H_ipm2g)
 
         # probability threshold for choosing visualize lanes
         self.prob_th = args.prob_th
@@ -250,7 +247,7 @@ class Visualizer:
                 x_g = x_offsets + self.anchor_x_steps[j]
 
                 # compute lanelines in ipm view
-                x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm, y_ipm = homographic_transformation(self.H_g2ipm, x_g, self.anchor_y_steps)
                 x_ipm = x_ipm.astype(np.int)
                 y_ipm = y_ipm.astype(np.int)
                 for k in range(1, x_g.shape[0]):
@@ -263,7 +260,7 @@ class Visualizer:
                 x_g = x_offsets + self.anchor_x_steps[j]
 
                 # compute lanelines in ipm view
-                x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm, y_ipm = homographic_transformation(self.H_g2ipm, x_g, self.anchor_y_steps)
                 x_ipm = x_ipm.astype(np.int)
                 y_ipm = y_ipm.astype(np.int)
                 for k in range(1, x_g.shape[0]):
@@ -276,7 +273,7 @@ class Visualizer:
                 x_g = x_offsets + self.anchor_x_steps[j]
 
                 # compute lanelines in ipm view
-                x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm, y_ipm = homographic_transformation(self.H_g2ipm, x_g, self.anchor_y_steps)
                 x_ipm = x_ipm.astype(np.int)
                 y_ipm = y_ipm.astype(np.int)
                 for k in range(1, x_g.shape[0]):
@@ -284,7 +281,9 @@ class Visualizer:
                                       (x_ipm[k], y_ipm[k]), color, 1)
         return im_ipm
 
-    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, dataset, evaluate=False):
+    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, dataset, evaluate=False):
+        pred_cam_pitch = pred_cam_pitch.data.cpu().numpy()
+        pred_cam_height = pred_cam_height.data.cpu().numpy()
         for i in range(idx.shape[0]):
             # during training, only visualize the first sample of this batch
             if i > 0 and not evaluate:
@@ -297,29 +296,34 @@ class Visualizer:
 
             gt_anchors = gt.data.cpu().numpy()[i]
             pred_anchors = pred.data.cpu().numpy()[i]
+
             # apply nms to avoid output directly neighbored lanes
             pred_anchors[:, -1] = nms_1d(pred_anchors[:, -1])
 
             if self.no_3d:
                 H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
-                M_gt = np.matmul(H_crop, H_g2im)
+                P_gt = np.matmul(H_crop, H_g2im)
+                H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
+                                               pred_cam_height[i], self.K)
+                P_pred = np.mtmul(H_crop, H_g2im_pred)
             else:
                 P_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
-                M_gt = np.matmul(H_crop, P_g2im)
+                P_gt = np.matmul(H_crop, P_g2im)
+                P_g2im_pred = projection_g2im(pred_cam_pitch[i],
+                                               pred_cam_height[i], self.K)
+                P_pred = np.mtmul(H_crop, P_g2im_pred)
 
             im_ipm = cv2.warpPerspective(im, H_im2ipm, (self.ipm_w, self.ipm_h))
             im_ipm = np.clip(im_ipm, 0, 1)
 
             # draw lanes on image
             im_laneline = im.copy()
-            im_laneline = self.draw_on_img(im_laneline, gt_anchors, M_gt, 'laneline', [0, 0, 1])
-            # TODO need to use predicted pitch and height to compute M
-            im_laneline = self.draw_on_img(im_laneline, pred_anchors, M_gt, 'laneline', [1, 0, 0])
+            im_laneline = self.draw_on_img(im_laneline, gt_anchors, P_gt, 'laneline', [0, 0, 1])
+            im_laneline = self.draw_on_img(im_laneline, pred_anchors, P_pred, 'laneline', [1, 0, 0])
             if not dataset.no_centerline:
                 im_centerline = im.copy()
-                im_centerline = self.draw_on_img(im_centerline, gt_anchors, M_gt, 'centerline', [0, 0, 1])
-                # TODO need to use predicted pitch and height to compute M
-                im_centerline = self.draw_on_img(im_centerline, pred_anchors, M_gt, 'centerline', [1, 0, 0])
+                im_centerline = self.draw_on_img(im_centerline, gt_anchors, P_gt, 'centerline', [0, 0, 1])
+                im_centerline = self.draw_on_img(im_centerline, pred_anchors, P_pred, 'centerline', [1, 0, 0])
 
             # draw lanes on ipm
             ipm_laneline = im_ipm.copy()
@@ -330,6 +334,7 @@ class Visualizer:
                 ipm_centerline = self.draw_on_ipm(ipm_centerline, gt_anchors, 'centerline', [0, 0, 1])
                 ipm_centerline = self.draw_on_ipm(ipm_centerline, pred_anchors, 'centerline', [1, 0, 0])
 
+            # plot on a single figure
             if self.no_centerline:
                 fig = plt.figure()
                 ax1 = fig.add_subplot(121)
@@ -356,47 +361,45 @@ class Visualizer:
             plt.close(fig)
 
 
-# compute normalized transformation matrix for a top-view region boundaries
-def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_size, cam_pitch, cam_height, K):
+def homography_im2ipm_norm(top_view_region, org_img_size, crop_y, resize_img_size, cam_pitch, cam_height, K):
     """
-        Compute the normalized transformation (M_inv) such that image region corresponding to top_view region maps to
+        Compute the normalized transformation such that image region are mapped to top_view region maps to
         the top view image's 4 corners
         Ground coordinates: x-right, y-forward, z-up
-        The purpose of applying normalized transformation is for invariance in scale change
+        The purpose of applying normalized transformation: 1. invariance in scale change
+                                                           2.Torch grid sample is based on normalized grids
 
     :param top_view_region: a 4 X 2 list of (X, Y) indicating the top-view region corners in order:
                             top-left, top-right, bottom-left, bottom-right
-    :param batch_size: number of samples for each batch
-    :param org_img_size: the size of original image size: (h, w)
+    :param org_img_size: the size of original image size: [h, w]
     :param crop_y: pixels croped from original img
-    :param resize_img_size: the size of image as network input: (h, w)
+    :param resize_img_size: the size of image as network input: [h, w]
     :param cam_pitch: camera pitch angle wrt ground plane
     :param cam_height: camera height wrt ground plane in meters
     :param K: camera intrinsic parameters
-    :return: M: the normalized transformation from image to IPM image
+    :return: H_im2ipm_norm: the normalized transformation from image to IPM image
     """
 
     # compute homography transformation from ground to image
     H_g2im = homograpthy_g2im(cam_pitch, cam_height, K)
-
     # transform original image region to network input region
     H_c = homography_crop_resize(org_img_size, crop_y, resize_img_size)
+    H_g2im = np.matmul(H_c, H_g2im)
 
     # compute top-view corners' coordinates in image
-    P = np.matmul(H_c, H_g2im)
-    x_2d, y_2d = homographic_transformation(P, top_view_region[:, 0], top_view_region[:, 1])
-    border_net = np.concatenate([x_2d.reshape(-1, 1), y_2d.reshape(-1, 1)], axis=1)
+    x_2d, y_2d = homographic_transformation(H_g2im, top_view_region[:, 0], top_view_region[:, 1])
+    border_im = np.concatenate([x_2d.reshape(-1, 1), y_2d.reshape(-1, 1)], axis=1)
 
     # compute the normalized transformation
-    border_net[:, 0] = border_net[:, 0] / resize_img_size[1]
-    border_net[:, 1] = border_net[:, 1] / resize_img_size[0]
-    border_net = np.float32(border_net)
+    border_im[:, 0] = border_im[:, 0] / resize_img_size[1]
+    border_im[:, 1] = border_im[:, 1] / resize_img_size[0]
+    border_im = np.float32(border_im)
     dst = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
     # img to ipm
-    M_im2g_norm = cv2.getPerspectiveTransform(border_net, dst)
+    H_im2ipm_norm = cv2.getPerspectiveTransform(border_im, dst)
     # ipm to im
-    M_g2im_norm = cv2.getPerspectiveTransform(dst, border_net)
-    return M_im2g_norm, M_g2im_norm
+    H_ipm2im_norm = cv2.getPerspectiveTransform(dst, border_im)
+    return H_im2ipm_norm, H_ipm2im_norm
 
 
 def homograpthy_g2im(cam_pitch, cam_height, K):
