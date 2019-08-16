@@ -152,35 +152,28 @@ def apollo_sim_config(args):
     args.batch_norm = True
 
 
-# TODO: implement the case for centerline and 3D
+# TODO: decide whetehr put visualizer functions under dataset class
 # for 3D, ipm view needs no change, but projection to image view needs to apply projective transformation
-class VisualSaver:
+class Visualizer:
     def __init__(self, args):
+        self.no_3d = args.no_3d
+        self.no_centerline = args.no_centerline
         self.vgg_mean = args.vgg_mean
         self.vgg_std = args.vgg_std
         self.save_path = args.save_path
         self.ipm_w = args.ipm_w
         self.ipm_h = args.ipm_h
+        self.num_y_steps = args.num_y_steps
+
+        if args.no_3d:
+            self.anchor_dim = args.num_y_steps + 1
+        else:
+            self.anchor_dim = 2 * args.num_y_steps + 1
 
         x_min = args.top_view_region[0, 0]
         x_max = args.top_view_region[1, 0]
         self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w / 8), endpoint=True)
         self.anchor_y_steps = args.anchor_y_steps
-
-        # compute homography between normalized coordinates of network input image and ipm image
-        pitch = np.pi / 180 * args.pitch
-        M_im2g_norm, M_g2im_norm = init_projective_transform(args.top_view_region, [args.org_h, args.org_w],
-                                                             args.crop_size, [args.resize_h, args.resize_w],
-                                                             pitch, args.cam_height, args.K)
-        # scale up the normalized homographic transformation from network input image to ipm image
-        S_ipm = np.array([[args.ipm_w, 0, 0],
-                          [0, args.ipm_h, 0],
-                          [0, 0, 1]], dtype=np.float)
-        S_im = np.array([[args.resize_w, 0, 0],
-                         [0, args.resize_h, 0],
-                         [0, 0, 1]], dtype=np.float)
-        M_im2ipm_scaledup = np.matmul(S_ipm, M_im2g_norm)
-        self.M_im2ipm = np.matmul(M_im2ipm_scaledup, np.linalg.inv(S_im))
 
         # transformation from ipm to ground region
         M_ipm2g = cv2.getPerspectiveTransform(np.float32([[0, 0],
@@ -188,88 +181,172 @@ class VisualSaver:
                                                           [0, self.ipm_h-1],
                                                           [self.ipm_w-1, self.ipm_h-1]]),
                                               np.float32(args.top_view_region))
-        M_im2g = np.matmul(M_ipm2g, self.M_im2ipm)
-        self.M_g2im = np.linalg.inv(M_im2g)
+        # M_im2g = np.matmul(H_ipm2g, self.M_im2ipm)
+        # self.M_g2im = np.linalg.inv(M_im2g)
         self.M_g2ipm = np.linalg.inv(M_ipm2g)
 
         # probability threshold for choosing visualize lanes
         self.prob_th = args.prob_th
 
-    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, evaluate=False):
+    def draw_on_img(self, img, lane_anchor, P_g2im, draw_type='laneline', color=[0, 0, 1]):
+        """
+        :param img: image in numpy array, each pixel in [0, 1] range
+        :param lane_anchor: lane anchor in N X C numpy ndarray, dimension in agree with dataloader
+        :param P_g2im: projection from ground 3D coordinates to image 2D coordinates
+        :param draw_type: 'laneline' or 'centerline' deciding which to draw
+        :param color: [r, g, b] color for line,  each range in [0, 1]
+        :return:
+        """
+
+        for j in range(lane_anchor.shape[0]):
+            # draw laneline
+            if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, :self.num_y_steps]
+                x_3d = x_offsets + self.anchor_x_steps[j]
+                if self.no_3d:
+                    x_2d, y_2d = homographic_transformation(P_g2im, x_3d, self.anchor_y_steps)
+                else:
+                    z_3d = lane_anchor[j, self.num_y_steps:self.anchor_dim - 1]
+                    x_2d, y_2d = projective_transformation(P_g2im, x_3d, self.anchor_y_steps, z_3d)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color, 2)
+
+            # draw centerline
+            if draw_type is 'centerline' and lane_anchor[j, 2 * self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, self.anchor_dim:self.anchor_dim + self.num_y_steps]
+                x_3d = x_offsets + self.anchor_x_steps[j]
+                if self.no_3d:
+                    x_2d, y_2d = homographic_transformation(P_g2im, x_3d, self.anchor_y_steps)
+                else:
+                    z_3d = lane_anchor[j, self.anchor_dim + self.num_y_steps:2 * self.anchor_dim - 1]
+                    x_2d, y_2d = projective_transformation(P_g2im, x_3d, self.anchor_y_steps, z_3d)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color, 2)
+
+            # draw the additional centerline for the merging case
+            if draw_type is 'centerline' and  lane_anchor[j, 3 * self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, 2 * self.anchor_dim:2 * self.anchor_dim + self.num_y_steps]
+                x_3d = x_offsets + self.anchor_x_steps[j]
+                if self.no_3d:
+                    x_2d, y_2d = homographic_transformation(P_g2im, x_3d, self.anchor_y_steps)
+                else:
+                    z_3d = lane_anchor[j, 2 * self.anchor_dim + self.num_y_steps:3 * self.anchor_dim - 1]
+                    x_2d, y_2d = projective_transformation(P_g2im, x_3d, self.anchor_y_steps, z_3d)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color, 2)
+        return img
+
+    def draw_on_ipm(self, im_ipm, lane_anchor, draw_type='laneline', color=[0, 0, 1]):
+        for j in range(lane_anchor.shape[0]):
+            # draw laneline
+            if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, :self.num_y_steps]
+                x_g = x_offsets + self.anchor_x_steps[j]
+
+                # compute lanelines in ipm view
+                x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm = x_ipm.astype(np.int)
+                y_ipm = y_ipm.astype(np.int)
+                for k in range(1, x_g.shape[0]):
+                    im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
+                                      (x_ipm[k], y_ipm[k]), color, 1)
+
+            # draw centerline
+            if draw_type is 'centerline' and lane_anchor[j, 2 * self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, self.anchor_dim:self.anchor_dim + self.num_y_steps]
+                x_g = x_offsets + self.anchor_x_steps[j]
+
+                # compute lanelines in ipm view
+                x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm = x_ipm.astype(np.int)
+                y_ipm = y_ipm.astype(np.int)
+                for k in range(1, x_g.shape[0]):
+                    im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
+                                      (x_ipm[k], y_ipm[k]), color, 1)
+
+            # draw the additional centerline for the merging case
+            if draw_type is 'centerline' and lane_anchor[j, 3 * self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, 2 * self.anchor_dim:2 * self.anchor_dim + self.num_y_steps]
+                x_g = x_offsets + self.anchor_x_steps[j]
+
+                # compute lanelines in ipm view
+                x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
+                x_ipm = x_ipm.astype(np.int)
+                y_ipm = y_ipm.astype(np.int)
+                for k in range(1, x_g.shape[0]):
+                    im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
+                                      (x_ipm[k], y_ipm[k]), color, 1)
+        return im_ipm
+
+    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, dataset, evaluate=False):
         for i in range(idx.shape[0]):
             # during training, only visualize the first sample of this batch
             if i > 0 and not evaluate:
                 break
-            # when in evaluation mode, visualize all samples
-            gt_anchor = gt.data.cpu().numpy()[i]
-            pred_anchor = pred.data.cpu().numpy()[i]
             im = images.permute(0, 2, 3, 1).data.cpu().numpy()[i]
             # the vgg_std and vgg_mean are for images in [0, 1] range
             im = im * np.array(self.vgg_std)
             im = im + np.array(self.vgg_mean)
             im = np.clip(im, 0, 1)
 
-            im_ipm = cv2.warpPerspective(im, self.M_im2ipm, (self.ipm_w, self.ipm_h))
+            gt_anchors = gt.data.cpu().numpy()[i]
+            pred_anchors = pred.data.cpu().numpy()[i]
+            # apply nms to avoid output directly neighbored lanes
+            pred_anchors[:, -1] = nms_1d(pred_anchors[:, -1])
+
+            if self.no_3d:
+                H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
+                M_gt = np.matmul(H_crop, H_g2im)
+            else:
+                P_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
+                M_gt = np.matmul(H_crop, P_g2im)
+
+            im_ipm = cv2.warpPerspective(im, H_im2ipm, (self.ipm_w, self.ipm_h))
             im_ipm = np.clip(im_ipm, 0, 1)
 
-            # draw ground-truth lanelines
-            for j in range(gt_anchor.shape[0]):
-                if gt_anchor[j, -1] > 0:
-                    x_offsets = gt_anchor[j, :-1]
-                    x_g = x_offsets + self.anchor_x_steps[j]
+            # draw lanes on image
+            im_laneline = im.copy()
+            im_laneline = self.draw_on_img(im_laneline, gt_anchors, M_gt, 'laneline', [0, 0, 1])
+            # TODO need to use predicted pitch and height to compute M
+            im_laneline = self.draw_on_img(im_laneline, pred_anchors, M_gt, 'laneline', [1, 0, 0])
+            if not dataset.no_centerline:
+                im_centerline = im.copy()
+                im_centerline = self.draw_on_img(im_centerline, gt_anchors, M_gt, 'centerline', [0, 0, 1])
+                # TODO need to use predicted pitch and height to compute M
+                im_centerline = self.draw_on_img(im_centerline, pred_anchors, M_gt, 'centerline', [1, 0, 0])
 
-                    # compute lanelines in image view
-                    x_2d, y_2d = homographic_transformation(self.M_g2im, x_g, self.anchor_y_steps)
-                    x_2d = x_2d.astype(np.int)
-                    y_2d = y_2d.astype(np.int)
-                    # compute lanelines in ipm view
-                    x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
-                    x_ipm = x_ipm.astype(np.int)
-                    y_ipm = y_ipm.astype(np.int)
-                    # draw lanelines in both views
-                    for k in range(1, x_2d.shape[0]):
-                        im = cv2.line(im,
-                                      (x_2d[k - 1], y_2d[k - 1]),
-                                      (x_2d[k], y_2d[k]),
-                                      [0, 0, 1], 1)
-                        im_ipm = cv2.line(im_ipm,
-                                              (x_ipm[k - 1], y_ipm[k - 1]),
-                                              (x_ipm[k], y_ipm[k]),
-                                              [0, 0, 1], 1)
+            # draw lanes on ipm
+            ipm_laneline = im_ipm.copy()
+            ipm_laneline = self.draw_on_ipm(ipm_laneline, gt_anchors, 'laneline', [0, 0, 1])
+            ipm_laneline = self.draw_on_ipm(ipm_laneline, pred_anchors, 'laneline', [1, 0, 0])
+            if not dataset.no_centerline:
+                ipm_centerline = im_ipm.copy()
+                ipm_centerline = self.draw_on_ipm(ipm_centerline, gt_anchors, 'centerline', [0, 0, 1])
+                ipm_centerline = self.draw_on_ipm(ipm_centerline, pred_anchors, 'centerline', [1, 0, 0])
 
-            # apply nms to avoid output directly neighbored lanes
-            pred_anchor[:, -1] = nms_1d(pred_anchor[:, -1])
+            if self.no_centerline:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(121)
+                ax2 = fig.add_subplot(122)
+                ax1.imshow(im_laneline)
+                ax2.imshow(ipm_laneline)
+            else:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(221)
+                ax2 = fig.add_subplot(222)
+                ax3 = fig.add_subplot(223)
+                ax4 = fig.add_subplot(224)
+                ax1.imshow(im_laneline)
+                ax2.imshow(ipm_laneline)
+                ax3.imshow(im_centerline)
+                ax4.imshow(ipm_centerline)
 
-            # draw predicted lanelines
-            for j in range(pred_anchor.shape[0]):
-                if pred_anchor[j, -1] > self.prob_th:
-                    x_offsets = pred_anchor[j, :-1]
-                    x_g = x_offsets + self.anchor_x_steps[j]
-
-                    # compute lanelines in image view
-                    x_2d, y_2d = homographic_transformation(self.M_g2im, x_g, self.anchor_y_steps)
-                    x_2d = x_2d.astype(np.int)
-                    y_2d = y_2d.astype(np.int)
-                    # compute lanelines in ipm view
-                    x_ipm, y_ipm = homographic_transformation(self.M_g2ipm, x_g, self.anchor_y_steps)
-                    x_ipm = x_ipm.astype(np.int)
-                    y_ipm = y_ipm.astype(np.int)
-                    # draw lanelines in both views
-                    for k in range(1, x_2d.shape[0]):
-                        im = cv2.line(im,
-                                      (x_2d[k - 1], y_2d[k - 1]),
-                                      (x_2d[k], y_2d[k]),
-                                      [1, 0, 0], 1)
-                        im_ipm = cv2.line(im_ipm,
-                                              (x_ipm[k - 1], y_ipm[k - 1]),
-                                              (x_ipm[k], y_ipm[k]),
-                                              [1, 0, 0], 1)
-
-            fig = plt.figure()
-            ax1 = fig.add_subplot(121)
-            ax2 = fig.add_subplot(122)
-            ax1.imshow(im)
-            ax2.imshow(im_ipm)
             if evaluate:
                 fig.savefig(self.save_path + '/example/eval_vis/infer_{}'.format(idx[i]))
             else:
@@ -300,7 +377,7 @@ def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_
     """
 
     # compute homography transformation from ground to image
-    H_g2im, H_im2g = homograpthy_g2im(cam_pitch, cam_height, K)
+    H_g2im = homograpthy_g2im(cam_pitch, cam_height, K)
 
     # transform original image region to network input region
     H_c = homography_crop_resize(org_img_size, crop_y, resize_img_size)
@@ -316,10 +393,10 @@ def init_projective_transform(top_view_region, org_img_size, crop_y, resize_img_
     border_net = np.float32(border_net)
     dst = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
     # img to ipm
-    M = cv2.getPerspectiveTransform(border_net, dst)
+    M_im2g_norm = cv2.getPerspectiveTransform(border_net, dst)
     # ipm to im
-    M_inv = cv2.getPerspectiveTransform(dst, border_net)
-    return M, M_inv
+    M_g2im_norm = cv2.getPerspectiveTransform(dst, border_net)
+    return M_im2g_norm, M_g2im_norm
 
 
 def homograpthy_g2im(cam_pitch, cam_height, K):
@@ -328,8 +405,7 @@ def homograpthy_g2im(cam_pitch, cam_height, K):
                       [0, np.cos(np.pi / 2 + cam_pitch), -np.sin(np.pi / 2 + cam_pitch)],
                       [0, np.sin(np.pi / 2 + cam_pitch), np.cos(np.pi / 2 + cam_pitch)]])
     H_g2im = np.matmul(K, np.concatenate([R_g2c[:, 0:2], [[0], [cam_height], [0]]], 1))
-    H_im2g = np.linalg.inv(H_g2im)
-    return H_g2im, H_im2g
+    return H_g2im
 
 
 def projection_g2im(cam_pitch, cam_height, K):

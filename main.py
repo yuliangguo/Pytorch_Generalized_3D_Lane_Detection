@@ -22,7 +22,7 @@ from Networks.Loss_crit import Laneline_3D_loss, Laneline_3D_loss_fix_cam
 from Networks.LaneNet3D import Net
 from tools.utils import define_args, first_run, tusimple_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
-                        define_scheduler, define_optim, AverageMeter, VisualSaver
+                        define_scheduler, define_optim, AverageMeter, Visualizer
 from tools.eval_lane_tusimple import LaneEval
 
 
@@ -116,7 +116,7 @@ def train_net():
         writer = SummaryWriter(os.path.join(args.save_path, 'Tensorboard/'))
 
     # initialize visual saver
-    vs_saver = VisualSaver(args)
+    vs_saver = Visualizer(args)
 
     # Train, evaluate or resume
     args.resume = first_run(args.save_path)

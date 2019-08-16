@@ -5,7 +5,6 @@ import os
 import os.path as ops
 import math
 import ujson as json
-import sys
 from tools.utils import define_args, init_projective_transform, \
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize, nms_1d,\
@@ -206,7 +205,7 @@ class LaneEval(object):
 
             # TODO: need to implement when visualize on image
             # should use projection rather than homography when lanes in 3D
-            # M_im2g = np.matmul(self.M_ipm2g, M_im2ipm)
+            # M_im2g = np.matmul(self.H_ipm2g, M_im2ipm)
             # M_g2im = np.linalg.inv(M_im2g)
             # compute IPM image
 
@@ -290,7 +289,7 @@ class LaneEval(object):
             R_lane += r_lane
             P_lane += p_lane
 
-            # # TODO: need to consider centerline and laneline separately
+            # TODO: need to consider centerline and laneline separately
             # if not args.no_centerline:
             #     pred_centerlines = pred['centerLines']
             #     gt_centerlines = gt['centerLines']

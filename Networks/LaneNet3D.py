@@ -156,7 +156,7 @@ class TopViewPathway(nn.Module):
 #  Lane Prediction Head: through a series of convolutions with no padding in the y dimension, the feature maps are
 #  reduced in height, and finally the prediction layer size is N × 1 × 3 ·(2 · K + 1)
 class LanePredictionHead(nn.Module):
-    def __init__(self, batch_norm=False, num_lane_type=3, anchor_dim=5):
+    def __init__(self, num_lane_type, anchor_dim, batch_norm=False):
         super(LanePredictionHead, self).__init__()
         self.anchor_dim = anchor_dim
         layers = []
@@ -178,7 +178,7 @@ class LanePredictionHead(nn.Module):
 
     def forward(self, x):
         x = self.features(x)
-        # x suppose to be N X 64 X 4 X w_ipm/8, reshape to N X 256 X w_ipm/8 X 1
+        # x suppose to be N X 64 X 4 X ipm_w/8, reshape to N X 256 X ipm_w/8 X 1
         sizes = x.shape
         x = x.reshape(sizes[0], sizes[1]*sizes[2], sizes[3], 1)
         x = self.dim_rt(x)
@@ -242,7 +242,7 @@ class Net(nn.Module):
         self.dim_rt3 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
 
         self.top_pathway = TopViewPathway(args.batch_norm)
-        self.lane_out = LanePredictionHead(args.batch_norm, self.num_lane_type, self.anchor_dim)
+        self.lane_out = LanePredictionHead(self.num_lane_type, self.anchor_dim, args.batch_norm)
 
     def forward(self, input):
         # compute image features from multiple layers
