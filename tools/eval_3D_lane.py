@@ -8,7 +8,7 @@ import ujson as json
 from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
-    tusimple_config, apollo_sim_config
+    tusimple_config, sim3d_config
 
 color = [[0, 0, 255],  # red
          [0, 255, 0],  # green
@@ -343,25 +343,22 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'apollosim'
+    args.dataset_name = 'sim3d'
     args.data_dir = ops.join('../data', args.dataset_name)
-    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_lane/'
+    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_3D_Lane/'
 
     # load configuration for certain dataset
-    if args.dataset_name is 'tusimple':
-        tusimple_config(args)
-    elif args.dataset_name is 'apollosim':
-        apollo_sim_config(args)
+    sim3d_config(args)
 
     args.pixel_per_meter = 10.
     args.dist_th = 1.5
     args.pt_th = 0.5
     args.min_num_pixels = 10
-
-    pred_file = '/home/yuliangguo/Projects/3DLaneNet/data/apollosim/val.json'
-    gt_file = '/home/yuliangguo/Projects/3DLaneNet/data/apollosim/val.json'
-
     evaluator = LaneEval(args)
+
+    pred_file = '../data/sim3d/val.json'
+    gt_file = '../data/sim3d/val.json'
+
     # try:
     print(evaluator.bench_one_submit(pred_file, gt_file, vis=True))
     # except Exception as e:

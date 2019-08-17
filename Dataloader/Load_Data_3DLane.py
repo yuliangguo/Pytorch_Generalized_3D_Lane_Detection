@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
-    homography_crop_resize, nms_1d, tusimple_config, apollo_sim_config, Visualizer
+    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -426,7 +426,7 @@ def get_loader(transformed_dataset, args):
     return data_loader
 
 
-def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor_y_steps, x_min, x_max, prob_th=0.5):
+def compute_tusimple_lanes(pred_anchor, h_samples, H_g2im, anchor_x_steps, anchor_y_steps, x_min, x_max, prob_th=0.5):
     """
         convert anchor lanes to image lanes in tusimple format
     :return: x values at h_samples in image coordinates
@@ -442,7 +442,7 @@ def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor
             x_offsets = pred_anchor[j, :-1]
             x_3d = x_offsets + anchor_x_steps[j]
             # compute x, y in original image coordinates
-            x_2d, y_2d = homographic_transformation(H_g2c, x_3d, anchor_y_steps)
+            x_2d, y_2d = homographic_transformation(H_g2im, x_3d, anchor_y_steps)
             # reverse the order such that y_2d is ascending
             x_2d = x_2d[::-1]
             y_2d = y_2d[::-1]
@@ -458,6 +458,45 @@ def compute_tusimple_lanes(pred_anchor, h_samples, H_g2c, anchor_x_steps, anchor
     return lanes_out
 
 
+def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, prob_th=0.5):
+    lanelines_out = []
+    centerlines_out = []
+    num_y_steps = anchor_y_steps.shape[0]
+
+    # apply nms to output lanes probabilities
+    # consider w/o centerline cases
+    pred_anchor[:, anchor_dim - 1] = nms_1d(pred_anchor[:, anchor_dim - 1])
+    pred_anchor[:, 2 * anchor_dim - 1] = nms_1d(pred_anchor[:, 2 * anchor_dim - 1])
+    pred_anchor[:, 3 * anchor_dim - 1] = nms_1d(pred_anchor[:, 3 * anchor_dim - 1])
+
+    for j in range(pred_anchor.shape[0]):
+        # draw laneline
+        if pred_anchor[j, anchor_dim - 1] > prob_th:
+            x_offsets = pred_anchor[j, :num_y_steps]
+            x_g = x_offsets + anchor_x_steps[j]
+            z_g = pred_anchor[j, num_y_steps:anchor_dim - 1]
+            line = np.hstack([x_g, anchor_y_steps, z_g])
+            lanelines_out.append(line)
+
+        # draw centerline
+        if pred_anchor[j, 2 * anchor_dim - 1] > prob_th:
+            x_offsets = pred_anchor[j, anchor_dim:anchor_dim + num_y_steps]
+            x_g = x_offsets + anchor_x_steps[j]
+            z_g = pred_anchor[j, anchor_dim + num_y_steps:2 * anchor_dim - 1]
+            line = np.hstack([x_g, anchor_y_steps, z_g])
+            centerlines_out.append(line)
+
+        # draw the additional centerline for the merging case
+        if pred_anchor[j, 3 * anchor_dim - 1] > prob_th:
+            x_offsets = pred_anchor[j, 2 * anchor_dim:2 * anchor_dim + num_y_steps]
+            x_g = x_offsets + anchor_x_steps[j]
+            z_g = pred_anchor[j, 2 * anchor_dim + num_y_steps:3 * anchor_dim - 1]
+            line = np.hstack([x_g, anchor_y_steps, z_g])
+            centerlines_out.append(line)
+
+    return lanelines_out, centerlines_out
+
+
 # unit test
 if __name__ == '__main__':
     from tools.utils import define_args
@@ -465,15 +504,15 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'apollosim'
+    args.dataset_name = 'sim3d'
     args.data_dir = ops.join('../data', args.dataset_name)
     args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_lane/'
 
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':
         tusimple_config(args)
-    elif args.dataset_name is 'apollosim':
-        apollo_sim_config(args)
+    elif args.dataset_name is 'sim3d':
+        sim3d_config(args)
 
     if args.no_3d:
         anchor_dim = args.num_y_steps + 1

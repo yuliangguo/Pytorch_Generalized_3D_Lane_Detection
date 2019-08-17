@@ -41,6 +41,7 @@ def define_args():
     parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
     parser.add_argument("--batch_norm", type=str2bool, nargs='?', const=True, default=True, help="apply batch norm")
+    parser.add_argument("--pred_cam", type=str2bool, nargs='?', const=True, default=False, help="prediction camera height and pitch online")
     parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
     parser.add_argument('--ipm_w', type=int, default=128, help='width of inverse projective map (IPM)')
     parser.add_argument('--resize_h', type=int, default=360, help='height of the original image')
@@ -120,7 +121,7 @@ def tusimple_config(args):
     args.batch_norm = True
 
 
-def apollo_sim_config(args):
+def sim3d_config(args):
 
     # set dataset parameters
     args.save_path = ops.join(args.save_path, args.dataset_name)
@@ -152,7 +153,6 @@ def apollo_sim_config(args):
     args.batch_norm = True
 
 
-# TODO: decide whetehr put visualizer functions under dataset class
 class Visualizer:
     def __init__(self, args):
         self.no_3d = args.no_3d
@@ -298,20 +298,26 @@ class Visualizer:
             pred_anchors = pred.data.cpu().numpy()[i]
 
             # apply nms to avoid output directly neighbored lanes
-            pred_anchors[:, -1] = nms_1d(pred_anchors[:, -1])
+            # consider w/o centerline cases
+            if self.no_centerline:
+                pred_anchors[:, -1] = nms_1d(pred_anchors[:, -1])
+            else:
+                pred_anchors[:, self.anchor_dim - 1] = nms_1d(pred_anchors[:, self.anchor_dim - 1])
+                pred_anchors[:, 2 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 2 * self.anchor_dim - 1])
+                pred_anchors[:, 3 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 3 * self.anchor_dim - 1])
 
             if self.no_3d:
                 H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
                 P_gt = np.matmul(H_crop, H_g2im)
                 H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
-                                               pred_cam_height[i], self.K)
-                P_pred = np.mtmul(H_crop, H_g2im_pred)
+                                               pred_cam_height[i], dataset.K)
+                P_pred = np.matmul(H_crop, H_g2im_pred)
             else:
                 P_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
                 P_gt = np.matmul(H_crop, P_g2im)
                 P_g2im_pred = projection_g2im(pred_cam_pitch[i],
-                                               pred_cam_height[i], self.K)
-                P_pred = np.mtmul(H_crop, P_g2im_pred)
+                                              pred_cam_height[i], dataset.K)
+                P_pred = np.matmul(H_crop, P_g2im_pred)
 
             im_ipm = cv2.warpPerspective(im, H_im2ipm, (self.ipm_w, self.ipm_h))
             im_ipm = np.clip(im_ipm, 0, 1)
@@ -320,7 +326,7 @@ class Visualizer:
             im_laneline = im.copy()
             im_laneline = self.draw_on_img(im_laneline, gt_anchors, P_gt, 'laneline', [0, 0, 1])
             im_laneline = self.draw_on_img(im_laneline, pred_anchors, P_pred, 'laneline', [1, 0, 0])
-            if not dataset.no_centerline:
+            if not self.no_centerline:
                 im_centerline = im.copy()
                 im_centerline = self.draw_on_img(im_centerline, gt_anchors, P_gt, 'centerline', [0, 0, 1])
                 im_centerline = self.draw_on_img(im_centerline, pred_anchors, P_pred, 'centerline', [1, 0, 0])
@@ -329,7 +335,7 @@ class Visualizer:
             ipm_laneline = im_ipm.copy()
             ipm_laneline = self.draw_on_ipm(ipm_laneline, gt_anchors, 'laneline', [0, 0, 1])
             ipm_laneline = self.draw_on_ipm(ipm_laneline, pred_anchors, 'laneline', [1, 0, 0])
-            if not dataset.no_centerline:
+            if not self.no_centerline:
                 ipm_centerline = im_ipm.copy()
                 ipm_centerline = self.draw_on_ipm(ipm_centerline, gt_anchors, 'centerline', [0, 0, 1])
                 ipm_centerline = self.draw_on_ipm(ipm_centerline, pred_anchors, 'centerline', [1, 0, 0])
@@ -380,7 +386,7 @@ def homography_im2ipm_norm(top_view_region, org_img_size, crop_y, resize_img_siz
     :return: H_im2ipm_norm: the normalized transformation from image to IPM image
     """
 
-    # compute homography transformation from ground to image
+    # compute homography transformation from ground to image (only this depends on cam_pitch and cam height)
     H_g2im = homograpthy_g2im(cam_pitch, cam_height, K)
     # transform original image region to network input region
     H_c = homography_crop_resize(org_img_size, crop_y, resize_img_size)

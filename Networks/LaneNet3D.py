@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
 import torchvision.models as models
-from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, tusimple_config, apollo_sim_config
+from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, tusimple_config, sim3d_config
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):
@@ -187,7 +187,7 @@ class LanePredictionHead(nn.Module):
         x[:, :, self.anchor_dim-1:self.anchor_dim:] = torch.sigmoid(x[:, :, self.anchor_dim-1:self.anchor_dim:])
         return x
 
-# TODO: implement network estimating height and pitch
+# TODO: implement sub network estimating height and pitch
 
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
@@ -203,8 +203,11 @@ class Net(nn.Module):
         M, M_inv = homography_im2ipm_norm(args.top_view_region, org_img_size,
                                           args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
         M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
-        # M_inv is the homography ipm2im in normalized coordinates
-        self.M_inv = M_inv
+
+        self.M_inv = M_inv # M_inv is the homography ipm2im in normalized coordinates
+        self.cam_height = torch.tensor(args.cam_height).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
+        self.cam_pitch = torch.tensor(pitch).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
+
         if not args.no_cuda:
             self.M_inv = self.M_inv.cuda()
 
@@ -247,7 +250,9 @@ class Net(nn.Module):
         # compute image features from multiple layers
         x1, x2, x3, x4 = self.im_encoder(input)
 
-        # TODO: update M_inv when camera_height camera_pitch are estimated online
+        # TODO: estimate camera height and pitch if self.pred_cam is true
+        cam_height = self.cam_height
+        cam_pitch = self.cam_pitch
 
         # spatial transfer image features to IPM features
         grid1 = self.project_layer1(self.M_inv)
@@ -269,14 +274,17 @@ class Net(nn.Module):
         # convert top-view features to anchor output
         out = self.lane_out(x)
 
-        return out
+        return out, cam_height, cam_pitch
 
     def update_projection(self, args, cam_height, cam_pitch):
         for i in range(args.batch_size):
+            # TODO: simplify the computation of M_inv
             M, M_inv = homography_im2ipm_norm(args.top_view_region, np.array([args.org_h, args.org_w]),
                                               args.crop_size, np.array([args.resize_h, args.resize_w]),
                                               cam_pitch[i], cam_height[i], args.K)
             self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
+            self.cam_height = cam_height
+            self.cam_pitch = cam_pitch
 
     def load_pretrained_vgg(self, batch_norm):
         if batch_norm:
@@ -322,8 +330,8 @@ if __name__ == '__main__':
 
     # args.dataset_name = 'tusimple'
     # tusimple_config(args)
-    args.dataset_name = 'apollosim'
-    apollo_sim_config(args)
+    args.dataset_name = 'sim3d'
+    sim3d_config(args)
 
     # construct model
     model = Net(args)
