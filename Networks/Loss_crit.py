@@ -14,11 +14,11 @@ class Laneline_3D_loss(nn.Module):
     loss2: sum of geometric distance betwen 3D lane anchor points in X and Z offsets
     loss3: error in estimating pitch and camera heights
     """
-    def __init__(self, num_types, anchor_dim, fix_cam):
+    def __init__(self, num_types, anchor_dim, pred_cam):
         super(Laneline_3D_loss, self).__init__()
         self.num_types = num_types
         self.anchor_dim = anchor_dim
-        self.fix_cam = fix_cam
+        self.pred_cam = pred_cam
 
     def forward(self, pred_3D_lanes, gt_3D_lanes, pred_hcam, gt_hcam, pred_pitch, gt_pitch):
         """
@@ -45,7 +45,7 @@ class Laneline_3D_loss(nn.Module):
                            (torch.ones_like(gt_class)-gt_class)*torch.log((torch.ones_like(pred_class)-pred_class)))
         # applying L1 norm does not need to separate X and Z
         loss2 = torch.sum(torch.norm(gt_class*(pred_anchors-gt_anchors), p=1, dim=3))
-        if self.fix_cam:
+        if not self.pred_cam:
             return loss1+loss2
         loss3 = torch.sum(torch.abs(gt_pitch-pred_pitch))+torch.sum(torch.abs(gt_hcam-pred_hcam))
         return loss1+loss2+loss3
@@ -55,8 +55,8 @@ class Laneline_3D_loss(nn.Module):
 if __name__ == '__main__':
     num_types = 3
     anchor_dim = 13
-    fix_cam = True
-    criterion = Laneline_3D_loss(num_types, anchor_dim, fix_cam)
+    pred_cam = True
+    criterion = Laneline_3D_loss(num_types, anchor_dim, pred_cam)
     criterion = criterion.cuda()
 
     pred_3D_lanes = torch.rand(8, 26, num_types*anchor_dim).cuda()

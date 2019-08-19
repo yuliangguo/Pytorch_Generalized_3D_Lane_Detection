@@ -196,7 +196,7 @@ class LaneEval(object):
         cnt_pred_out = sum(cnt_pred_list > 0)
 
         # visualization
-        # TODO: implement visualization on image when necessary
+        # TODO: visualization on image can tell the error in Z estimation
         if vis:
             # compute homography between normalized coordinates of network input image and ipm image
             H_im2ipm_norm, H_ipm2im_norm = homography_im2ipm_norm(self.top_view_region, [self.org_h, self.org_w],
@@ -305,7 +305,7 @@ class LaneEval(object):
                     img_name = raw_file.replace("/", "_")
                     cv2.imwrite(save_path + '/centerline_' + img_name, vis_map)
 
-            print('processed sample: {}'.format(i))
+            # print('processed sample: {}'.format(i))
 
         output_stats = []
         r_pixel, p_pixel, gt_pixel, pred_pixel,\

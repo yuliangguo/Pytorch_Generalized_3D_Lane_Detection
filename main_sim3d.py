@@ -87,7 +87,7 @@ def train_net():
         anchor_dim = 2 * args.num_y_steps + 1
 
     # Define loss criteria
-    criterion = Laneline_3D_loss(num_lane_type, anchor_dim, args.fix_cam)
+    criterion = Laneline_3D_loss(num_lane_type, anchor_dim, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
@@ -149,7 +149,7 @@ def train_net():
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
         mkdir_if_missing(os.path.join(args.save_path, 'example/eval_vis'))
-        loss_valid, eval_stats = validate(valid_loader, model, criterion, vs_saver, val_gt_file)
+        loss_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file)
         return
 
     # Start training from clean slate
@@ -184,7 +184,7 @@ def train_net():
         end = time.time()
 
         # Start training loop
-        for i, (input, gt, idx, gt_cam_height, gt_cam_pitch) in tqdm(enumerate(train_loader)):
+        for i, (input, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(train_loader)):
 
             # Time dataloader
             data_time.update(time.time() - end)
@@ -195,13 +195,13 @@ def train_net():
                 input = input.float()
 
             if not args.fix_cam and not args.pred_cam:
-                model.update_projection(args, gt_cam_height, gt_cam_pitch)
+                model.update_projection(args, gt_hcam, gt_pitch)
 
             # Run model
             optimizer.zero_grad()
             # Evaluate model
             try:
-                output_net, pred_cam_height, pred_cam_pitch = model(input)
+                output_net, pred_hcam, pred_pitch = model(input)
             except RuntimeError as e:
                 print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
                 print(e)
@@ -212,7 +212,7 @@ def train_net():
             if args.fix_cam:
                 loss = criterion(output_net, gt)
             else:
-                loss = criterion(output_net, gt, pred_cam_height, gt_cam_height, pred_cam_pitch, gt_cam_pitch)
+                loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
 
             losses.update(loss.item(), input.size(0))
 
@@ -239,16 +239,21 @@ def train_net():
             # Plot curves in two views
             if (i + 1) % args.save_freq == 0:
                 vs_saver.save_result('train', epoch, i, idx,
-                                     input, gt, output_net, pred_cam_pitch, pred_cam_height, train_dataset)
+                                     input, gt, output_net, pred_pitch, pred_hcam, train_dataset)
 
         losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file, epoch)
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
-        print("===> Evaluation accuracy: {:3f}".format(eval_stats[0]))
+        if args.dataset_name is 'tusimple':
+            print("===> Evaluation accuracy: {:3f}".format(eval_stats[0]))
+        elif args.dataset_name is 'sim3d':
+            print("===> Evaluation laneline F (pixel): {:3f}".format(eval_stats[0]))
+            print("===> Evaluation laneline F (lane): {:3f}".format(eval_stats[1]))
+            print("===> Evaluation centerline F (pixel): {:3f}".format(eval_stats[2]))
+            print("===> Evaluation centerline F (lane): {:3f}".format(eval_stats[3]))
 
-        print("===> Last best {}-loss was {:.8f} in epoch {}".format(
-            crit_string, lowest_loss, best_epoch))
+        print("===> Last best {}-loss was {:.8f} in epoch {}".format(crit_string, lowest_loss, best_epoch))
 
         if not args.no_tb:
             writer.add_scalars('3D-Lane-Loss', {'Training': losses.avg}, epoch)
@@ -259,7 +264,7 @@ def train_net():
                 writer.add_scalars('Evaluation', {'laneline F (pixel)': eval_stats[0]}, epoch)
                 writer.add_scalars('Evaluation', {'laneline F (lane)': eval_stats[1]}, epoch)
                 writer.add_scalars('Evaluation', {'centerline F (pixel)': eval_stats[2]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline F (pixel)': eval_stats[3]}, epoch)
+                writer.add_scalars('Evaluation', {'centerline F (lane)': eval_stats[3]}, epoch)
         total_score = losses.avg
 
         # Adjust learning_rate if loss plateaued
@@ -301,16 +306,16 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
     with torch.no_grad():
         with open(lane_pred_file, 'w') as jsonFile:
             # Start validation loop
-            for i, (input, gt, idx, gt_cam_height, gt_cam_pitch) in tqdm(enumerate(loader)):
+            for i, (input, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                     input = input.float()
 
                 if not args.fix_cam and not args.pred_cam:
-                    model.update_projection(args, gt_cam_height, gt_cam_pitch)
+                    model.update_projection(args, gt_hcam, gt_pitch)
                 # Evaluate model
                 try:
-                    output_net, pred_cam_height, pred_cam_pitch = model(input)
+                    output_net, pred_hcam, pred_pitch = model(input)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
                     print(e)
@@ -318,7 +323,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
                 # Compute losses on parameters or segmentation
                 gt = gt.cuda(non_blocking=True)
-                loss = criterion(output_net, gt)
+                loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
                 losses.update(loss.item(), input.size(0))
 
                 # Print info
@@ -330,7 +335,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                 # Plot curves in two views
                 if (i + 1) % args.save_freq == 0 or args.evaluate:
                     vs_saver.save_result('valid', epoch, i, idx,
-                                         input, gt, output_net, pred_cam_pitch, pred_cam_height,
+                                         input, gt, output_net, pred_pitch, pred_hcam,
                                          dataset, args.evaluate)
 
                 # write results and evaluate
@@ -339,7 +344,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
                 for j in range(num_el):
                     im_id = idx[j]
-                    H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
+                    H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[j])
                     json_line = valid_set_labels[im_id]
                     if args.dataset_name is 'tusimple':
                         h_samples = json_line["h_samples"]
@@ -405,9 +410,11 @@ if __name__ == '__main__':
     global evaluator
     if args.dataset_name is 'tusimple':
         tusimple_config(args)
+        # define evaluator
         evaluator = eval_lane_tusimple.LaneEval
     elif args.dataset_name is 'sim3d':
         sim3d_config(args)
+        # define evaluator
         args.pixel_per_meter = 10.
         args.dist_th = 1.5
         args.pt_th = 0.5
@@ -415,7 +422,7 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args)
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.nworkers = 0

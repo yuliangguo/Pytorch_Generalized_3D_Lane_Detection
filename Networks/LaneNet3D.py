@@ -158,6 +158,7 @@ class TopViewPathway(nn.Module):
 class LanePredictionHead(nn.Module):
     def __init__(self, num_lane_type, anchor_dim, batch_norm=False):
         super(LanePredictionHead, self).__init__()
+        self.num_lane_type = num_lane_type
         self.anchor_dim = anchor_dim
         layers = []
         layers += make_one_layer(512, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
@@ -184,7 +185,8 @@ class LanePredictionHead(nn.Module):
         x = self.dim_rt(x)
         x = x.squeeze(-1).transpose(1, 2)
         # apply sigmoid to the probability terms to make it in (0, 1)
-        x[:, :, self.anchor_dim-1:self.anchor_dim:] = torch.sigmoid(x[:, :, self.anchor_dim-1:self.anchor_dim:])
+        for i in range(self.num_lane_type):
+            x[:, :, (i+1)*self.anchor_dim-1] = torch.sigmoid(x[:, :, (i+1)*self.anchor_dim-1])
         return x
 
 # TODO: implement sub network estimating height and pitch

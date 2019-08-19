@@ -41,7 +41,7 @@ def define_args():
     parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
     parser.add_argument("--batch_norm", type=str2bool, nargs='?', const=True, default=True, help="apply batch norm")
-    parser.add_argument("--pred_cam", type=str2bool, nargs='?', const=True, default=False, help="prediction camera height and pitch online")
+    parser.add_argument("--pred_cam", type=str2bool, nargs='?', const=True, default=False, help="if to use network to predict camera online")
     parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
     parser.add_argument('--ipm_w', type=int, default=128, help='width of inverse projective map (IPM)')
     parser.add_argument('--resize_h', type=int, default=360, help='height of the original image')
@@ -97,6 +97,7 @@ def tusimple_config(args):
     args.no_centerline = True
     args.no_3d = True
     args.fix_cam = True
+    args.pred_cam = False
 
     # set camera parameters for the test dataset
     args.K = np.array([[1000, 0, 640],
@@ -131,6 +132,7 @@ def sim3d_config(args):
     args.no_centerline = False
     args.no_3d = False
     args.fix_cam = False
+    args.pred_cam = False
 
     # set camera parameters for the test dataset
     args.K = np.array([[2015., 0., 960.],

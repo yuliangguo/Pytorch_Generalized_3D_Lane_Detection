@@ -475,24 +475,24 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             x_offsets = pred_anchor[j, :num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
             z_g = pred_anchor[j, num_y_steps:anchor_dim - 1]
-            line = np.hstack([x_g, anchor_y_steps, z_g])
-            lanelines_out.append(line)
+            line = np.vstack([x_g, anchor_y_steps, z_g]).T
+            lanelines_out.append(line.data.tolist())
 
         # draw centerline
         if pred_anchor[j, 2 * anchor_dim - 1] > prob_th:
             x_offsets = pred_anchor[j, anchor_dim:anchor_dim + num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
             z_g = pred_anchor[j, anchor_dim + num_y_steps:2 * anchor_dim - 1]
-            line = np.hstack([x_g, anchor_y_steps, z_g])
-            centerlines_out.append(line)
+            line = np.vstack([x_g, anchor_y_steps, z_g]).T
+            centerlines_out.append(line.data.tolist())
 
         # draw the additional centerline for the merging case
         if pred_anchor[j, 3 * anchor_dim - 1] > prob_th:
             x_offsets = pred_anchor[j, 2 * anchor_dim:2 * anchor_dim + num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
             z_g = pred_anchor[j, 2 * anchor_dim + num_y_steps:3 * anchor_dim - 1]
-            line = np.hstack([x_g, anchor_y_steps, z_g])
-            centerlines_out.append(line)
+            line = np.vstack([x_g, anchor_y_steps, z_g]).T
+            centerlines_out.append(line.data.tolist())
 
     return lanelines_out, centerlines_out
 
