@@ -42,6 +42,7 @@ class LaneDataset(Dataset):
         self.normalize = transforms.Normalize(args.vgg_mean, args.vgg_std)
 
         # dataset parameters
+        self.dataset_name = args.dataset_name
         self.no_3d = args.no_3d
         self.no_centerline = args.no_centerline
 
@@ -88,16 +89,108 @@ class LaneDataset(Dataset):
         self.num_y_steps = len(self.anchor_y_steps)
 
         # parse ground-truth file
-        if args.dataset_name is 'tusimple':
+        if self.dataset_name is 'tusimple':
             self._label_image_path,\
-                self._label_laneline_pts_all = self._init_dataset_tusimple(dataset_base_dir, json_file_path)
-        else:  # assume loading apollo sim 3D lane
-            self._label_image_path, self._label_laneline_pts_all, \
-                self._label_centerline_pts_all, self._label_cam_height_all,\
-                self._label_cam_pitch_all = self._init_dataset_3D(dataset_base_dir, json_file_path)
+                self._label_laneline_pts_all, \
+                self._laneline_ass_ids = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
+        elif self.dataset_name is 'sim3d':  # assume loading apollo sim 3D lane
+            self._label_image_path, \
+                self._label_laneline_pts_all, self._label_centerline_pts_all, \
+                self._label_cam_height_all, self._label_cam_pitch_all, \
+                self._laneline_ass_ids, self._centerline_ass_ids = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
 
-    def _init_dataset_3D(self, dataset_base_dir, json_file_path):
+    def __len__(self):
+        """
+        Conventional len method
+        """
+        return self.n_samples
+
+    def __getitem__(self, idx):
+        """
+        Args: idx (int): Index in list to load image
+        """
+
+        # fetch camera height and pitch
+        if not self.fix_cam:
+            gt_cam_height = self._label_cam_height_all[idx]
+            gt_cam_pitch = self._label_cam_pitch_all[idx]
+            H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
+            H_im2g = np.linalg.inv(H_g2im)
+        else:
+            gt_cam_height = self.cam_height
+            gt_cam_pitch = self.cam_pitch
+            H_im2g = self.H_im2g
+
+        img_name = self._label_image_path[idx]
+
+        with open(img_name, 'rb') as f:
+            image = (Image.open(f).convert('RGB'))
+
+        # image preprocess with crop and resize
+        image = F.crop(image, self.h_crop, 0, self.h_org-self.h_crop, self.w_org)
+        image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
+
+        if self.no_centerline:
+            num_types = 1
+        else:
+            num_types = 3
+
+        if self.no_3d:
+            anchor_dim = self.num_y_steps + 1
+        else:
+            anchor_dim = 2*self.num_y_steps + 1
+        gt_anchor = np.zeros([np.int32(self.ipm_w / 8), num_types, anchor_dim], dtype=np.float32)
+
+        gt_lanes = self._label_laneline_pts_all[idx]
+        for i in range(len(gt_lanes)):
+            # # convert gt label to anchor label
+            # ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
+
+            # if ass_id >= 0:
+            ass_id = self._laneline_ass_ids[idx][i]
+            x_off_values = gt_lanes[i][:, 0]
+            z_values = gt_lanes[i][:, 1]
+            # assign anchor tensor values
+            gt_anchor[ass_id, 0, 0: self.num_y_steps] = x_off_values
+            if not self.no_3d:
+                gt_anchor[ass_id, 0, self.num_y_steps:2 * self.num_y_steps] = z_values
+            gt_anchor[ass_id, 0, -1] = 1.0
+
+        # fetch centerlines when available
+        if not self.no_centerline:
+            gt_lanes = self._label_centerline_pts_all[idx]
+            for i in range(len(gt_lanes)):
+                # # convert gt label to anchor label
+                # ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
+
+                # if ass_id >= 0:
+                ass_id = self._centerline_ass_ids[idx][i]
+                x_off_values = gt_lanes[i][:, 0]
+                z_values = gt_lanes[i][:, 1]
+
+                # assign anchor tensor values
+                # if ass_id >= 0:
+                if gt_anchor[ass_id, 1, -1] > 0:  # the case one spliting lane has been assigned
+                    gt_anchor[ass_id, 2, 0: self.num_y_steps] = x_off_values
+                    if not self.no_3d:
+                        gt_anchor[ass_id, 2, self.num_y_steps:2*self.num_y_steps] = z_values
+                    gt_anchor[ass_id, 2, -1] = 1.0
+                else:
+                    gt_anchor[ass_id, 1, 0: self.num_y_steps] = x_off_values
+                    if not self.no_3d:
+                        gt_anchor[ass_id, 1, self.num_y_steps:2*self.num_y_steps] = z_values
+                    gt_anchor[ass_id, 1, -1] = 1.0
+
+        image = self.totensor(image).float()
+        image = self.normalize(image)
+        gt_anchor = gt_anchor.reshape([np.int32(self.ipm_w / 8), -1])
+        gt_anchor = torch.from_numpy(gt_anchor)
+        gt_cam_height = torch.tensor(gt_cam_height, dtype=torch.float32)
+        gt_cam_pitch = torch.tensor(gt_cam_pitch, dtype=torch.float32)
+        return image, gt_anchor, idx, gt_cam_height, gt_cam_pitch
+
+    def init_dataset_3D(self, dataset_base_dir, json_file_path):
         """
         :param dataset_info_file:
         :return: image paths, labels in normalized net input coordinates
@@ -151,9 +244,48 @@ class LaneDataset(Dataset):
         gt_cam_height_all = np.array(gt_cam_height_all)
         gt_cam_pitch_all = np.array(gt_cam_pitch_all)
 
-        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all
+        # convert labeled laneline to anchor format
+        gt_laneline_ass_ids = []
+        gt_centerline_ass_ids = []
+        for idx in range(len(gt_laneline_pts_all)):
 
-    def _init_dataset_tusimple(self, dataset_base_dir, json_file_path):
+            # fetch camera height and pitch
+            if not self.fix_cam:
+                gt_cam_height = gt_cam_height_all[idx]
+                gt_cam_pitch = gt_cam_pitch_all[idx]
+                H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
+                H_im2g = np.linalg.inv(H_g2im)
+            else:
+                H_im2g = self.H_im2g
+
+            gt_lanes = gt_laneline_pts_all[idx]
+            gt_anchors = []
+            ass_ids = []
+            for i in range(len(gt_lanes)):
+                # convert gt label to anchor label
+                ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
+                if ass_id >= 0:
+                    gt_anchors.append(np.vstack([x_off_values, z_values]).T)
+                    ass_ids.append(ass_id)
+            gt_laneline_ass_ids.append(ass_ids)
+            gt_laneline_pts_all[idx] = gt_anchors
+
+            if not self.no_centerline:
+                gt_lanes = gt_centerline_pts_all[idx]
+                gt_anchors = []
+                ass_ids = []
+                for i in range(len(gt_lanes)):
+                    # convert gt label to anchor label
+                    ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
+                    if ass_id >= 0:
+                        gt_anchors.append(np.vstack([x_off_values, z_values]).T)
+                        ass_ids.append(ass_id)
+                gt_centerline_ass_ids.append(ass_ids)
+                gt_centerline_pts_all[idx] = gt_anchors
+
+        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all, gt_laneline_ass_ids, gt_centerline_ass_ids
+
+    def init_dataset_tusimple(self, dataset_base_dir, json_file_path):
         """
         :param json_file_path:
         :return: image paths, labels in normalized net input coordinates
@@ -165,7 +297,6 @@ class LaneDataset(Dataset):
         # load image path, and lane pts
         label_image_path = []
         gt_laneline_pts_all = []
-
         assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
 
         with open(json_file_path, 'r') as file:
@@ -196,142 +327,63 @@ class LaneDataset(Dataset):
                     gt_lane_pts.append(lane)
                 gt_laneline_pts_all.append(gt_lane_pts)
         label_image_path = np.array(label_image_path)
-        return label_image_path, gt_laneline_pts_all
 
-    def __len__(self):
-        """
-        Conventional len method
-        """
-        return self.n_samples
-
-    def __getitem__(self, idx):
-        """
-        Args: idx (int): Index in list to load image
-        """
-
-        # fetch camera height and pitch
-        if not self.fix_cam:
-            gt_cam_height = self._label_cam_height_all[idx]
-            gt_cam_pitch = self._label_cam_pitch_all[idx]
-            H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
-            H_im2g = np.linalg.inv(H_g2im)
-        else:
-            gt_cam_height = self.cam_height
-            gt_cam_pitch = self.cam_pitch
-            H_im2g = self.H_im2g
-
-        img_name = self._label_image_path[idx]
-
-        with open(img_name, 'rb') as f:
-            image = (Image.open(f).convert('RGB'))
-
-        # image preprocess with crop and resize
-        image = F.crop(image, self.h_crop, 0, self.h_org-self.h_crop, self.w_org)
-        image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
-
-        if self.no_centerline:
-            num_types = 1
-        else:
-            num_types = 3
-
-        if self.no_3d:
-            anchor_dim = self.num_y_steps + 1
-        else:
-            anchor_dim = 2*self.num_y_steps + 1
-        gt_anchor = np.zeros([np.int32(self.ipm_w / 8), num_types, anchor_dim], dtype=np.float32)
-
-        gt_lanes = self._label_laneline_pts_all[idx]
-        for i in range(len(gt_lanes)):
-            if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
-                gt_lane_2d = gt_lanes[i]
-                # project to ground coordinates
-                gt_lane_grd_x, gt_lane_grd_y = homographic_transformation(H_im2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
-                gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
-                gt_lane_3d[:, 0] = gt_lane_grd_x
-                gt_lane_3d[:, 1] = gt_lane_grd_y
-            else:  # For ground-truth in ground coordinates (Apollo Sim)
-                gt_lane_3d = gt_lanes[i]
-
-            # # remove points with y out of range, will miss super long straight-line
-            # gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 100), ...]
-            # if gt_lane_3d.shape[0] < 2:
-            #     continue
-
-            if self.no_centerline:
-                # reverse the order of 3d pints to make the first point the closest
-                gt_lane_3d = gt_lane_3d[::-1, :]
-
-            # ignore GT does not pass y_ref
-            if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
-                continue
-
-            # resample ground-truth laneline at anchor y steps
-            x_values, z_values = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps)
-
-            # decide association at r_ref
-            lane_id = np.argmin((self.anchor_x_steps - x_values[1])**2)
-
-            # assign anchor tensor values
-            gt_anchor[lane_id, 0, 0: self.num_y_steps] = x_values - self.anchor_x_steps[lane_id]
-            if not self.no_3d:
-                gt_anchor[lane_id, 0, self.num_y_steps:2*self.num_y_steps] = z_values
-            gt_anchor[lane_id, 0, -1] = 1.0
-
-        # fetch centerlines when available
-        if not self.no_centerline:
-            gt_lanes = self._label_centerline_pts_all[idx]
+        # convert labeled laneline to anchor format
+        H_im2g = self.H_im2g
+        gt_laneline_ass_ids = []
+        for idx in range(len(gt_laneline_pts_all)):
+            gt_lanes = gt_laneline_pts_all[idx]
+            gt_anchors = []
+            ass_ids = []
             for i in range(len(gt_lanes)):
-                if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
-                    gt_lane_2d = gt_lanes[i]
-                    # project to ground coordinates
-                    gt_lane_grd_x, gt_lane_grd_y = homographic_transformation(H_im2g, gt_lane_2d[:, 0],
-                                                                              gt_lane_2d[:, 1])
-                    gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
-                    gt_lane_3d[:, 0] = gt_lane_grd_x
-                    gt_lane_3d[:, 1] = gt_lane_grd_y
-                else:  # For ground-truth in ground coordinates (Apollo Sim)
-                    gt_lane_3d = gt_lanes[i]
+                # convert gt label to anchor label
+                ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
+                if ass_id >= 0:
+                    gt_anchors.append(np.vstack([x_off_values, z_values]).T)
+                    ass_ids.append(ass_id)
+            gt_laneline_ass_ids.append(ass_ids)
+            gt_laneline_pts_all[idx] = gt_anchors
 
-                # # remove points with y out of range
-                # gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 100), ...]
-                # if gt_lane_3d.shape[0] < 2:
-                #     continue
+        return label_image_path, gt_laneline_pts_all, gt_laneline_ass_ids
 
-                # TODO: Assume the use of apollo sim samples which are recorded from close to far. No need to reverse
-                # reverse the order of 3d pints to make the first point the closest
-                # gt_lane_3d = gt_lane_3d[::-1, :]
+    def convert_label_to_anchor(self, laneline_gt, H_im2g):
+        if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
+            gt_lane_2d = laneline_gt
+            # project to ground coordinates
+            gt_lane_grd_x, gt_lane_grd_y = homographic_transformation(H_im2g, gt_lane_2d[:, 0], gt_lane_2d[:, 1])
+            gt_lane_3d = np.zeros_like(gt_lane_2d, dtype=np.float32)
+            gt_lane_3d[:, 0] = gt_lane_grd_x
+            gt_lane_3d[:, 1] = gt_lane_grd_y
+        else:  # For ground-truth in ground coordinates (Apollo Sim)
+            gt_lane_3d = laneline_gt
 
-                # ignore GT does not pass y_ref
-                if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
-                    continue
+        # remove points with y out of range
+        # 3D label will miss super long straight-line with only two points
+        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
+        if self.dataset_name is 'tusimple':
+            gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 100), ...]
+            if gt_lane_3d.shape[0] < 2:
+                return -1, np.array([]), np.array([])
 
-                # resample ground-truth laneline at anchor y steps
-                x_values, z_values = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps)
+        if self.dataset_name is 'tusimple':
+            # reverse the order of 3d pints to make the first point the closest
+            gt_lane_3d = gt_lane_3d[::-1, :]
 
-                # decide association at r_ref
-                lane_id = np.argmin((self.anchor_x_steps - x_values[1]) ** 2)
+        # ignore GT does not pass y_ref
+        if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
+            return -1, np.array([]), np.array([])
 
-                # assign anchor tensor values
-                if gt_anchor[lane_id, 1, -1] > 0:  # the case one spliting lane has been assigned
-                    gt_anchor[lane_id, 2, 0: self.num_y_steps] = x_values - self.anchor_x_steps[lane_id]
-                    if not self.no_3d:
-                        gt_anchor[lane_id, 2, self.num_y_steps:2*self.num_y_steps] = z_values
-                    gt_anchor[lane_id, 2, -1] = 1.0
-                else:
-                    gt_anchor[lane_id, 1, 0: self.num_y_steps] = x_values - self.anchor_x_steps[lane_id]
-                    if not self.no_3d:
-                        gt_anchor[lane_id, 1, self.num_y_steps:2*self.num_y_steps] = z_values
-                    gt_anchor[lane_id, 1, -1] = 1.0
+        # resample ground-truth laneline at anchor y steps
+        x_values, z_values = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps)
 
-        image = self.totensor(image).float()
-        image = self.normalize(image)
-        gt_anchor = gt_anchor.reshape([np.int32(self.ipm_w / 8), -1])
-        gt_anchor = torch.from_numpy(gt_anchor)
-        gt_cam_height = torch.tensor(gt_cam_height, dtype=torch.float32)
-        gt_cam_pitch = torch.tensor(gt_cam_pitch, dtype=torch.float32)
-        return image, gt_anchor, idx, gt_cam_height, gt_cam_pitch
+        # decide association at r_ref
+        ass_id = np.argmin((self.anchor_x_steps - x_values[1]) ** 2)
+        # compute offset values
+        x_off_values = x_values - self.anchor_x_steps[ass_id]
 
-    def proj_trainsforms(self, idx):
+        return ass_id, x_off_values, z_values
+
+    def transform_mats(self, idx):
         if not self.fix_cam:
             H_g2im = homograpthy_g2im(self._label_cam_pitch_all[idx],
                                       self._label_cam_height_all[idx], self.K)
@@ -401,11 +453,8 @@ def resample_laneline_in_y(input_lane, y_steps):
 
 
 """
-    Data Augmentation: 1. It is more complicated to apply data augmentation for this network because 
-                          the spatial transformation would be changed after applying data augmentation.
-                       2. It is still doable because any rotation, cropping augmentation can be described in
-                          projection matrix, which can be dynamically applied. Provide an additional
-                          transformation matrix just like online calibration.
+    Data Augmentation: 1. As the labels will be in 3D view, image augmentation will not change the the labels
+                       2. Indeed, image data augmentation would change the spatial transform matrix integrated in the network
 """
 
 
@@ -499,20 +548,24 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
 
 # unit test
 if __name__ == '__main__':
+    import sys
     from tools.utils import define_args
 
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d'
+    args.dataset_name = 'tusimple'
     args.data_dir = ops.join('../data', args.dataset_name)
-    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_lane/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
 
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':
         tusimple_config(args)
     elif args.dataset_name is 'sim3d':
         sim3d_config(args)
+    else:
+        print('Not using a supported dataset')
+        sys.exit()
 
     if args.no_3d:
         anchor_dim = args.num_y_steps + 1
@@ -554,11 +607,11 @@ if __name__ == '__main__':
             img = np.clip(img, 0, 1)
 
             if args.no_3d:
-                H_g2im, H_crop, H_im2ipm = test_dataset.proj_trainsforms(idx[i])
+                H_g2im, H_crop, H_im2ipm = test_dataset.transform_mats(idx[i])
                 M = np.matmul(H_crop, H_g2im)
                 x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
             else:
-                P_g2im, H_crop, H_im2ipm = test_dataset.proj_trainsforms(idx[i])
+                P_g2im, H_crop, H_im2ipm = test_dataset.transform_mats(idx[i])
                 M = np.matmul(H_crop, P_g2im)
                 x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
                                                        vis_border_3d[:, 1], np.zeros(vis_border_3d.shape[0]))
@@ -593,7 +646,7 @@ if __name__ == '__main__':
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))
-            cv2.waitKey()
+            cv2.waitKey(500)
             print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
 
     print('done')

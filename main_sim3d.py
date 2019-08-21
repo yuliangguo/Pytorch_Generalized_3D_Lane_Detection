@@ -149,7 +149,7 @@ def train_net():
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
         mkdir_if_missing(os.path.join(args.save_path, 'example/eval_vis'))
-        loss_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file)
+        losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file)
         return
 
     # Start training from clean slate
@@ -344,7 +344,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
                 for j in range(num_el):
                     im_id = idx[j]
-                    H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[j])
+                    H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[j])
                     json_line = valid_set_labels[im_id]
                     if args.dataset_name is 'tusimple':
                         h_samples = json_line["h_samples"]

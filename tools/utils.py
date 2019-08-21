@@ -309,13 +309,13 @@ class Visualizer:
                 pred_anchors[:, 3 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 3 * self.anchor_dim - 1])
 
             if self.no_3d:
-                H_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
+                H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 P_gt = np.matmul(H_crop, H_g2im)
                 H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
                                                pred_cam_height[i], dataset.K)
                 P_pred = np.matmul(H_crop, H_g2im_pred)
             else:
-                P_g2im, H_crop, H_im2ipm = dataset.proj_trainsforms(idx[i])
+                P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 P_gt = np.matmul(H_crop, P_g2im)
                 P_g2im_pred = projection_g2im(pred_cam_pitch[i],
                                               pred_cam_height[i], dataset.K)
