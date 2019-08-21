@@ -87,18 +87,36 @@ class LaneDataset(Dataset):
         self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
         self.anchor_y_steps = args.anchor_y_steps
         self.num_y_steps = len(self.anchor_y_steps)
+        if self.no_centerline:
+            self.num_types = 1
+        else:
+            self.num_types = 3
+
+        if self.no_3d:
+            self.anchor_dim = self.num_y_steps + 1
+        else:
+            self.anchor_dim = 2*self.num_y_steps + 1
 
         # parse ground-truth file
         if self.dataset_name is 'tusimple':
             self._label_image_path,\
-                self._label_laneline_pts_all, \
-                self._laneline_ass_ids = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
+                self._label_laneline_all, \
+                self._laneline_ass_ids, \
+                self._x_off_std = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
         elif self.dataset_name is 'sim3d':  # assume loading apollo sim 3D lane
             self._label_image_path, \
-                self._label_laneline_pts_all, self._label_centerline_pts_all, \
-                self._label_cam_height_all, self._label_cam_pitch_all, \
-                self._laneline_ass_ids, self._centerline_ass_ids = self.init_dataset_3D(dataset_base_dir, json_file_path)
+                self._label_laneline_all, \
+                self._label_centerline_all, \
+                self._label_cam_height_all, \
+                self._label_cam_pitch_all, \
+                self._laneline_ass_ids, \
+                self._centerline_ass_ids, \
+                self._x_off_std, \
+                self._z_std = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
+
+        # normalize label values
+        self.normalize_lane_label()
 
     def __len__(self):
         """
@@ -115,12 +133,12 @@ class LaneDataset(Dataset):
         if not self.fix_cam:
             gt_cam_height = self._label_cam_height_all[idx]
             gt_cam_pitch = self._label_cam_pitch_all[idx]
-            H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
-            H_im2g = np.linalg.inv(H_g2im)
+            # H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
+            # H_im2g = np.linalg.inv(H_g2im)
         else:
             gt_cam_height = self.cam_height
             gt_cam_pitch = self.cam_pitch
-            H_im2g = self.H_im2g
+            # H_im2g = self.H_im2g
 
         img_name = self._label_image_path[idx]
 
@@ -131,18 +149,9 @@ class LaneDataset(Dataset):
         image = F.crop(image, self.h_crop, 0, self.h_org-self.h_crop, self.w_org)
         image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
 
-        if self.no_centerline:
-            num_types = 1
-        else:
-            num_types = 3
+        gt_anchor = np.zeros([np.int32(self.ipm_w / 8), self.num_types, self.anchor_dim], dtype=np.float32)
 
-        if self.no_3d:
-            anchor_dim = self.num_y_steps + 1
-        else:
-            anchor_dim = 2*self.num_y_steps + 1
-        gt_anchor = np.zeros([np.int32(self.ipm_w / 8), num_types, anchor_dim], dtype=np.float32)
-
-        gt_lanes = self._label_laneline_pts_all[idx]
+        gt_lanes = self._label_laneline_all[idx]
         for i in range(len(gt_lanes)):
             # # convert gt label to anchor label
             # ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
@@ -159,7 +168,7 @@ class LaneDataset(Dataset):
 
         # fetch centerlines when available
         if not self.no_centerline:
-            gt_lanes = self._label_centerline_pts_all[idx]
+            gt_lanes = self._label_centerline_all[idx]
             for i in range(len(gt_lanes)):
                 # # convert gt label to anchor label
                 # ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
@@ -247,6 +256,8 @@ class LaneDataset(Dataset):
         # convert labeled laneline to anchor format
         gt_laneline_ass_ids = []
         gt_centerline_ass_ids = []
+        lane_x_off_all = []
+        lane_z_all = []
         for idx in range(len(gt_laneline_pts_all)):
 
             # fetch camera height and pitch
@@ -267,6 +278,8 @@ class LaneDataset(Dataset):
                 if ass_id >= 0:
                     gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                     ass_ids.append(ass_id)
+                    lane_x_off_all.append(x_off_values)
+                    lane_z_all.append(z_values)
             gt_laneline_ass_ids.append(ass_ids)
             gt_laneline_pts_all[idx] = gt_anchors
 
@@ -280,10 +293,16 @@ class LaneDataset(Dataset):
                     if ass_id >= 0:
                         gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                         ass_ids.append(ass_id)
+                        lane_x_off_all.append(x_off_values)
+                        lane_z_all.append(z_values)
                 gt_centerline_ass_ids.append(ass_ids)
                 gt_centerline_pts_all[idx] = gt_anchors
 
-        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all, gt_laneline_ass_ids, gt_centerline_ass_ids
+        lane_x_off_all = np.array(lane_x_off_all)
+        lane_z_all = np.array(lane_z_all)
+        lane_x_off_std = np.std(lane_x_off_all, axis=0)
+        lane_z_std = np.std(lane_z_all, axis=0)
+        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all, gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_z_std
 
     def init_dataset_tusimple(self, dataset_base_dir, json_file_path):
         """
@@ -331,6 +350,7 @@ class LaneDataset(Dataset):
         # convert labeled laneline to anchor format
         H_im2g = self.H_im2g
         gt_laneline_ass_ids = []
+        lane_x_off_all = []
         for idx in range(len(gt_laneline_pts_all)):
             gt_lanes = gt_laneline_pts_all[idx]
             gt_anchors = []
@@ -341,10 +361,34 @@ class LaneDataset(Dataset):
                 if ass_id >= 0:
                     gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                     ass_ids.append(ass_id)
+                    lane_x_off_all.append(x_off_values)
             gt_laneline_ass_ids.append(ass_ids)
             gt_laneline_pts_all[idx] = gt_anchors
 
-        return label_image_path, gt_laneline_pts_all, gt_laneline_ass_ids
+        lane_x_off_all = np.array(lane_x_off_all)
+        lane_x_off_std = np.std(lane_x_off_all, axis=0)
+
+        return label_image_path, gt_laneline_pts_all, gt_laneline_ass_ids, lane_x_off_std
+
+    def set_x_off_std(self, x_off_std):
+        self._x_off_std = x_off_std
+
+    def set_z_std(self, z_std):
+        self._z_std = z_std
+
+    def normalize_lane_label(self):
+        for lanes in self._label_laneline_all:
+            for lane in lanes:
+                lane[:, 0] = np.divide(lane[:, 0], self._x_off_std)
+                if not self.no_3d:
+                    lane[:, 1] = np.divide(lane[:, 1], self._z_std)
+
+        if not self.no_centerline:
+            for lanes in self._label_centerline_all:
+                for lane in lanes:
+                    lane[:, 0] = np.divide(lane[:, 0], self._x_off_std)
+                    if not self.no_3d:
+                        lane[:, 1] = np.divide(lane[:, 1], self._z_std)
 
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
         if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
@@ -546,6 +590,17 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     return lanelines_out, centerlines_out
 
 
+def unormalize_lane_anchor(anchor, dataset):
+    num_y_steps = dataset.num_y_steps
+    anchor_dim = dataset.anchor_dim
+    for i in range(dataset.num_types):
+        anchor[:, i * anchor_dim : i * anchor_dim + num_y_steps] = \
+            np.multiply(anchor[:, i * anchor_dim: i * anchor_dim + num_y_steps], dataset._x_off_std)
+        if not dataset.no_3d:
+            anchor[:, i * anchor_dim + num_y_steps: (i+1) * anchor_dim-1] = \
+                np.multiply(anchor[:, i * anchor_dim + num_y_steps: (i+1) * anchor_dim-1], dataset._z_std)
+
+
 # unit test
 if __name__ == '__main__':
     import sys
@@ -554,9 +609,10 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'tusimple'
+    # dataset_name 'tusimple' or 'sim3d'
+    args.dataset_name = 'sim3d'
     args.data_dir = ops.join('../data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
 
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':
@@ -567,10 +623,10 @@ if __name__ == '__main__':
         print('Not using a supported dataset')
         sys.exit()
 
-    if args.no_3d:
-        anchor_dim = args.num_y_steps + 1
-    else:
-        anchor_dim = 2*args.num_y_steps + 1
+    # if args.no_3d:
+    #     anchor_dim = args.num_y_steps + 1
+    # else:
+    #     anchor_dim = 2*args.num_y_steps + 1
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -627,6 +683,9 @@ if __name__ == '__main__':
             img = cv2.line(img, (x_2d[0], y_2d[0]), (x_2d[2], y_2d[2]), [1, 0, 0], 2)
             img = cv2.line(img, (x_2d[1], y_2d[1]), (x_2d[3], y_2d[3]), [1, 0, 0], 2)
             gt_anchor = gt_anchors[i, :, :]
+
+            # un-normalize
+            unormalize_lane_anchor(gt_anchor, test_dataset)
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             img = visualizer.draw_on_img(img, gt_anchor, M, 'laneline', color=[0, 0, 1])

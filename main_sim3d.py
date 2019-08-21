@@ -17,7 +17,7 @@ import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes
+from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
 from Networks.Loss_crit import Laneline_3D_loss
 from Networks.LaneNet3D import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
@@ -49,6 +49,10 @@ def train_net():
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args)
     train_loader = get_loader(train_dataset, args)
     valid_dataset = LaneDataset(args.dataset_dir, val_gt_file, args)
+    # assign std of valid dataset to be consistent with train dataset
+    valid_dataset.set_x_off_std(train_dataset._x_off_std)
+    if not args.no_3d:
+        valid_dataset.set_z_std(train_dataset._z_std)
     valid_loader = get_loader(valid_dataset, args)
 
     # extract valid set labels for evaluation later
@@ -209,11 +213,7 @@ def train_net():
 
             # Compute losses on
             gt = gt.cuda(non_blocking=True)
-            if args.fix_cam:
-                loss = criterion(output_net, gt)
-            else:
-                loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
-
+            loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
             losses.update(loss.item(), input.size(0))
 
             # Clip gradients (usefull for instabilities or mistakes in ground truth)
@@ -227,6 +227,17 @@ def train_net():
             # Time trainig iteration
             batch_time.update(time.time() - end)
             end = time.time()
+
+            pred_pitch = pred_pitch.data.cpu().numpy().flatten()
+            pred_hcam = pred_hcam.data.cpu().numpy().flatten()
+            output_net = output_net.data.cpu().numpy()
+            gt = gt.data.cpu().numpy()
+
+            # unormalize lane outputs
+            num_el = input.size(0)
+            for j in range(num_el):
+                unormalize_lane_anchor(output_net[j], train_dataset)
+                unormalize_lane_anchor(gt[j], train_dataset)
 
             # Print info
             if (i + 1) % args.print_freq == 0:
@@ -326,6 +337,17 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                 loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
                 losses.update(loss.item(), input.size(0))
 
+                pred_pitch = pred_pitch.data.cpu().numpy().flatten()
+                pred_hcam = pred_hcam.data.cpu().numpy().flatten()
+                output_net = output_net.data.cpu().numpy()
+                gt = gt.data.cpu().numpy()
+
+                # unormalize lane outputs
+                num_el = input.size(0)
+                for j in range(num_el):
+                    unormalize_lane_anchor(output_net[j], dataset)
+                    unormalize_lane_anchor(gt[j], dataset)
+
                 # Print info
                 if (i + 1) % args.print_freq == 0:
                         print('Test: [{0}/{1}]\t'
@@ -339,23 +361,22 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                                          dataset, args.evaluate)
 
                 # write results and evaluate
-                output_net = output_net.data.cpu().numpy()
-                num_el = input.size(0)
-
                 for j in range(num_el):
                     im_id = idx[j]
                     H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[j])
                     json_line = valid_set_labels[im_id]
+                    lane_anchors = output_net[j]
+                    # convert to json output format
                     if args.dataset_name is 'tusimple':
                         h_samples = json_line["h_samples"]
-                        lanes_pred = compute_tusimple_lanes(output_net[j], h_samples, H_g2im,
+                        lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
                                                             anchor_x_steps, args.anchor_y_steps, 0, args.org_w)
                         json_line["lanes"] = lanes_pred
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
-                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(output_net[j], anchor_dim,
+                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
@@ -396,15 +417,17 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global args
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d'
+    # dataset_name 'tusimple' or 'sim3d'
+    args.dataset_name = 'tusimple'
     args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
 
     # load configuration for certain dataset
     global evaluator
@@ -422,7 +445,7 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args)
 
     # for the case only running evaluation
-    args.evaluate = True
+    args.evaluate = False
 
     # settings for save and visualize
     args.nworkers = 0

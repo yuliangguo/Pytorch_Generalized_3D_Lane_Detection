@@ -19,7 +19,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 plt.rcParams['figure.figsize'] = (35, 30)
-
+# from Dataloader.Load_Data_3DLane import unormalize_lane_anchor
 
 def define_args():
     parser = argparse.ArgumentParser(description='Lane_detection_all_objectives')
@@ -284,8 +284,8 @@ class Visualizer:
         return im_ipm
 
     def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, dataset, evaluate=False):
-        pred_cam_pitch = pred_cam_pitch.data.cpu().numpy()
-        pred_cam_height = pred_cam_height.data.cpu().numpy()
+        # pred_cam_pitch = pred_cam_pitch.data.cpu().numpy()
+        # pred_cam_height = pred_cam_height.data.cpu().numpy()
         for i in range(idx.shape[0]):
             # during training, only visualize the first sample of this batch
             if i > 0 and not evaluate:
@@ -296,8 +296,13 @@ class Visualizer:
             im = im + np.array(self.vgg_mean)
             im = np.clip(im, 0, 1)
 
-            gt_anchors = gt.data.cpu().numpy()[i]
-            pred_anchors = pred.data.cpu().numpy()[i]
+            # gt_anchors = gt.data.cpu().numpy()[i]
+            # pred_anchors = pred.data.cpu().numpy()[i]
+            gt_anchors = gt[i]
+            pred_anchors = pred[i]
+
+            # unormalize_lane_anchor(gt_anchors, dataset)
+            # unormalize_lane_anchor(pred_anchors, dataset)
 
             # apply nms to avoid output directly neighbored lanes
             # consider w/o centerline cases
