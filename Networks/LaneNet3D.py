@@ -209,10 +209,17 @@ class Net(nn.Module):
         self.M_inv = M_inv # M_inv is the homography ipm2im in normalized coordinates
         self.cam_height = torch.tensor(args.cam_height).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
         self.cam_pitch = torch.tensor(pitch).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
-
+        self.S_im = torch.from_numpy(np.array([[args.resize_w, 0, 0],
+                                               [0, args.resize_h, 0],
+                                               [0, 0, 1]], dtype=np.float32))
+        self.S_im_inv = torch.from_numpy(np.array([[1/np.float(args.resize_w), 0, 0],
+                                                   [0, 1/np.float(args.resize_h), 0],
+                                                   [0, 0, 1]], dtype=np.float32))
         self.no_cuda = args.no_cuda
         if not self.no_cuda:
             self.M_inv = self.M_inv.cuda()
+            self.S_im = self.S_im.cuda()
+            self.S_im_inv = self.S_im_inv.cuda()
 
         if args.no_centerline:
             self.num_lane_type = 1
@@ -293,6 +300,7 @@ class Net(nn.Module):
         if not self.no_cuda:
             aug_mats = aug_mats.cuda()
         for i in range(aug_mats.shape[0]):
+            aug_mats[i] = torch.matmul(torch.matmul(self.S_im_inv, aug_mats[i]), self.S_im)
             self.M_inv[i] = torch.matmul(aug_mats[i], self.M_inv[i])
 
     def load_pretrained_vgg(self, batch_norm):
