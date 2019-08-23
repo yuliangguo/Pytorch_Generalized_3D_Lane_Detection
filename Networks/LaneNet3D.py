@@ -210,7 +210,8 @@ class Net(nn.Module):
         self.cam_height = torch.tensor(args.cam_height).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
         self.cam_pitch = torch.tensor(pitch).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
 
-        if not args.no_cuda:
+        self.no_cuda = args.no_cuda
+        if not self.no_cuda:
             self.M_inv = self.M_inv.cuda()
 
         if args.no_centerline:
@@ -287,6 +288,12 @@ class Net(nn.Module):
             self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
             self.cam_height = cam_height
             self.cam_pitch = cam_pitch
+
+    def update_projection_for_data_aug(self, aug_mats):
+        if not self.no_cuda:
+            aug_mats = aug_mats.cuda()
+        for i in range(aug_mats.shape[0]):
+            self.M_inv[i] = torch.matmul(aug_mats[i], self.M_inv[i])
 
     def load_pretrained_vgg(self, batch_norm):
         if batch_norm:

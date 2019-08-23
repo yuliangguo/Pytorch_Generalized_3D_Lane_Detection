@@ -19,7 +19,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 plt.rcParams['figure.figsize'] = (35, 30)
-# from Dataloader.Load_Data_3DLane import unormalize_lane_anchor
+
 
 def define_args():
     parser = argparse.ArgumentParser(description='Lane_detection_all_objectives')
@@ -112,7 +112,7 @@ def tusimple_config(args):
         args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
         args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     """
-    args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
+    args.top_view_region = np.array([[-10, 82], [10, 82], [-10, 2], [10, 2]])
     args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
     args.num_y_steps = len(args.anchor_y_steps)
 
@@ -134,7 +134,7 @@ def sim3d_config(args):
     args.fix_cam = False
     args.pred_cam = False
 
-    # set camera parameters for the test dataset
+    # set camera parameters for the test datasets
     args.K = np.array([[2015., 0., 960.],
                        [0., 2015., 540.],
                        [0., 0., 1.]])
@@ -145,8 +145,8 @@ def sim3d_config(args):
         args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
         args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     """
-    args.top_view_region = np.array([[-10, 81], [10, 81], [-10, 1], [10, 1]])
-    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
+    args.top_view_region = np.array([[-10, 83], [10, 83], [-10, 3], [10, 3]])
+    args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
@@ -283,9 +283,10 @@ class Visualizer:
                                       (x_ipm[k], y_ipm[k]), color, 1)
         return im_ipm
 
-    def save_result(self, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, dataset, evaluate=False):
-        # pred_cam_pitch = pred_cam_pitch.data.cpu().numpy()
-        # pred_cam_height = pred_cam_height.data.cpu().numpy()
+    def save_result(self, dataset, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, aug_mat=np.identity(3, dtype=np.float), evaluate=False):
+        if not dataset.data_aug:
+            aug_mat = np.repeat(np.expand_dims(aug_mat, axis=0), idx.shape[0], axis=0)
+
         for i in range(idx.shape[0]):
             # during training, only visualize the first sample of this batch
             if i > 0 and not evaluate:
@@ -296,13 +297,8 @@ class Visualizer:
             im = im + np.array(self.vgg_mean)
             im = np.clip(im, 0, 1)
 
-            # gt_anchors = gt.data.cpu().numpy()[i]
-            # pred_anchors = pred.data.cpu().numpy()[i]
             gt_anchors = gt[i]
             pred_anchors = pred[i]
-
-            # unormalize_lane_anchor(gt_anchors, dataset)
-            # unormalize_lane_anchor(pred_anchors, dataset)
 
             # apply nms to avoid output directly neighbored lanes
             # consider w/o centerline cases
@@ -319,6 +315,10 @@ class Visualizer:
                 H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
                                                pred_cam_height[i], dataset.K)
                 P_pred = np.matmul(H_crop, H_g2im_pred)
+
+                # consider data augmentation
+                P_gt = np.matmul(aug_mat[i, :, :], P_gt)
+                P_pred = np.matmul(aug_mat[i, :, :], P_pred)
             else:
                 P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 P_gt = np.matmul(H_crop, P_g2im)
@@ -326,6 +326,12 @@ class Visualizer:
                                               pred_cam_height[i], dataset.K)
                 P_pred = np.matmul(H_crop, P_g2im_pred)
 
+                # consider data augmentation
+                P_gt = np.matmul(aug_mat[i, :, :], P_gt)
+                P_pred = np.matmul(aug_mat[i, :, :], P_pred)
+
+            # update transformation with image augmentation
+            H_im2ipm = np.matmul(H_im2ipm, np.linalg.inv(aug_mat[i, :, :]))
             im_ipm = cv2.warpPerspective(im, H_im2ipm, (self.ipm_w, self.ipm_h))
             im_ipm = np.clip(im_ipm, 0, 1)
 

@@ -32,7 +32,7 @@ class LaneDataset(Dataset):
         w/o centerline annotations
         default considers 3D laneline, including centerlines
     """
-    def __init__(self, dataset_base_dir, json_file_path, args):
+    def __init__(self, dataset_base_dir, json_file_path, args, data_aug=False):
         """
 
         :param dataset_info_file: json file list
@@ -40,6 +40,7 @@ class LaneDataset(Dataset):
         # define image pre-processor
         self.totensor = transforms.ToTensor()
         self.normalize = transforms.Normalize(args.vgg_mean, args.vgg_std)
+        self.data_aug = data_aug
 
         # dataset parameters
         self.dataset_name = args.dataset_name
@@ -191,12 +192,18 @@ class LaneDataset(Dataset):
                         gt_anchor[ass_id, 1, self.num_y_steps:2*self.num_y_steps] = z_values
                     gt_anchor[ass_id, 1, -1] = 1.0
 
+        if self.data_aug:
+            img_rot, aug_mat = data_aug_rotate(image)
+            image = Image.fromarray(img_rot)
         image = self.totensor(image).float()
         image = self.normalize(image)
         gt_anchor = gt_anchor.reshape([np.int32(self.ipm_w / 8), -1])
         gt_anchor = torch.from_numpy(gt_anchor)
         gt_cam_height = torch.tensor(gt_cam_height, dtype=torch.float32)
         gt_cam_pitch = torch.tensor(gt_cam_pitch, dtype=torch.float32)
+        if self.data_aug:
+            aug_mat = torch.from_numpy(aug_mat.astype(np.float32))
+            return image, gt_anchor, idx, gt_cam_height, gt_cam_pitch, aug_mat
         return image, gt_anchor, idx, gt_cam_height, gt_cam_pitch
 
     def init_dataset_3D(self, dataset_base_dir, json_file_path):
@@ -497,9 +504,32 @@ def resample_laneline_in_y(input_lane, y_steps):
 
 
 """
-    Data Augmentation: 1. As the labels will be in 3D view, image augmentation will not change the the labels
-                       2. Indeed, image data augmentation would change the spatial transform matrix integrated in the network
+    Data Augmentation: 
+        idea 1:
+            when initializing dataset, all labels will be prepared in 3D which do not need to be changed in image augmenting
+            Image data augmentation would change the spatial transform matrix integrated in the network, provide 
+            the transformation matrix related to random cropping, scaling and rotation
+        idea 2:
+            Introduce random sampling of cam_h, cam_pitch and their associated transformed image
+            img2 = [R2[:, 0:2], T2] [R1[:, 0:2], T1]^-1 img1
+            output augmented hcam, pitch, and img2 and untouched 3D anchor label value, Before forward pass, update spatial
+            transform in network. However, However, image rotation is not considered, additional cropping is still needed
 """
+
+
+def data_aug_rotate(img):
+    # assume img in PIL image format
+    rot = random.uniform(-np.pi/18, np.pi/18)
+    # rot = random.uniform(-10, 10)
+    center_x = img.width / 2
+    center_y = img.height / 2
+    rot_mat = cv2.getRotationMatrix2D((center_x, center_y), rot, 1.0)
+    img_rot = np.array(img)
+    img_rot = cv2.warpAffine(img_rot, rot_mat, (img.width, img.height), flags=cv2.INTER_LINEAR)
+    # img_rot = img.rotate(rot)
+    # rot = rot / 180 * np.pi
+    rot_mat = np.vstack([rot_mat, [0, 0, 1]])
+    return img_rot, rot_mat
 
 
 def get_loader(transformed_dataset, args):
@@ -610,9 +640,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d'
+    args.dataset_name = 'tusimple'
     args.data_dir = ops.join('../data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
 
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':
@@ -623,26 +654,21 @@ if __name__ == '__main__':
         print('Not using a supported dataset')
         sys.exit()
 
-    # if args.no_3d:
-    #     anchor_dim = args.num_y_steps + 1
-    # else:
-    #     anchor_dim = 2*args.num_y_steps + 1
-
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
     print('visual area border:')
     print(vis_border_3d)
 
     # load data
-    test_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args)
-    test_loader = get_loader(test_dataset, args)
-    anchor_x_steps = test_dataset.anchor_x_steps
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args, data_aug=True)
+    loader = get_loader(dataset, args)
+    anchor_x_steps = dataset.anchor_x_steps
 
     # initialize visualizer
     visualizer = Visualizer(args)
 
     # get a batch of data/label pairs from loader
-    for batch_ndx, (image_tensor, gt_tensor, idx, gt_cam_height, gt_cam_pitch) in enumerate(test_loader):
+    for batch_ndx, (image_tensor, gt_tensor, idx, gt_cam_height, gt_cam_pitch, aug_mat) in enumerate(loader):
         print('batch id: {:d}, image tensor shape:'.format(batch_ndx))
         print(image_tensor.shape)
         print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
@@ -654,6 +680,7 @@ if __name__ == '__main__':
         idx = idx.numpy()
         gt_cam_height = gt_cam_height.numpy()
         gt_cam_pitch = gt_cam_pitch.numpy()
+        aug_mat = aug_mat.numpy()
         for i in range(args.batch_size):
             img = images[i]
             img = img * np.array(args.vgg_std).astype(np.float32)
@@ -663,15 +690,20 @@ if __name__ == '__main__':
             img = np.clip(img, 0, 1)
 
             if args.no_3d:
-                H_g2im, H_crop, H_im2ipm = test_dataset.transform_mats(idx[i])
+                H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 M = np.matmul(H_crop, H_g2im)
+                # update transformation with image augmentation
+                M = np.matmul(aug_mat[i], M)
                 x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
             else:
-                P_g2im, H_crop, H_im2ipm = test_dataset.transform_mats(idx[i])
+                P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 M = np.matmul(H_crop, P_g2im)
+                # update transformation with image augmentation
+                M = np.matmul(aug_mat[i], M)
                 x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
                                                        vis_border_3d[:, 1], np.zeros(vis_border_3d.shape[0]))
-
+            # update transformation with image augmentation
+            H_im2ipm = np.matmul(H_im2ipm, np.linalg.inv(aug_mat[i]))
             im_ipm = cv2.warpPerspective(img, H_im2ipm, (args.ipm_w, args.ipm_h))
             im_ipm = np.clip(im_ipm, 0, 1)
 
@@ -685,7 +717,7 @@ if __name__ == '__main__':
             gt_anchor = gt_anchors[i, :, :]
 
             # un-normalize
-            unormalize_lane_anchor(gt_anchor, test_dataset)
+            unormalize_lane_anchor(gt_anchor, dataset)
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             img = visualizer.draw_on_img(img, gt_anchor, M, 'laneline', color=[0, 0, 1])
@@ -705,7 +737,7 @@ if __name__ == '__main__':
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))
-            cv2.waitKey(500)
+            cv2.waitKey()
             print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
 
     print('done')

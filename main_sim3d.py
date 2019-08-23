@@ -46,7 +46,7 @@ def train_net():
 
     # Dataloader for training and validation set
     val_gt_file = ops.join(args.data_dir, 'val.json')
-    train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args)
+    train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
     train_loader = get_loader(train_dataset, args)
     valid_dataset = LaneDataset(args.dataset_dir, val_gt_file, args)
     # assign std of valid dataset to be consistent with train dataset
@@ -188,7 +188,7 @@ def train_net():
         end = time.time()
 
         # Start training loop
-        for i, (input, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(train_loader)):
+        for i, (input, gt, idx, gt_hcam, gt_pitch, aug_mat) in tqdm(enumerate(train_loader)):
 
             # Time dataloader
             data_time.update(time.time() - end)
@@ -200,6 +200,9 @@ def train_net():
 
             if not args.fix_cam and not args.pred_cam:
                 model.update_projection(args, gt_hcam, gt_pitch)
+
+            # update transformation for data augmentation (only for training)
+            model.update_projection_for_data_aug(aug_mat)
 
             # Run model
             optimizer.zero_grad()
@@ -230,6 +233,7 @@ def train_net():
 
             pred_pitch = pred_pitch.data.cpu().numpy().flatten()
             pred_hcam = pred_hcam.data.cpu().numpy().flatten()
+            aug_mat = aug_mat.data.cpu().numpy()
             output_net = output_net.data.cpu().numpy()
             gt = gt.data.cpu().numpy()
 
@@ -249,8 +253,8 @@ def train_net():
 
             # Plot curves in two views
             if (i + 1) % args.save_freq == 0:
-                vs_saver.save_result('train', epoch, i, idx,
-                                     input, gt, output_net, pred_pitch, pred_hcam, train_dataset)
+                vs_saver.save_result(train_dataset, 'train', epoch, i, idx,
+                                     input, gt, output_net, pred_pitch, pred_hcam, aug_mat)
 
         losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file, epoch)
 
@@ -356,9 +360,8 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
                 # Plot curves in two views
                 if (i + 1) % args.save_freq == 0 or args.evaluate:
-                    vs_saver.save_result('valid', epoch, i, idx,
-                                         input, gt, output_net, pred_pitch, pred_hcam,
-                                         dataset, args.evaluate)
+                    vs_saver.save_result(dataset, 'valid', epoch, i, idx,
+                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=args.evaluate)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -417,7 +420,7 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
