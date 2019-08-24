@@ -420,7 +420,7 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global args
     parser = define_args()

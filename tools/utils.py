@@ -66,7 +66,7 @@ def define_args():
     parser.add_argument('--vgg_std', type=float, default=[0.229, 0.224, 0.225], help='Std of rgb used in pretrained model on ImageNet')
     # Optimizer settings
     parser.add_argument('--optimizer', type=str, default='adam', help='adam or sgd')
-    parser.add_argument('--weight_init', type=str, default='kaiming', help='normal, xavier, kaiming, orhtogonal weights initialisation')
+    parser.add_argument('--weight_init', type=str, default='normal', help='normal, xavier, kaiming, orhtogonal weights initialisation')
     parser.add_argument('--weight_decay', type=float, default=0, help='L2 weight decay/regularisation on?')
     parser.add_argument('--lr_decay', action='store_true', help='decay learning rate with rule')
     parser.add_argument('--niter', type=int, default=50, help='# of iter at starting learning rate')
@@ -117,7 +117,7 @@ def tusimple_config(args):
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
-    args.pretrained = False
+    args.pretrained = True
     # apply batch norm in network
     args.batch_norm = True
 
