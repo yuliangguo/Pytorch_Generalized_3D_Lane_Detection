@@ -114,8 +114,13 @@ class ProjectiveGridGenerator(nn.Module):
         # if base_grid is top-view, M should be ipm-to-img homography transformation, and vice versa
         grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), M.transpose(1, 2))
         grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape([self.N, self.H, self.W, 2])
-        # output grid to be used for grid_sample. grid specifies the sampling pixel locations normalized by the
-        # input spatial dimensions.
+        #
+        """
+        output grid to be used for grid_sample. 
+            1. grid specifies the sampling pixel locations normalized by the input spatial dimensions.
+            2. pixel locations need to be converted to the range (-1, 1)
+        """
+        grid = (grid - 0.5) * 2
         return grid
 
 
@@ -132,12 +137,15 @@ class TopViewPathway(nn.Module):
 
     def forward(self, a, b, c, d):
         x = self.features1(a)
+        feat_1 = x
         x = torch.cat([x, b], 1)
         x = self.features2(x)
+        feat_2 = x
         x = torch.cat([x, c], 1)
         x = self.features3(x)
+        feat_3 = x
         x = torch.cat([x, d], 1)
-        return x
+        return x, feat_1, feat_2, feat_3
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -194,16 +202,17 @@ class LanePredictionHead(nn.Module):
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, debug=False):
         super().__init__()
 
+        self.debug = debug
         # define homographic transformation between image and ipm
-
         org_img_size = np.array([args.org_h, args.org_w])
         resize_img_size = np.array([args.resize_h, args.resize_w])
         pitch = np.pi / 180 * args.pitch
         M, M_inv = homography_im2ipm_norm(args.top_view_region, org_img_size,
                                           args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
+        # M = torch.from_numpy(M).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
         M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
 
         self.M_inv = M_inv # M_inv is the homography ipm2im in normalized coordinates
@@ -272,17 +281,23 @@ class Net(nn.Module):
 
         x1_proj = F.grid_sample(x1, grid1)
         x2_proj = F.grid_sample(x2, grid2)
+        x2_proj_out = x2_proj
         x2_proj = self.dim_rt1(x2_proj)
         x3_proj = F.grid_sample(x3, grid3)
+        x3_proj_out = x3_proj
         x3_proj = self.dim_rt2(x3_proj)
         x4_proj = F.grid_sample(x4, grid4)
+        x4_proj_out = x4_proj
         x4_proj = self.dim_rt3(x4_proj)
 
         # process features from top view
-        x = self.top_pathway(x1_proj, x2_proj, x3_proj, x4_proj)
+        x, top_2, top_3, top_4 = self.top_pathway(x1_proj, x2_proj, x3_proj, x4_proj)
 
         # convert top-view features to anchor output
         out = self.lane_out(x)
+
+        if self.debug:
+            return out, cam_height, cam_pitch, x1, x2, x3, x4, x1_proj, x2_proj_out, x3_proj_out, x4_proj_out, top_2, top_3, top_4
 
         return out, cam_height, cam_pitch
 

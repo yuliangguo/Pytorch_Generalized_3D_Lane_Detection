@@ -447,10 +447,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d'
+    # args.dataset_name = 'sim3d'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_name = 'tusimple'
+    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
 
     # load configuration for certain dataset
     global evaluator
@@ -473,8 +474,8 @@ if __name__ == '__main__':
     # settings for save and visualize
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 25
-    args.save_freq = 25
+    args.print_freq = 40
+    args.save_freq = 40
 
     # run the training
     train_net()
