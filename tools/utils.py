@@ -150,7 +150,7 @@ def sim3d_config(args):
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
-    args.pretrained = False
+    args.pretrained = True
     # apply batch norm in network
     args.batch_norm = True
 

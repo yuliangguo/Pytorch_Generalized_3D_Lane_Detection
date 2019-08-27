@@ -263,10 +263,12 @@ def train_net():
         if args.dataset_name is 'tusimple':
             print("===> Evaluation accuracy: {:3f}".format(eval_stats[0]))
         elif args.dataset_name is 'sim3d':
-            print("===> Evaluation laneline F (pixel): {:3f}".format(eval_stats[0]))
-            print("===> Evaluation laneline F (lane): {:3f}".format(eval_stats[1]))
-            print("===> Evaluation centerline F (pixel): {:3f}".format(eval_stats[2]))
-            print("===> Evaluation centerline F (lane): {:3f}".format(eval_stats[3]))
+            print("===> Evaluation laneline F-measure: {:3f}".format(eval_stats[0]))
+            print("===> Evaluation laneline Recall: {:3f}".format(eval_stats[1]))
+            print("===> Evaluation laneline Precision: {:3f}".format(eval_stats[2]))
+            print("===> Evaluation centerline F-measure: {:3f}".format(eval_stats[7]))
+            print("===> Evaluation centerline Recall: {:3f}".format(eval_stats[8]))
+            print("===> Evaluation centerline Precision: {:3f}".format(eval_stats[9]))
 
         print("===> Last best {}-loss was {:.8f} in epoch {}".format(crit_string, lowest_loss, best_epoch))
 
@@ -276,10 +278,12 @@ def train_net():
             if args.dataset_name is 'tusimple':
                 writer.add_scalars('Evaluation', {'Accuracy': eval_stats[0]}, epoch)
             elif args.dataset_name is 'sim3d':
-                writer.add_scalars('Evaluation', {'laneline F (pixel)': eval_stats[0]}, epoch)
-                writer.add_scalars('Evaluation', {'laneline F (lane)': eval_stats[1]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline F (pixel)': eval_stats[2]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline F (lane)': eval_stats[3]}, epoch)
+                writer.add_scalars('Evaluation', {'laneline F-measure': eval_stats[0]}, epoch)
+                writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
+                writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
+                writer.add_scalars('Evaluation', {'centerline F-measure': eval_stats[7]}, epoch)
+                writer.add_scalars('Evaluation', {'centerline Recall': eval_stats[8]}, epoch)
+                writer.add_scalars('Evaluation', {'centerline Precision': eval_stats[9]}, epoch)
         total_score = losses.avg
 
         # Adjust learning_rate if loss plateaued
@@ -393,10 +397,26 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                 print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
             elif args.dataset_name is 'sim3d':
                 print("===> Evaluation on validation set: \n"
-                      "laneline F (pixel) {:.8} \n"
-                      "laneline F (lane) {:.8} \n"
-                      "centerline F (pixel) {:.8} \n"
-                      "centerline F (lane) {:.8} \n".format(eval_stats[0], eval_stats[1], eval_stats[2], eval_stats[3]))
+                      "laneline F-measure {:.8} \n"
+                      "laneline Recall  {:.8} \n"
+                      "laneline Precision  {:.8} \n"
+                      "laneline x error (close)  {:.8} m\n"
+                      "laneline x error (far)  {:.8} m\n"
+                      "laneline z error (close)  {:.8} m\n"
+                      "laneline z error (far)  {:.8} m\n\n"
+                      "centerline F-measure {:.8} \n"
+                      "centerline Recall  {:.8} \n"
+                      "centerline Precision  {:.8} \n"
+                      "centerline x error (close)  {:.8} m\n"
+                      "centerline x error (far)  {:.8} m\n"
+                      "centerline z error (close)  {:.8} m\n"
+                      "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
+                                                                   eval_stats[2], eval_stats[3],
+                                                                   eval_stats[3], eval_stats[5],
+                                                                   eval_stats[6], eval_stats[7],
+                                                                   eval_stats[8], eval_stats[9],
+                                                                   eval_stats[10], eval_stats[11],
+                                                                   eval_stats[12], eval_stats[13]))
 
         return losses.avg, eval_stats
 
@@ -427,10 +447,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'tusimple'
+    args.dataset_name = 'sim3d'
     args.data_dir = ops.join('data', args.dataset_name)
-    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
 
     # load configuration for certain dataset
     global evaluator
@@ -453,8 +473,8 @@ if __name__ == '__main__':
     # settings for save and visualize
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 40
-    args.save_freq = 40
+    args.print_freq = 25
+    args.save_freq = 25
 
     # run the training
     train_net()
