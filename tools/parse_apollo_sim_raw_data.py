@@ -26,7 +26,7 @@ img_width = 1920
 K = np.array([[2015.0,      0, 960.0],
              [      0, 2015.0, 540.0],
              [      0,      0,     1]])
-vis = True
+vis = False
 
 
 def get_lists(test_file):
@@ -145,7 +145,7 @@ def process_lane_label_apollo_sim_3D(label_file):
 
 
 if __name__ == '__main__':
-    base_folder = "/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_lane/"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
     image_list, label_list, name_list = get_lists(input_file)

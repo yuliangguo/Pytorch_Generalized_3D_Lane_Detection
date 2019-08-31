@@ -71,7 +71,7 @@ def main():
         anchor_dim = 2 * args.num_y_steps + 1
 
     # initialize visual saver
-    vs_saver = Visualizer(args)
+    vs_saver = Visualizer(args, vis_folder)
 
     # load trained model for testing
     best_file_name = glob.glob(os.path.join(args.save_path, 'model_best*'))[0]
@@ -82,7 +82,7 @@ def main():
         model.load_state_dict(checkpoint['state_dict'])
     else:
         print("=> no checkpoint found at '{}'".format(best_file_name))
-    mkdir_if_missing(os.path.join(args.save_path, 'example/eval_vis'))
+    mkdir_if_missing(os.path.join(args.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, model, vs_saver, test_gt_file)
 
 
@@ -161,7 +161,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                 top_4 = top_4/np.max(top_4)
 
                 # visualize features
-                plt.figure()
+                fig = plt.figure()
 
                 plt.subplot(341)
                 plt.title('img feat1', fontsize=30)
@@ -202,7 +202,8 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                 plt.title('top feat4', fontsize=30)
                 plt.imshow(top_4)
 
-                plt.savefig(args.save_path + '/example/eval_vis/features_{}'.format(idx[0]))
+                plt.savefig(args.save_path + '/example/' + vis_folder + '/features_{}'.format(idx[0]))
+                plt.close(fig)
 
                 # unormalize lane outputs
                 num_el = input.size(0)
@@ -224,14 +225,14 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     if args.dataset_name is 'tusimple':
                         h_samples = json_line["h_samples"]
                         lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
-                                                            anchor_x_steps, args.anchor_y_steps, 0, args.org_w)
+                                                            anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
                         json_line["lanes"] = lanes_pred
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps)
+                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
@@ -267,17 +268,20 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+
+    global vis_folder
+    vis_folder = 'test_vis'
 
     global args
     parser = define_args()
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    # args.dataset_name = 'sim3d'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
-    args.dataset_name = 'tusimple'
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.dataset_name = 'sim3d'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    # args.dataset_name = 'tusimple'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
@@ -294,6 +298,7 @@ if __name__ == '__main__':
         args.pt_th = 0.5
         args.min_num_pixels = 10
         evaluator = eval_3D_lane.LaneEval(args)
+    args.prob_th = 0.5
 
     # use batch 1 for testing
     args.batch_size = 1
@@ -301,7 +306,7 @@ if __name__ == '__main__':
     # settings for save and visualize
     args.nworkers = 0
 
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_True_batchnorm_True')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True')
 
     # run the training
     main()

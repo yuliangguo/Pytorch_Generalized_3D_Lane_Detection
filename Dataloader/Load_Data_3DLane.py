@@ -640,10 +640,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'tusimple'
-    args.data_dir = ops.join('../data', args.dataset_name)
-    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.dataset_name = 'sim3d'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    # args.dataset_name = 'tusimple'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
     if args.dataset_name is 'tusimple':

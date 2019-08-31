@@ -7,10 +7,10 @@ import math
 import glob
 
 if __name__ == '__main__':
-    dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/TuSimple/labeled'
-    json_file_list = glob.glob('{:s}/label_data*.json'.format(dataset_dir))
+    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane'
+    json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
 
-    output_folder = '../data/tusimple/'
+    output_folder = '../data/sim3d/'
     split_ratio = [0.8, 0.1]
     if not ops.exists(output_folder):
         os.makedirs(output_folder)

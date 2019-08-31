@@ -377,14 +377,14 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                     if args.dataset_name is 'tusimple':
                         h_samples = json_line["h_samples"]
                         lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
-                                                            anchor_x_steps, args.anchor_y_steps, 0, args.org_w)
+                                                            anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
                         json_line["lanes"] = lanes_pred
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps)
+                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
@@ -440,17 +440,17 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    # args.dataset_name = 'sim3d'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
-    args.dataset_name = 'tusimple'
-    args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args.dataset_name = 'sim3d'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    # args.dataset_name = 'tusimple'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
@@ -467,15 +467,16 @@ if __name__ == '__main__':
         args.pt_th = 0.5
         args.min_num_pixels = 10
         evaluator = eval_3D_lane.LaneEval(args)
+    args.prob_th = 0.5
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 40
-    args.save_freq = 40
+    args.print_freq = 100
+    args.save_freq = 100
 
     # run the training
     train_net()

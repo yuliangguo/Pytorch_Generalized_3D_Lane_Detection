@@ -163,7 +163,8 @@ class LaneEval(object):
                 except OSError as e:
                     print(e.message)
         try:
-            json_pred = [json.loads(line) for line in open(pred_file).readlines()]
+            pred_lines = open(pred_file).readlines()
+            json_pred = [json.loads(line) for line in pred_lines]
         except BaseException as e:
             raise Exception('Fail to load json file of the prediction.')
         json_gt = [json.loads(line) for line in open(gt_file).readlines()]

@@ -50,7 +50,7 @@ def define_args():
     parser.add_argument('--prob_th', type=float, default=0.5, help='probability threshold for selecting output lanes')
     # General model settings
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
-    parser.add_argument('--nepochs', type=int, default=350, help='total numbers of epochs')
+    parser.add_argument('--nepochs', type=int, default=100, help='total numbers of epochs')
     parser.add_argument('--learning_rate', type=float, default=5*1e-4, help='learning rate')
     parser.add_argument('--no_cuda', action='store_true', help='if gpu available')
     parser.add_argument('--nworkers', type=int, default=8, help='num of threads')
@@ -117,7 +117,7 @@ def tusimple_config(args):
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
-    args.pretrained = True
+    args.pretrained = False
     # apply batch norm in network
     args.batch_norm = True
 
@@ -150,13 +150,14 @@ def sim3d_config(args):
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
-    args.pretrained = True
+    args.pretrained = False
     # apply batch norm in network
     args.batch_norm = True
 
 
 class Visualizer:
-    def __init__(self, args):
+    def __init__(self, args, vis_folder='eval_vis'):
+        self.vis_folder = vis_folder
         self.no_3d = args.no_3d
         self.no_centerline = args.no_centerline
         self.vgg_mean = args.vgg_mean
@@ -372,7 +373,7 @@ class Visualizer:
                 ax4.imshow(ipm_centerline)
 
             if evaluate:
-                fig.savefig(self.save_path + '/example/eval_vis/infer_{}'.format(idx[i]))
+                fig.savefig(self.save_path + '/example/' + self.vis_folder + '/infer_{}'.format(idx[i]))
             else:
                 fig.savefig(self.save_path + '/example/{}/epoch-{}_batch-{}_idx-{}'.format(train_or_val,
                                                                                            epoch, batch_i, idx[i]))
