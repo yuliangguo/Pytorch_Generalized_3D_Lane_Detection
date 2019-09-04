@@ -14,7 +14,7 @@ import torch.optim
 from PIL import Image
 from torch.optim import lr_scheduler
 import os.path as ops
-
+from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
@@ -41,7 +41,7 @@ def define_args():
     parser.add_argument('--mod', type=str, default='3DLaneNet', help='model to train')
     parser.add_argument("--pretrained", type=str2bool, nargs='?', const=True, default=True, help="use pretrained vgg model")
     parser.add_argument("--batch_norm", type=str2bool, nargs='?', const=True, default=True, help="apply batch norm")
-    parser.add_argument("--pred_cam", type=str2bool, nargs='?', const=True, default=False, help="if to use network to predict camera online")
+    parser.add_argument("--pred_cam", type=str2bool, nargs='?', const=True, default=False, help="use network to predict camera online?")
     parser.add_argument('--ipm_h', type=int, default=208, help='height of inverse projective map (IPM)')
     parser.add_argument('--ipm_w', type=int, default=128, help='width of inverse projective map (IPM)')
     parser.add_argument('--resize_h', type=int, default=360, help='height of the original image')
@@ -53,7 +53,7 @@ def define_args():
     parser.add_argument('--nepochs', type=int, default=100, help='total numbers of epochs')
     parser.add_argument('--learning_rate', type=float, default=5*1e-4, help='learning rate')
     parser.add_argument('--no_cuda', action='store_true', help='if gpu available')
-    parser.add_argument('--nworkers', type=int, default=8, help='num of threads')
+    parser.add_argument('--nworkers', type=int, default=0, help='num of threads')
     parser.add_argument('--no_dropout', action='store_true', help='no dropout in network')
     parser.add_argument('--pretrain_epochs', type=int, default=20, help='Number of epochs to perform segmentation pretraining')
     parser.add_argument('--channels_in', type=int, default=3, help='num channels of input image')
@@ -77,7 +77,7 @@ def define_args():
     # CUDNN usage
     parser.add_argument("--cudnn", type=str2bool, nargs='?', const=True, default=True, help="cudnn optimization active")
     # Tensorboard settings
-    parser.add_argument("--no_tb", type=str2bool, nargs='?', const=True, default=True, help="Use tensorboard logging by tensorflow")
+    parser.add_argument("--no_tb", type=str2bool, nargs='?', const=True, default=False, help="Use tensorboard logging by tensorflow")
     # Print settings
     parser.add_argument('--print_freq', type=int, default=500, help='padding')
     parser.add_argument('--save_freq', type=int, default=500, help='padding')
@@ -284,6 +284,29 @@ class Visualizer:
                                       (x_ipm[k], y_ipm[k]), color, 1)
         return im_ipm
 
+    def draw_3d_curves(self, ax, lane_anchor, draw_type='laneline', color=[0, 0, 1]):
+        for j in range(lane_anchor.shape[0]):
+            # draw laneline
+            if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, :self.num_y_steps]
+                x_g = x_offsets + self.anchor_x_steps[j]
+                z_g = lane_anchor[j, self.num_y_steps:2*self.num_y_steps]
+                ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
+
+            # draw centerline
+            if draw_type is 'centerline' and lane_anchor[j, 2*self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, self.anchor_dim:self.anchor_dim + self.num_y_steps]
+                x_g = x_offsets + self.anchor_x_steps[j]
+                z_g = lane_anchor[j, self.anchor_dim + self.num_y_steps:self.anchor_dim + 2*self.num_y_steps]
+                ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
+
+            # draw the additional centerline for the merging case
+            if draw_type is 'centerline' and lane_anchor[j, 3*self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, 2*self.anchor_dim:2*self.anchor_dim + self.num_y_steps]
+                x_g = x_offsets + self.anchor_x_steps[j]
+                z_g = lane_anchor[j, 2*self.anchor_dim + self.num_y_steps:2*self.anchor_dim + 2*self.num_y_steps]
+                ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
+
     def save_result(self, dataset, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, aug_mat=np.identity(3, dtype=np.float), evaluate=False):
         if not dataset.data_aug:
             aug_mat = np.repeat(np.expand_dims(aug_mat, axis=0), idx.shape[0], axis=0)
@@ -355,13 +378,13 @@ class Visualizer:
                 ipm_centerline = self.draw_on_ipm(ipm_centerline, pred_anchors, 'centerline', [1, 0, 0])
 
             # plot on a single figure
-            if self.no_centerline:
+            if self.no_centerline and self.no_3d:
                 fig = plt.figure()
                 ax1 = fig.add_subplot(121)
                 ax2 = fig.add_subplot(122)
                 ax1.imshow(im_laneline)
                 ax2.imshow(ipm_laneline)
-            else:
+            elif not self.no_centerline and self.no_3d:
                 fig = plt.figure()
                 ax1 = fig.add_subplot(221)
                 ax2 = fig.add_subplot(222)
@@ -371,6 +394,32 @@ class Visualizer:
                 ax2.imshow(ipm_laneline)
                 ax3.imshow(im_centerline)
                 ax4.imshow(ipm_centerline)
+            elif not self.no_centerline and not self.no_3d:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(231)
+                ax2 = fig.add_subplot(232)
+                ax3 = fig.add_subplot(233, projection='3d')
+                ax4 = fig.add_subplot(234)
+                ax5 = fig.add_subplot(235)
+                ax6 = fig.add_subplot(236, projection='3d')
+                ax1.imshow(im_laneline)
+                ax2.imshow(ipm_laneline)
+                self.draw_3d_curves(ax3, gt_anchors, 'laneline', [0, 0, 1])
+                self.draw_3d_curves(ax3, pred_anchors, 'laneline', [1, 0, 0])
+                bottom, top = ax3.get_zlim()
+                ax3.set_zlim(min(bottom, -1), max(top, 1))
+                ax3.set_xlabel('x axis')
+                ax3.set_ylabel('y axis')
+                ax3.set_zlabel('z axis')
+                ax4.imshow(im_centerline)
+                ax5.imshow(ipm_centerline)
+                self.draw_3d_curves(ax6, gt_anchors, 'centerline', [0, 0, 1])
+                self.draw_3d_curves(ax6, pred_anchors, 'centerline', [1, 0, 0])
+                ax6.set_xlabel('x axis')
+                ax6.set_ylabel('y axis')
+                ax6.set_zlabel('z axis')
+                bottom, top = ax6.get_zlim()
+                ax6.set_zlim(min(bottom, -1), max(top, 1))
 
             if evaluate:
                 fig.savefig(self.save_path + '/example/' + self.vis_folder + '/infer_{}'.format(idx[i]))

@@ -476,8 +476,6 @@ if __name__ == '__main__':
     args.evaluate = False
 
     # settings for save and visualize
-    args.nworkers = 0
-    args.no_tb = False
     args.print_freq = 50
     args.save_freq = 50
 

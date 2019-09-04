@@ -268,7 +268,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global vis_folder
     vis_folder = 'test_vis'
@@ -304,9 +304,7 @@ if __name__ == '__main__':
     args.batch_size = 1
 
     # settings for save and visualize
-    args.nworkers = 0
-
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcame_False')
-
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True')
+    args.pred_cam=False
     # run the training
     main()

@@ -414,7 +414,7 @@ class Net(nn.Module):
     def update_projection(self, args, cam_height, cam_pitch):
         """
             Update transformation matrix based on ground-truth cam_height and cam_pitch
-            This function is mutually exclusive with the updates of M_inv from network prediction
+            This function is "Mutually Exclusive" to the updates of M_inv from network prediction
         :param args:
         :param cam_height:
         :param cam_pitch:
