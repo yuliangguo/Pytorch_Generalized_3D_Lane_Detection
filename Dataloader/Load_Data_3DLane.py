@@ -49,7 +49,7 @@ class LaneDataset(Dataset):
 
         self.h_org = args.org_h
         self.w_org = args.org_w
-        self.h_crop = args.crop_size
+        self.h_crop = args.crop_y
 
         # parameters related to service network
         self.h_net = args.resize_h
@@ -62,7 +62,7 @@ class LaneDataset(Dataset):
         self.y_ref = args.y_ref
 
         self.K = args.K
-        self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_size, [args.resize_h, args.resize_w])
+        self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_y, [args.resize_h, args.resize_w])
         # transformation from ipm to ground region
         self.H_ipm2g = cv2.getPerspectiveTransform(np.float32([[0, 0],
                                                                [self.ipm_w-1, 0],

@@ -24,7 +24,7 @@ class LaneEval(object):
         self.top_view_region = args.top_view_region
         self.org_h = args.org_h
         self.org_w = args.org_w
-        self.crop_y = args.crop_size
+        self.crop_y = args.crop_y
         self.resize_h = args.resize_h
         self.resize_w = args.resize_w
         self.K = args.K

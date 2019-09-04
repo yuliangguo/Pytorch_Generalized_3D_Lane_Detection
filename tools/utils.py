@@ -31,7 +31,7 @@ def define_args():
     # Dataset settings
     parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
-    parser.add_argument('--crop_size', type=int, default=0, help='crop from image')
+    parser.add_argument('--crop_y', type=int, default=0, help='crop from image')
     parser.add_argument('--cam_height', type=float, default=1.55, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')
     parser.add_argument('--fix_cam', type=str2bool, nargs='?', const=True, default=False, help='if to use fix camera')
@@ -93,7 +93,7 @@ def tusimple_config(args):
     args.save_path = ops.join(args.save_path, args.dataset_name)
     args.org_h = 720
     args.org_w = 1280
-    args.crop_size = 80
+    args.crop_y = 80
     args.no_centerline = True
     args.no_3d = True
     args.fix_cam = True
@@ -128,11 +128,11 @@ def sim3d_config(args):
     args.save_path = ops.join(args.save_path, args.dataset_name)
     args.org_h = 1080
     args.org_w = 1920
-    args.crop_size = 0
+    args.crop_y = 0
     args.no_centerline = False
     args.no_3d = False
     args.fix_cam = False
-    args.pred_cam = False
+    args.pred_cam = True
 
     # set camera parameters for the test datasets
     args.K = np.array([[2015., 0., 960.],
@@ -420,6 +420,12 @@ def homography_im2ipm_norm(top_view_region, org_img_size, crop_y, resize_img_siz
     # ipm to im
     H_ipm2im_norm = cv2.getPerspectiveTransform(dst, border_im)
     return H_im2ipm_norm, H_ipm2im_norm
+
+
+def homography_ipmnorm2g(top_view_region):
+    src = np.float32([[0, 0], [1, 0], [0, 1], [1, 1]])
+    H_ipmnorm2g = cv2.getPerspectiveTransform(src, np.float32(top_view_region))
+    return H_ipmnorm2g
 
 
 def homograpthy_g2im(cam_pitch, cam_height, K):

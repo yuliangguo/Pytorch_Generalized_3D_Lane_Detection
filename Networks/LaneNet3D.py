@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
 import torchvision.models as models
-from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, tusimple_config, sim3d_config
+from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, homography_crop_resize, homography_ipmnorm2g, tusimple_config, sim3d_config
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):
@@ -66,9 +66,56 @@ class VggEncoder(nn.Module):
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # if m.bias is not None:
+                #     nn.init.constant_(m.bias, 0)
+                nn.init.normal_(m.weight.data, 0.0, 0.02)
                 if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, 0.01)
+                nn.init.constant_(m.bias, 0)
+
+
+# Road plane prediction: estimate camera height and pitch angle
+class RoadPlanePredHead(nn.Module):
+    def __init__(self, im_h, im_w, batch_norm=False, init_weights=True):
+        super().__init__()
+        self.im_h = im_h
+        self.im_w = im_w
+        self.features1 = make_layers(['M', 256, 256, 256], 512, batch_norm)
+        self.features2 = make_layers(['M', 128, 128, 128], 256, batch_norm)
+        self.features3 = make_layers(['M', 64, 64, 64], 128, batch_norm)
+        # fc layer
+        self.fc = nn.Sequential(
+            nn.Linear(64 * int(self.im_h/128) * int(self.im_w/128), 64),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(64, 2))
+
+        if init_weights:
+            self._initialize_weights()
+
+    def forward(self, x):
+        x1 = self.features1(x)
+        x2 = self.features2(x1)
+        x3 = self.features3(x2)
+        x3 = x3.reshape([-1, 64 * int(self.im_h/128) * int(self.im_w/128)])
+        out = self.fc(x3)
+        return out
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # if m.bias is not None:
+                #     nn.init.constant_(m.bias, 0)
+                nn.init.normal_(m.weight.data, 0.0, 0.02)
+                if m.bias is not None:
+                    m.bias.data.zero_()
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -79,7 +126,7 @@ class VggEncoder(nn.Module):
 
 # initialize base_grid with different sizes can adapt to different sizes
 class ProjectiveGridGenerator(nn.Module):
-    def __init__(self, size_ipm, im_h, im_w, M, no_cuda):
+    def __init__(self, size_ipm, M, no_cuda):
         """
 
         :param size_ipm: size of ipm tensor NCHW
@@ -90,8 +137,8 @@ class ProjectiveGridGenerator(nn.Module):
         """
         super().__init__()
         self.N, self.C, self.H, self.W = size_ipm
-        self.im_h = im_h
-        self.im_w = im_w
+        # self.im_h = im_h
+        # self.im_w = im_w
         linear_points_W = torch.linspace(0, 1 - 1/self.W, self.W)
         linear_points_H = torch.linspace(0, 1 - 1/self.H, self.H)
 
@@ -106,8 +153,8 @@ class ProjectiveGridGenerator(nn.Module):
         self.base_grid = Variable(self.base_grid)
         if not no_cuda:
             self.base_grid = self.base_grid.cuda()
-            self.im_h = self.im_h.cuda()
-            self.im_w = self.im_w.cuda()
+            # self.im_h = self.im_h.cuda()
+            # self.im_w = self.im_w.cuda()
 
     def forward(self, M):
         # compute the grid mapping based on the input transformation matrix M
@@ -150,9 +197,12 @@ class TopViewPathway(nn.Module):
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # if m.bias is not None:
+                #     nn.init.constant_(m.bias, 0)
+                nn.init.normal_(m.weight.data, 0.0, 0.02)
                 if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
+                    m.bias.data.zero_()
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -197,39 +247,16 @@ class LanePredictionHead(nn.Module):
             x[:, :, (i+1)*self.anchor_dim-1] = torch.sigmoid(x[:, :, (i+1)*self.anchor_dim-1])
         return x
 
-# TODO: implement sub network estimating height and pitch
-
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
     def __init__(self, args, debug=False):
         super().__init__()
 
-        self.debug = debug
-        # define homographic transformation between image and ipm
-        org_img_size = np.array([args.org_h, args.org_w])
-        resize_img_size = np.array([args.resize_h, args.resize_w])
-        pitch = np.pi / 180 * args.pitch
-        M, M_inv = homography_im2ipm_norm(args.top_view_region, org_img_size,
-                                          args.crop_size, resize_img_size, pitch, args.cam_height, args.K)
-        # M = torch.from_numpy(M).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
-        M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([args.batch_size, 3, 3]).type(torch.FloatTensor)
-
-        self.M_inv = M_inv # M_inv is the homography ipm2im in normalized coordinates
-        self.cam_height = torch.tensor(args.cam_height).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
-        self.cam_pitch = torch.tensor(pitch).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
-        self.S_im = torch.from_numpy(np.array([[args.resize_w, 0, 0],
-                                               [0, args.resize_h, 0],
-                                               [0, 0, 1]], dtype=np.float32))
-        self.S_im_inv = torch.from_numpy(np.array([[1/np.float(args.resize_w), 0, 0],
-                                                   [0, 1/np.float(args.resize_h), 0],
-                                                   [0, 0, 1]], dtype=np.float32))
         self.no_cuda = args.no_cuda
-        if not self.no_cuda:
-            self.M_inv = self.M_inv.cuda()
-            self.S_im = self.S_im.cuda()
-            self.S_im_inv = self.S_im_inv.cuda()
-
+        self.debug = debug
+        self.pred_cam = args.pred_cam
+        self.batch_size = args.batch_size
         if args.no_centerline:
             self.num_lane_type = 1
         else:
@@ -240,23 +267,89 @@ class Net(nn.Module):
         else:
             self.anchor_dim = 2*args.num_y_steps + 1
 
+        # define required transformation matrices
+        # define homographic transformation between image and ipm
+        org_img_size = np.array([args.org_h, args.org_w])
+        resize_img_size = np.array([args.resize_h, args.resize_w])
+        cam_pitch = np.pi / 180 * args.pitch
+
+        self.cam_height = torch.tensor(args.cam_height).unsqueeze_(0).expand([self.batch_size, 1]).type(torch.FloatTensor)
+        self.cam_pitch = torch.tensor(cam_pitch).unsqueeze_(0).expand([self.batch_size, 1]).type(torch.FloatTensor)
+        self.cam_height_default = torch.tensor(args.cam_height).unsqueeze_(0).expand(self.batch_size).type(torch.FloatTensor)
+        self.cam_pitch_default = torch.tensor(cam_pitch).unsqueeze_(0).expand(self.batch_size).type(torch.FloatTensor)
+
+        # image scale matrix
+        self.S_im = torch.from_numpy(np.array([[args.resize_w,              0, 0],
+                                               [0,              args.resize_h, 0],
+                                               [0,                          0, 1]], dtype=np.float32))
+        self.S_im_inv = torch.from_numpy(np.array([[1/np.float(args.resize_w),                         0, 0],
+                                                   [                        0, 1/np.float(args.resize_h), 0],
+                                                   [                        0,                         0, 1]], dtype=np.float32))
+        self.S_im_inv_batch = self.S_im_inv.unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+
+        # image transform matrix
+        H_c = homography_crop_resize(org_img_size, args.crop_y, resize_img_size)
+        self.H_c = torch.from_numpy(H_c).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+
+        # camera intrinsic matrix
+        self.K = torch.from_numpy(args.K).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+
+        # homograph ground to camera
+        # H_g2cam = np.array([[1,                             0,               0],
+        #                     [0, np.cos(np.pi / 2 + cam_pitch), args.cam_height],
+        #                     [0, np.sin(np.pi / 2 + cam_pitch),               0]])
+        H_g2cam = np.array([[1,                             0,               0],
+                            [0, np.sin(-cam_pitch), args.cam_height],
+                            [0, np.cos(-cam_pitch),               0]])
+        self.H_g2cam = torch.from_numpy(H_g2cam).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+
+        # transform from ipm normalized coordinates to ground coordinates
+        H_ipmnorm2g = homography_ipmnorm2g(args.top_view_region)
+        self.H_ipmnorm2g = torch.from_numpy(H_ipmnorm2g).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+
+        # compute the tranformation from ipm norm coords to image norm coords
+        M_ipm2im = torch.bmm(self.H_g2cam, self.H_ipmnorm2g)
+        M_ipm2im = torch.bmm(self.K, M_ipm2im)
+        M_ipm2im = torch.bmm(self.H_c, M_ipm2im)
+        M_ipm2im = torch.bmm(self.S_im_inv_batch, M_ipm2im)
+        M_ipm2im = torch.div(M_ipm2im,  M_ipm2im[:, 2, 2].reshape([self.batch_size, 1, 1]).expand([self.batch_size, 3, 3]))
+        self.M_inv = M_ipm2im
+
+        # M, M_inv = homography_im2ipm_norm(args.top_view_region, org_img_size,
+        #                                   args.crop_y, resize_img_size, cam_pitch, args.cam_height, args.K)
+        # # M = torch.from_numpy(M).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+        # M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
+        #
+        # self.M_inv = M_inv  # M_inv is the homography ipm2im in normalized coordinates
+
+        if not self.no_cuda:
+            self.M_inv = self.M_inv.cuda()
+            self.S_im = self.S_im.cuda()
+            self.S_im_inv = self.S_im_inv.cuda()
+            self.S_im_inv_batch = self.S_im_inv_batch.cuda()
+            self.H_c = self.H_c.cuda()
+            self.K = self.K.cuda()
+            self.H_g2cam = self.H_g2cam.cuda()
+            self.H_ipmnorm2g = self.H_ipmnorm2g.cuda()
+            self.cam_height_default = self.cam_height_default.cuda()
+            self.cam_pitch_default = self.cam_pitch_default.cuda()
+
         # Define network
         self.im_encoder = VggEncoder(batch_norm=args.batch_norm)
 
+        if self.pred_cam:
+            self.road_plane_pred_head = RoadPlanePredHead(args.resize_h, args.resize_w, batch_norm=False)
+
         # the grid considers both src and dst grid normalized
-        resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
-        size_top1 = torch.Size([args.batch_size, 128, args.ipm_h, args.ipm_w])
-        self.project_layer1 = ProjectiveGridGenerator(size_top1, resize_img_size[0]/2, resize_img_size[1]/2,
-                                                      M_inv, args.no_cuda)
-        size_top2 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
-        self.project_layer2 = ProjectiveGridGenerator(size_top2, resize_img_size[0]/4, resize_img_size[1]/4,
-                                                      M_inv, args.no_cuda)
-        size_top3 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
-        self.project_layer3 = ProjectiveGridGenerator(size_top3, resize_img_size[0]/8, resize_img_size[1]/8,
-                                                      M_inv, args.no_cuda)
-        size_top4 = torch.Size([args.batch_size, 128, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
-        self.project_layer4 = ProjectiveGridGenerator(size_top4, resize_img_size[0]/16, resize_img_size[1]/16,
-                                                      M_inv, args.no_cuda)
+        # resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
+        size_top1 = torch.Size([self.batch_size, 128, args.ipm_h, args.ipm_w])
+        self.project_layer1 = ProjectiveGridGenerator(size_top1, self.M_inv, args.no_cuda)
+        size_top2 = torch.Size([self.batch_size, 128, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
+        self.project_layer2 = ProjectiveGridGenerator(size_top2, self.M_inv, args.no_cuda)
+        size_top3 = torch.Size([self.batch_size, 128, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
+        self.project_layer3 = ProjectiveGridGenerator(size_top3, self.M_inv, args.no_cuda)
+        size_top4 = torch.Size([self.batch_size, 128, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
+        self.project_layer4 = ProjectiveGridGenerator(size_top4, self.M_inv, args.no_cuda)
 
         self.dim_rt1 = nn.Sequential(*make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=args.batch_norm))
         self.dim_rt2 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
@@ -269,9 +362,26 @@ class Net(nn.Module):
         # compute image features from multiple layers
         x1, x2, x3, x4 = self.im_encoder(input)
 
-        # TODO: estimate camera height and pitch if self.pred_cam is true
-        cam_height = self.cam_height
-        cam_pitch = self.cam_pitch
+        if self.pred_cam:
+            pred_cam = self.road_plane_pred_head(x4)
+            cam_height = self.cam_height_default + pred_cam[:, 0]
+            cam_pitch = self.cam_pitch_default + pred_cam[:, 1]
+            # compute projection matrix based on predicted camera height and pitch
+            # ATTENTION: need to implement in tensor format, how to prevent back-propagation?
+            with torch.no_grad():
+                self.H_g2cam[:, 1, 1] = torch.sin(-cam_pitch)
+                self.H_g2cam[:, 2, 1] = torch.cos(-cam_pitch)
+                self.H_g2cam[:, 1, 2] = cam_height
+                M_ipm2im = torch.bmm(self.H_g2cam, self.H_ipmnorm2g)
+                M_ipm2im = torch.bmm(self.K, M_ipm2im)
+                M_ipm2im = torch.bmm(self.H_c, M_ipm2im)
+                M_ipm2im = torch.bmm(self.S_im_inv_batch, M_ipm2im)
+                M_ipm2im = torch.div(M_ipm2im,
+                                     M_ipm2im[:, 2, 2].reshape([self.batch_size, 1, 1]).expand([self.batch_size, 3, 3]))
+                self.M_inv = M_ipm2im
+        else:
+            cam_height = self.cam_height
+            cam_pitch = self.cam_pitch
 
         # spatial transfer image features to IPM features
         grid1 = self.project_layer1(self.M_inv)
@@ -302,19 +412,36 @@ class Net(nn.Module):
         return out, cam_height, cam_pitch
 
     def update_projection(self, args, cam_height, cam_pitch):
-        for i in range(args.batch_size):
-            # TODO: simplify the computation of M_inv
+        """
+            Update transformation matrix based on ground-truth cam_height and cam_pitch
+            This function is mutually exclusive with the updates of M_inv from network prediction
+        :param args:
+        :param cam_height:
+        :param cam_pitch:
+        :return:
+        """
+        for i in range(self.batch_size):
+
             M, M_inv = homography_im2ipm_norm(args.top_view_region, np.array([args.org_h, args.org_w]),
-                                              args.crop_size, np.array([args.resize_h, args.resize_w]),
+                                              args.crop_y, np.array([args.resize_h, args.resize_w]),
                                               cam_pitch[i], cam_height[i], args.K)
             self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
             self.cam_height = cam_height
             self.cam_pitch = cam_pitch
 
     def update_projection_for_data_aug(self, aug_mats):
+        """
+            update transformation matrix when data augmentation have been applied, and the image augmentation matrix are provided
+            Need to consider both the cases of 1. when using ground-truth cam_height, cam_pitch, update M_inv
+                                               2. when cam_height, cam_pitch are online estimated, update H_c for later use
+        """
         if not self.no_cuda:
             aug_mats = aug_mats.cuda()
+
         for i in range(aug_mats.shape[0]):
+            # update H_c directly
+            self.H_c[i] = torch.matmul(aug_mats[i], self.H_c[i])
+            # augmentation need to be applied in unnormalized image coords for M_inv
             aug_mats[i] = torch.matmul(torch.matmul(self.S_im_inv, aug_mats[i]), self.S_im)
             self.M_inv[i] = torch.matmul(aug_mats[i], self.M_inv[i])
 
@@ -364,6 +491,7 @@ if __name__ == '__main__':
     # tusimple_config(args)
     args.dataset_name = 'sim3d'
     sim3d_config(args)
+    args.pred_cam = True
 
     # construct model
     model = Net(args)
@@ -384,7 +512,7 @@ if __name__ == '__main__':
     with open(img_name, 'rb') as f:
         image = (Image.open(f).convert('RGB'))
     w, h = image.size
-    image = F2.crop(image, args.crop_size, 0, args.org_h - args.crop_size, w)
+    image = F2.crop(image, args.crop_y, 0, args.org_h - args.crop_y, w)
     image = F2.resize(image, size=(args.resize_h, args.resize_w), interpolation=Image.BILINEAR)
     image = transforms.ToTensor()(image).float()
     image.unsqueeze_(0)
@@ -394,9 +522,11 @@ if __name__ == '__main__':
     # test update of camera height and pitch
     cam_height = torch.tensor(1.65).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
     cam_pitch = torch.tensor(0.1).unsqueeze_(0).expand([args.batch_size, 1]).type(torch.FloatTensor)
-    model.update_projection(args, cam_height, cam_pitch)
+    # model.update_projection(args, cam_height, cam_pitch)
 
     # inference the model
-    output_net = model(image)
+    output_net, pred_height, pred_pitch = model(image)
 
     print(output_net.shape)
+    print(pred_height)
+    print(pred_pitch)

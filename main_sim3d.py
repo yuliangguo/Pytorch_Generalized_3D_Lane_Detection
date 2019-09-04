@@ -34,7 +34,7 @@ def train_net():
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define save path
-    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}' \
+    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
               .format(args.mod,
                       args.optimizer,
                       args.learning_rate,
@@ -42,7 +42,8 @@ def train_net():
                       args.resize_h,
                       args.resize_w,
                       args.pretrained,
-                      args.batch_norm)
+                      args.batch_norm,
+                      args.pred_cam)
 
     # Dataloader for training and validation set
     val_gt_file = ops.join(args.data_dir, 'val.json')
@@ -197,6 +198,8 @@ def train_net():
             if not args.no_cuda:
                 input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                 input = input.float()
+                gt_hcam = gt_hcam.cuda()
+                gt_pitch = gt_pitch.cuda()
 
             if not args.fix_cam and not args.pred_cam:
                 model.update_projection(args, gt_hcam, gt_pitch)
@@ -206,16 +209,15 @@ def train_net():
 
             # Run model
             optimizer.zero_grad()
-            # Evaluate model
+            # Inference model
             try:
                 output_net, pred_hcam, pred_pitch = model(input)
             except RuntimeError as e:
-                print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
+                print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                 print(e)
                 continue
 
             # Compute losses on
-            gt = gt.cuda(non_blocking=True)
             loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
             losses.update(loss.item(), input.size(0))
 
@@ -329,19 +331,20 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                     input = input.float()
+                    gt_hcam = gt_hcam.cuda()
+                    gt_pitch = gt_pitch.cuda()
 
                 if not args.fix_cam and not args.pred_cam:
                     model.update_projection(args, gt_hcam, gt_pitch)
-                # Evaluate model
+                # Inference model
                 try:
                     output_net, pred_hcam, pred_pitch = model(input)
                 except RuntimeError as e:
-                    print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
+                    print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                     print(e)
                     continue
 
                 # Compute losses on parameters or segmentation
-                gt = gt.cuda(non_blocking=True)
                 loss = criterion(output_net, gt, pred_hcam, gt_hcam, pred_pitch, gt_pitch)
                 losses.update(loss.item(), input.size(0))
 
@@ -470,13 +473,13 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # for the case only running evaluation
-    args.evaluate = True
+    args.evaluate = False
 
     # settings for save and visualize
     args.nworkers = 0
     args.no_tb = False
-    args.print_freq = 100
-    args.save_freq = 100
+    args.print_freq = 50
+    args.save_freq = 50
 
     # run the training
     train_net()
