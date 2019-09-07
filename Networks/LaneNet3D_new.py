@@ -214,10 +214,12 @@ class TopViewPathway(nn.Module):
 #  Lane Prediction Head: through a series of convolutions with no padding in the y dimension, the feature maps are
 #  reduced in height, and finally the prediction layer size is N × 1 × 3 ·(2 · K + 1)
 class LanePredictionHead(nn.Module):
-    def __init__(self, num_lane_type, anchor_dim, batch_norm=False):
+    def __init__(self, num_lane_type, num_y_steps, batch_norm=False):
         super(LanePredictionHead, self).__init__()
         self.num_lane_type = num_lane_type
-        self.anchor_dim = anchor_dim
+        self.num_y_steps = num_y_steps
+        self.anchor_dim = 3*self.num_y_steps + 1
+
         layers = []
         layers += make_one_layer(512, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
         layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
@@ -231,8 +233,8 @@ class LanePredictionHead(nn.Module):
 
         # reshape is needed before executing later layers
         dim_rt_layers = []
-        dim_rt_layers += make_one_layer(256, 64, kernel_size=1, padding=0, batch_norm=batch_norm)
-        dim_rt_layers += [nn.Conv2d(64, num_lane_type*anchor_dim, kernel_size=1, padding=0)]
+        dim_rt_layers += make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=batch_norm)
+        dim_rt_layers += [nn.Conv2d(128, self.num_lane_type*self.anchor_dim, kernel_size=1, padding=0)]
         self.dim_rt = nn.Sequential(*dim_rt_layers)
 
     def forward(self, x):
@@ -244,7 +246,8 @@ class LanePredictionHead(nn.Module):
         x = x.squeeze(-1).transpose(1, 2)
         # apply sigmoid to the probability terms to make it in (0, 1)
         for i in range(self.num_lane_type):
-            x[:, :, (i+1)*self.anchor_dim-1] = torch.sigmoid(x[:, :, (i+1)*self.anchor_dim-1])
+            x[:, :, i*self.anchor_dim + 2*self.num_y_steps:(i+1)*self.anchor_dim] = \
+                torch.sigmoid(x[:, :, i*self.anchor_dim + 2*self.num_y_steps:(i+1)*self.anchor_dim])
         return x
 
 
@@ -262,10 +265,11 @@ class Net(nn.Module):
         else:
             self.num_lane_type = 3
 
+        self.num_y_steps = args.num_y_steps
         if args.no_3d:
             self.anchor_dim = args.num_y_steps + 1
         else:
-            self.anchor_dim = 2*args.num_y_steps + 1
+            self.anchor_dim = 3*args.num_y_steps + 1
 
         # define required transformation matrices
         # define homographic transformation between image and ipm
@@ -315,13 +319,6 @@ class Net(nn.Module):
         M_ipm2im = torch.div(M_ipm2im,  M_ipm2im[:, 2, 2].reshape([self.batch_size, 1, 1]).expand([self.batch_size, 3, 3]))
         self.M_inv = M_ipm2im
 
-        # M, M_inv = homography_im2ipm_norm(args.top_view_region, org_img_size,
-        #                                   args.crop_y, resize_img_size, cam_pitch, args.cam_height, args.K)
-        # # M = torch.from_numpy(M).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
-        # M_inv = torch.from_numpy(M_inv).unsqueeze_(0).expand([self.batch_size, 3, 3]).type(torch.FloatTensor)
-        #
-        # self.M_inv = M_inv  # M_inv is the homography ipm2im in normalized coordinates
-
         if not self.no_cuda:
             self.M_inv = self.M_inv.cuda()
             self.S_im = self.S_im.cuda()
@@ -356,7 +353,7 @@ class Net(nn.Module):
         self.dim_rt3 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
 
         self.top_pathway = TopViewPathway(args.batch_norm)
-        self.lane_out = LanePredictionHead(self.num_lane_type, self.anchor_dim, args.batch_norm)
+        self.lane_out = LanePredictionHead(self.num_lane_type, self.num_y_steps, args.batch_norm)
 
     def forward(self, input):
         # compute image features from multiple layers
