@@ -113,7 +113,7 @@ def tusimple_config(args):
         args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     """
     args.top_view_region = np.array([[-10, 82], [10, 82], [-10, 2], [10, 2]])
-    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 50, 60, 80])
+    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
@@ -146,7 +146,8 @@ def sim3d_config(args):
         args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     """
     args.top_view_region = np.array([[-10, 83], [10, 83], [-10, 3], [10, 3]])
-    args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 45, 60, 80, 100])
+    # args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
+    args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
@@ -169,8 +170,10 @@ class Visualizer:
 
         if args.no_3d:
             self.anchor_dim = args.num_y_steps + 1
-        else:
+        elif args.mod is '3DLaneNet':
             self.anchor_dim = 2 * args.num_y_steps + 1
+        elif args.mod is '3DLaneNet_new':
+            self.anchor_dim = 3 * args.num_y_steps + 1
 
         x_min = args.top_view_region[0, 0]
         x_max = args.top_view_region[1, 0]
@@ -251,7 +254,6 @@ class Visualizer:
         :param color: [r, g, b] color for line,  each range in [0, 1]
         :return:
         """
-
         for j in range(lane_anchor.shape[0]):
             # draw laneline
             if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
@@ -266,7 +268,7 @@ class Visualizer:
                 y_2d = y_2d.astype(np.int)
                 visibility = lane_anchor[j, 2*self.num_y_steps:3*self.num_y_steps]
                 for k in range(1, x_2d.shape[0]):
-                    if visibility[k]:
+                    if visibility[k] > self.prob_th:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color, 2)
                     else:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 0, 0], 2)
@@ -284,7 +286,7 @@ class Visualizer:
                 y_2d = y_2d.astype(np.int)
                 visibility = lane_anchor[j, self.anchor_dim + 2*self.num_y_steps:self.anchor_dim + 3*self.num_y_steps]
                 for k in range(1, x_2d.shape[0]):
-                    if visibility[k]:
+                    if visibility[k] > self.prob_th:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color, 2)
                     else:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 0, 0], 2)
@@ -302,7 +304,7 @@ class Visualizer:
                 y_2d = y_2d.astype(np.int)
                 visibility = lane_anchor[j, 2*self.anchor_dim + 2*self.num_y_steps:2*self.anchor_dim + 3*self.num_y_steps]
                 for k in range(1, x_2d.shape[0]):
-                    if visibility[k]:
+                    if visibility[k] > self.prob_th:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color, 2)
                     else:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 0, 0], 2)
@@ -363,7 +365,7 @@ class Visualizer:
                 x_ipm = x_ipm.astype(np.int)
                 y_ipm = y_ipm.astype(np.int)
                 for k in range(1, x_g.shape[0]):
-                    if visibility[k]:
+                    if visibility[k] > self.prob_th:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
                                           (x_ipm[k], y_ipm[k]), color, 1)
                     else:
@@ -381,7 +383,7 @@ class Visualizer:
                 x_ipm = x_ipm.astype(np.int)
                 y_ipm = y_ipm.astype(np.int)
                 for k in range(1, x_g.shape[0]):
-                    if visibility[k]:
+                    if visibility[k] > self.prob_th:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
                                           (x_ipm[k], y_ipm[k]), color, 1)
                     else:
@@ -399,7 +401,7 @@ class Visualizer:
                 x_ipm = x_ipm.astype(np.int)
                 y_ipm = y_ipm.astype(np.int)
                 for k in range(1, x_g.shape[0]):
-                    if visibility[k]:
+                    if visibility[k] > self.prob_th:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
                                           (x_ipm[k], y_ipm[k]), color, 1)
                     else:

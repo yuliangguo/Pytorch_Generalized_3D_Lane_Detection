@@ -98,8 +98,10 @@ class LaneDataset(Dataset):
 
         if self.no_3d:
             self.anchor_dim = self.num_y_steps + 1
-        else:
-            self.anchor_dim = 3*self.num_y_steps + 1
+        elif args.mod is '3DLaneNet':
+            self.anchor_dim = 2 * args.num_y_steps + 1
+        elif args.mod is '3DLaneNet_new':
+            self.anchor_dim = 3 * args.num_y_steps + 1
 
         # parse ground-truth file
         if self.dataset_name is 'tusimple':
@@ -274,6 +276,8 @@ class LaneDataset(Dataset):
         lane_z_all = []
         visibility_all_flat = []
         for idx in range(len(gt_laneline_pts_all)):
+            # if idx is 332:
+            #     print('here')
             # fetch camera height and pitch
             if not self.fix_cam:
                 gt_cam_height = gt_cam_height_all[idx]
@@ -524,7 +528,8 @@ class LaneDataset(Dataset):
         # remove points with y out of range
         # 3D label may miss super long straight-line with only two points
         # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
-        gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 2*self.top_view_region[0, 1]), ...]
+        # TODO: change 200 to 2*self.top_view_region[0, 1]) when label step issue has been solved
+        gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 200), ...]
         if gt_lane_3d.shape[0] < 2:
             return -1, np.array([]), np.array([])
 
@@ -782,6 +787,9 @@ if __name__ == '__main__':
         print('Not using a supported dataset')
         sys.exit()
 
+    # define the network model
+    args.mod = '3DLaneNet_new'
+
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
     print('visual area border:')
@@ -794,6 +802,7 @@ if __name__ == '__main__':
 
     # initialize visualizer
     visualizer = Visualizer(args)
+    Visualizer.anchor_dim = dataset.anchor_dim
 
     # get a batch of data/label pairs from loader
     for batch_ndx, (image_tensor, gt_tensor, idx, gt_cam_height, gt_cam_pitch, aug_mat) in enumerate(loader):

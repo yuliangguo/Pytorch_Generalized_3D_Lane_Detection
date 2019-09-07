@@ -54,7 +54,7 @@ class Laneline_3D_loss(nn.Module):
 # unit test
 if __name__ == '__main__':
     num_types = 3
-    anchor_dim = 13
+    anchor_dim = 2*6 + 1
     pred_cam = True
     criterion = Laneline_3D_loss(num_types, anchor_dim, pred_cam)
     criterion = criterion.cuda()
