@@ -76,7 +76,8 @@ class LaneDataset(Dataset):
             # compute the homography between image and IPM, and crop transformation
             self.cam_height = args.cam_height
             self.cam_pitch = np.pi / 180 * args.pitch
-            self.H_g2im = homograpthy_g2im(self.cam_pitch, args.cam_height, args.K)
+            self.P_g2im = projection_g2im(self.cam_pitch, self.cam_height, args.K)
+            self.H_g2im = homograpthy_g2im(self.cam_pitch, self.cam_height, args.K)
             self.H_im2g = np.linalg.inv(self.H_g2im)
             self.H_im2ipm = np.linalg.inv(np.matmul(self.H_crop, np.matmul(self.H_g2im, self.H_ipm2g)))
         else:
@@ -85,6 +86,8 @@ class LaneDataset(Dataset):
         # compute anchor steps
         x_min = self.top_view_region[0, 0]
         x_max = self.top_view_region[1, 0]
+        self.x_min = x_min
+        self.x_max = x_max
         self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
         self.anchor_y_steps = args.anchor_y_steps
         self.num_y_steps = len(self.anchor_y_steps)
@@ -96,7 +99,7 @@ class LaneDataset(Dataset):
         if self.no_3d:
             self.anchor_dim = self.num_y_steps + 1
         else:
-            self.anchor_dim = 2*self.num_y_steps + 1
+            self.anchor_dim = 3*self.num_y_steps + 1
 
         # parse ground-truth file
         if self.dataset_name is 'tusimple':
@@ -113,7 +116,9 @@ class LaneDataset(Dataset):
                 self._laneline_ass_ids, \
                 self._centerline_ass_ids, \
                 self._x_off_std, \
-                self._z_std = self.init_dataset_3D(dataset_base_dir, json_file_path)
+                self._z_std, \
+                self._gt_laneline_visibility_all, \
+                self._gt_centerline_visibility_all = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
 
         # normalize label values
@@ -134,12 +139,9 @@ class LaneDataset(Dataset):
         if not self.fix_cam:
             gt_cam_height = self._label_cam_height_all[idx]
             gt_cam_pitch = self._label_cam_pitch_all[idx]
-            # H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
-            # H_im2g = np.linalg.inv(H_g2im)
         else:
             gt_cam_height = self.cam_height
             gt_cam_pitch = self.cam_pitch
-            # H_im2g = self.H_im2g
 
         img_name = self._label_image_path[idx]
 
@@ -151,45 +153,48 @@ class LaneDataset(Dataset):
         image = F.resize(image, size=(self.h_net, self.w_net), interpolation=Image.BILINEAR)
 
         gt_anchor = np.zeros([np.int32(self.ipm_w / 8), self.num_types, self.anchor_dim], dtype=np.float32)
-
         gt_lanes = self._label_laneline_all[idx]
+        gt_vis_inds = self._gt_laneline_visibility_all[idx]
         for i in range(len(gt_lanes)):
-            # # convert gt label to anchor label
-            # ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
 
             # if ass_id >= 0:
             ass_id = self._laneline_ass_ids[idx][i]
             x_off_values = gt_lanes[i][:, 0]
             z_values = gt_lanes[i][:, 1]
+            visibility = gt_vis_inds[i]
             # assign anchor tensor values
             gt_anchor[ass_id, 0, 0: self.num_y_steps] = x_off_values
             if not self.no_3d:
-                gt_anchor[ass_id, 0, self.num_y_steps:2 * self.num_y_steps] = z_values
+                gt_anchor[ass_id, 0, self.num_y_steps:2*self.num_y_steps] = z_values
+                gt_anchor[ass_id, 0, 2*self.num_y_steps:3*self.num_y_steps] = visibility
+
             gt_anchor[ass_id, 0, -1] = 1.0
 
         # fetch centerlines when available
         if not self.no_centerline:
             gt_lanes = self._label_centerline_all[idx]
+            gt_vis_inds = self._gt_centerline_visibility_all[idx]
             for i in range(len(gt_lanes)):
-                # # convert gt label to anchor label
-                # ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
 
                 # if ass_id >= 0:
                 ass_id = self._centerline_ass_ids[idx][i]
                 x_off_values = gt_lanes[i][:, 0]
                 z_values = gt_lanes[i][:, 1]
+                visibility = gt_vis_inds[i]
 
                 # assign anchor tensor values
                 # if ass_id >= 0:
-                if gt_anchor[ass_id, 1, -1] > 0:  # the case one spliting lane has been assigned
+                if gt_anchor[ass_id, 1, -1] > 0:  # the case one splitting lane has been assigned
                     gt_anchor[ass_id, 2, 0: self.num_y_steps] = x_off_values
                     if not self.no_3d:
                         gt_anchor[ass_id, 2, self.num_y_steps:2*self.num_y_steps] = z_values
+                        gt_anchor[ass_id, 2, 2*self.num_y_steps:3*self.num_y_steps] = visibility
                     gt_anchor[ass_id, 2, -1] = 1.0
                 else:
                     gt_anchor[ass_id, 1, 0: self.num_y_steps] = x_off_values
                     if not self.no_3d:
                         gt_anchor[ass_id, 1, self.num_y_steps:2*self.num_y_steps] = z_values
+                        gt_anchor[ass_id, 1, 2*self.num_y_steps:3*self.num_y_steps] = visibility
                     gt_anchor[ass_id, 1, -1] = 1.0
 
         if self.data_aug:
@@ -209,7 +214,7 @@ class LaneDataset(Dataset):
     def init_dataset_3D(self, dataset_base_dir, json_file_path):
         """
         :param dataset_info_file:
-        :return: image paths, labels in normalized net input coordinates
+        :return: image paths, labels in unormalized net input coordinates
 
         data processing:
         ground truth labels map are scaled wrt network input sizes
@@ -261,61 +266,89 @@ class LaneDataset(Dataset):
         gt_cam_pitch_all = np.array(gt_cam_pitch_all)
 
         # convert labeled laneline to anchor format
+        gt_laneline_visibility_all = [None] * len(gt_laneline_pts_all)
+        gt_centerline_visibility_all = [None] * len(gt_centerline_pts_all)
         gt_laneline_ass_ids = []
         gt_centerline_ass_ids = []
         lane_x_off_all = []
         lane_z_all = []
+        visibility_all_flat = []
         for idx in range(len(gt_laneline_pts_all)):
-
             # fetch camera height and pitch
             if not self.fix_cam:
                 gt_cam_height = gt_cam_height_all[idx]
                 gt_cam_pitch = gt_cam_pitch_all[idx]
+                P_g2im = projection_g2im(gt_cam_pitch, gt_cam_height, self.K)
                 H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
                 H_im2g = np.linalg.inv(H_g2im)
             else:
+                P_g2im = self.P_g2im
                 H_im2g = self.H_im2g
+            P_g2gflat = np.matmul(H_im2g, P_g2im)
 
             gt_lanes = gt_laneline_pts_all[idx]
+            # convert 3d lanes to flat ground space
+            self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
             gt_anchors = []
             ass_ids = []
             for i in range(len(gt_lanes)):
                 # convert gt label to anchor label
+                # consider individual out-of-range interpolation still visible
                 ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
                 if ass_id >= 0:
                     gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                     ass_ids.append(ass_id)
-                    lane_x_off_all.append(x_off_values)
-                    lane_z_all.append(z_values)
+            # decide visibility from global road profile, return sorted anchors and ass_ids
+            gt_visibilty, gt_anchors, ass_ids = self.compute_visibility_lanes_gflat(gt_anchors, ass_ids)
+
+            for i in range(len(gt_anchors)):
+                lane_x_off_all.append(gt_anchors[i][:, 0])
+                lane_z_all.append(gt_anchors[i][:, 1])
+            visibility_all_flat.extend(gt_visibilty)
             gt_laneline_ass_ids.append(ass_ids)
             gt_laneline_pts_all[idx] = gt_anchors
+            gt_laneline_visibility_all[idx] = gt_visibilty
 
             if not self.no_centerline:
                 gt_lanes = gt_centerline_pts_all[idx]
+                # convert 3d lanes to flat ground space
+                self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
                 gt_anchors = []
                 ass_ids = []
                 for i in range(len(gt_lanes)):
                     # convert gt label to anchor label
+                    # consider individual out-of-range interpolation still visible
                     ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
                     if ass_id >= 0:
                         gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                         ass_ids.append(ass_id)
-                        lane_x_off_all.append(x_off_values)
-                        lane_z_all.append(z_values)
+                # decide visibility from global road profile, return sorted anchors and ass_ids
+                gt_visibilty, gt_anchors, ass_ids = self.compute_visibility_lanes_gflat(gt_anchors, ass_ids)
+
+                for i in range(len(gt_anchors)):
+                    lane_x_off_all.append(gt_anchors[i][:, 0])
+                    lane_z_all.append(gt_anchors[i][:, 1])
+                visibility_all_flat.extend(gt_visibilty)
                 gt_centerline_ass_ids.append(ass_ids)
                 gt_centerline_pts_all[idx] = gt_anchors
+                gt_centerline_visibility_all[idx] = gt_visibilty
 
         lane_x_off_all = np.array(lane_x_off_all)
         lane_z_all = np.array(lane_z_all)
-        # TODO: should not direct compute std, it will be based on the actual mean, but we want to enforce mean 0
-        lane_x_off_std = np.std(lane_x_off_all, axis=0)
-        lane_z_std = np.std(lane_z_all, axis=0)
-        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all, gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_z_std
+        visibility_all_flat = np.array(visibility_all_flat)
+
+        # computed weighted std based on visibility
+        lane_x_off_std = np.sqrt(np.average(lane_x_off_all**2, weights=visibility_all_flat, axis=0))
+        lane_z_std = np.sqrt(np.average(lane_z_all**2, weights=visibility_all_flat, axis=0))
+
+        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all,\
+               gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_z_std,\
+               gt_laneline_visibility_all, gt_centerline_visibility_all
 
     def init_dataset_tusimple(self, dataset_base_dir, json_file_path):
         """
         :param json_file_path:
-        :return: image paths, labels in normalized net input coordinates
+        :return: image paths, labels in unormalized net input coordinates
 
         data processing:
         ground truth labels map are scaled wrt network input sizes
@@ -398,7 +431,86 @@ class LaneDataset(Dataset):
                     if not self.no_3d:
                         lane[:, 1] = np.divide(lane[:, 1], self._z_std)
 
+    def convert_lanes_3d_to_gflat(self, lanes, P_g2gflat):
+        """
+            Convert a set of lanes from 3D ground coordinates [X, Y, Z], to IPM-based
+            flat ground coordinates [x_gflat, y_gflat, Z]
+        :param lanes: a list of N x 3 numpy arrays recording a set of 3d lanes
+        :param P_g2gflat: projection matrix from 3D ground coordinates to frat ground coordinates
+        :return:
+        """
+        for lane in lanes:
+            # convert gt label to anchor label
+            lane_gflat_x, lane_gflat_y = projective_transformation(P_g2gflat, lane[:, 0], lane[:, 1], lane[:, 2])
+            lane[:, 0] = lane_gflat_x
+            lane[:, 1] = lane_gflat_y
+
+    def compute_visibility_lanes_gflat(self, lane_anchors, ass_ids):
+        """
+            Compute the visibility of each anchor point in flat ground space. The reasoning requires all the considering
+            lanes globally.
+        :param lane_anchors: A list of N x 2 numpy arrays where N equals to number of Y steps in anchor representation
+                             x offset and z values are recorded for each lane
+               ass_ids: the associated id determine the base x value
+        :return:
+        """
+        if len(lane_anchors) is 0:
+            return [], [], []
+
+        vis_inds_lanes = []
+        # sort the lane_anchors by the order of ass_ids, such that lanes are recorded from left to right
+        sort_idx = np.argsort(ass_ids)
+        lane_anchors = [lane_anchors[i] for i in sort_idx]
+        ass_ids = [ass_ids[i] for i in sort_idx]
+
+        min_x_vec = lane_anchors[0][:, 0] + self.anchor_x_steps[ass_ids[0]]
+        max_x_vec = lane_anchors[-1][:, 0] + self.anchor_x_steps[ass_ids[-1]]
+        for i, lane in enumerate(lane_anchors):
+            vis_inds = np.ones(lane.shape[0])
+            for j in range(lane.shape[0]):
+                x_value = lane[j, 0] + self.anchor_x_steps[ass_ids[i]]
+                if x_value < 2*self.x_min or x_value > 2*self.x_max:
+                    vis_inds[j:] = 0
+                # A point with x < the left most lane's current x is considered invisible
+                # A point with x > the right most lane's current x is considered invisible
+                if x_value < min_x_vec[j] - 0.01 or x_value > max_x_vec[j] + 0.01:
+                    vis_inds[j:] = 0
+                    break
+                # A point with orientation close enough to horizontal is considered as invisible
+                if j > 0:
+                    dx = lane[j, 0] - lane[j-1, 0]
+                    dy = self.anchor_y_steps[j] - self.anchor_y_steps[j-1]
+                    if dx/dy > 10:
+                        vis_inds[j:] = 0
+                        break
+            vis_inds_lanes.append(vis_inds)
+        return vis_inds_lanes, lane_anchors, ass_ids
+
+    def make_lane_y_mono_inc(self, lane):
+        """
+            Due to lose of height dim, projected lanes to flat ground plane may not have monotonically increasing y.
+            This function trace the y with monotonically increasing y, and output a pruned lane
+        :param lane:
+        :return:
+        """
+        idx2del = []
+        max_y = lane[0, 1]
+        for i in range(1, lane.shape[0]):
+            if lane[i, 1] <= max_y:
+                idx2del.append(i)
+            else:
+                max_y = lane[i, 1]
+        return np.delete(lane, idx2del, 0)
+
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
+        """
+            Convert a set of ground-truth lane points to the format of network anchor representation.
+        :param laneline_gt:
+        :param H_im2g:
+        :return: ass_id: the column id of current lane in anchor representation
+                 x_off_values: current lane's x offset from it associated anchor column
+                 z_values: current lane's z value in ground coordinates
+        """
         if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
             gt_lane_2d = laneline_gt
             # project to ground coordinates
@@ -410,16 +522,25 @@ class LaneDataset(Dataset):
             gt_lane_3d = laneline_gt
 
         # remove points with y out of range
-        # 3D label will miss super long straight-line with only two points
+        # 3D label may miss super long straight-line with only two points
         # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
-        if self.dataset_name is 'tusimple':
-            gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 100), ...]
-            if gt_lane_3d.shape[0] < 2:
-                return -1, np.array([]), np.array([])
+        gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 2*self.top_view_region[0, 1]), ...]
+        if gt_lane_3d.shape[0] < 2:
+            return -1, np.array([]), np.array([])
+
+        # remove lane points out of x range
+        gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 0] > 2*self.x_min,
+                                               gt_lane_3d[:, 0] < 2*self.x_max), ...]
+
+        if gt_lane_3d.shape[0] < 2:
+            return -1, np.array([]), np.array([])
 
         if self.dataset_name is 'tusimple':
             # reverse the order of 3d pints to make the first point the closest
             gt_lane_3d = gt_lane_3d[::-1, :]
+
+        # only keep the portion y is monotonically increasing
+        gt_lane_3d = self.make_lane_y_mono_inc(gt_lane_3d)
 
         # ignore GT does not pass y_ref
         if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -436,6 +557,11 @@ class LaneDataset(Dataset):
         return ass_id, x_off_values, z_values
 
     def transform_mats(self, idx):
+        """
+            return the transform matrices associated with sample idx
+        :param idx:
+        :return:
+        """
         if not self.fix_cam:
             H_g2im = homograpthy_g2im(self._label_cam_pitch_all[idx],
                                       self._label_cam_height_all[idx], self.K)
@@ -443,10 +569,10 @@ class LaneDataset(Dataset):
                                      self._label_cam_height_all[idx], self.K)
 
             H_im2ipm = np.linalg.inv(np.matmul(self.H_crop, np.matmul(H_g2im, self.H_ipm2g)))
-            if self.no_3d:
-                return H_g2im, self.H_crop, H_im2ipm
-            else:
-                return P_g2im, self.H_crop, H_im2ipm
+            # if self.no_3d:
+            return H_g2im, self.H_crop, H_im2ipm
+            # else:
+                # return P_g2im, self.H_crop, H_im2ipm
         else:
             return self.H_g2im, self.H_crop, self.H_im2ipm
 
@@ -590,8 +716,8 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     # apply nms to output lanes probabilities
     # consider w/o centerline cases
     pred_anchor[:, anchor_dim - 1] = nms_1d(pred_anchor[:, anchor_dim - 1])
-    pred_anchor[:, 2 * anchor_dim - 1] = nms_1d(pred_anchor[:, 2 * anchor_dim - 1])
-    pred_anchor[:, 3 * anchor_dim - 1] = nms_1d(pred_anchor[:, 3 * anchor_dim - 1])
+    pred_anchor[:, 2*anchor_dim - 1] = nms_1d(pred_anchor[:, 2*anchor_dim - 1])
+    pred_anchor[:, 3*anchor_dim - 1] = nms_1d(pred_anchor[:, 3*anchor_dim - 1])
 
     for j in range(pred_anchor.shape[0]):
         # draw laneline
@@ -603,18 +729,18 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             lanelines_out.append(line.data.tolist())
 
         # draw centerline
-        if pred_anchor[j, 2 * anchor_dim - 1] > prob_th:
+        if pred_anchor[j, 2*anchor_dim - 1] > prob_th:
             x_offsets = pred_anchor[j, anchor_dim:anchor_dim + num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
-            z_g = pred_anchor[j, anchor_dim + num_y_steps:2 * anchor_dim - 1]
+            z_g = pred_anchor[j, anchor_dim + num_y_steps:2*anchor_dim - 1]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
             centerlines_out.append(line.data.tolist())
 
         # draw the additional centerline for the merging case
-        if pred_anchor[j, 3 * anchor_dim - 1] > prob_th:
-            x_offsets = pred_anchor[j, 2 * anchor_dim:2 * anchor_dim + num_y_steps]
+        if pred_anchor[j, 3*anchor_dim - 1] > prob_th:
+            x_offsets = pred_anchor[j, 2*anchor_dim:2*anchor_dim + num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
-            z_g = pred_anchor[j, 2 * anchor_dim + num_y_steps:3 * anchor_dim - 1]
+            z_g = pred_anchor[j, 2*anchor_dim + num_y_steps:3*anchor_dim - 1]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
             centerlines_out.append(line.data.tolist())
 
@@ -625,11 +751,11 @@ def unormalize_lane_anchor(anchor, dataset):
     num_y_steps = dataset.num_y_steps
     anchor_dim = dataset.anchor_dim
     for i in range(dataset.num_types):
-        anchor[:, i * anchor_dim : i * anchor_dim + num_y_steps] = \
-            np.multiply(anchor[:, i * anchor_dim: i * anchor_dim + num_y_steps], dataset._x_off_std)
+        anchor[:, i*anchor_dim:i*anchor_dim + num_y_steps] = \
+            np.multiply(anchor[:, i*anchor_dim: i*anchor_dim + num_y_steps], dataset._x_off_std)
         if not dataset.no_3d:
-            anchor[:, i * anchor_dim + num_y_steps: (i+1) * anchor_dim-1] = \
-                np.multiply(anchor[:, i * anchor_dim + num_y_steps: (i+1) * anchor_dim-1], dataset._z_std)
+            anchor[:, i*anchor_dim + num_y_steps: i*anchor_dim + 2*num_y_steps] = \
+                np.multiply(anchor[:, i*anchor_dim + num_y_steps: i*anchor_dim + 2*num_y_steps], dataset._z_std)
 
 
 # unit test
@@ -691,19 +817,19 @@ if __name__ == '__main__':
                 print('found an invalid normalized sample')
             img = np.clip(img, 0, 1)
 
-            if args.no_3d:
-                H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
-                M = np.matmul(H_crop, H_g2im)
-                # update transformation with image augmentation
-                M = np.matmul(aug_mat[i], M)
-                x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
-            else:
-                P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
-                M = np.matmul(H_crop, P_g2im)
-                # update transformation with image augmentation
-                M = np.matmul(aug_mat[i], M)
-                x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
-                                                       vis_border_3d[:, 1], np.zeros(vis_border_3d.shape[0]))
+            # if args.no_3d:
+            H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
+            M = np.matmul(H_crop, H_g2im)
+            # update transformation with image augmentation
+            M = np.matmul(aug_mat[i], M)
+            x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
+            # else:
+            #     P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
+            #     M = np.matmul(H_crop, P_g2im)
+            #     # update transformation with image augmentation
+            #     M = np.matmul(aug_mat[i], M)
+            #     x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
+            #                                            vis_border_3d[:, 1], np.zeros(vis_border_3d.shape[0]))
             # update transformation with image augmentation
             H_im2ipm = np.matmul(H_im2ipm, np.linalg.inv(aug_mat[i]))
             im_ipm = cv2.warpPerspective(img, H_im2ipm, (args.ipm_w, args.ipm_h))
@@ -722,9 +848,9 @@ if __name__ == '__main__':
             unormalize_lane_anchor(gt_anchor, dataset)
 
             # visualize ground-truth anchor lanelines by projecting them on the image
-            img = visualizer.draw_on_img(img, gt_anchor, M, 'laneline', color=[0, 0, 1])
+            img = visualizer.draw_on_img_new(img, gt_anchor, M, 'laneline', color=[0, 0, 1])
             if not args.no_centerline:
-                img = visualizer.draw_on_img(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
+                img = visualizer.draw_on_img_new(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
 
             cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
                         (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
@@ -732,9 +858,9 @@ if __name__ == '__main__':
                         (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
 
             # visualize on ipm
-            im_ipm = visualizer.draw_on_ipm(im_ipm, gt_anchor, 'laneline', color=[0, 0, 1])
+            im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'laneline', color=[0, 0, 1])
             if not args.no_centerline:
-                im_ipm = visualizer.draw_on_ipm(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
+                im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
