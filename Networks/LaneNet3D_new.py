@@ -418,13 +418,12 @@ class Net(nn.Module):
         :return:
         """
         for i in range(self.batch_size):
-
             M, M_inv = homography_im2ipm_norm(args.top_view_region, np.array([args.org_h, args.org_w]),
                                               args.crop_y, np.array([args.resize_h, args.resize_w]),
-                                              cam_pitch[i], cam_height[i], args.K)
+                                              cam_pitch[i].data.cpu().numpy(), cam_height[i].data.cpu().numpy(), args.K)
             self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
-            self.cam_height = cam_height
-            self.cam_pitch = cam_pitch
+        self.cam_height = cam_height
+        self.cam_pitch = cam_pitch
 
     def update_projection_for_data_aug(self, aug_mats):
         """

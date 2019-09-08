@@ -76,6 +76,7 @@ class LaneDataset(Dataset):
             # compute the homography between image and IPM, and crop transformation
             self.cam_height = args.cam_height
             self.cam_pitch = np.pi / 180 * args.pitch
+            self.P_g2im = projection_g2im(self.cam_pitch, self.cam_height, args.K)
             self.H_g2im = homograpthy_g2im(self.cam_pitch, args.cam_height, args.K)
             self.H_im2g = np.linalg.inv(self.H_g2im)
             self.H_im2ipm = np.linalg.inv(np.matmul(self.H_crop, np.matmul(self.H_g2im, self.H_ipm2g)))
@@ -443,12 +444,9 @@ class LaneDataset(Dataset):
                                      self._label_cam_height_all[idx], self.K)
 
             H_im2ipm = np.linalg.inv(np.matmul(self.H_crop, np.matmul(H_g2im, self.H_ipm2g)))
-            if self.no_3d:
-                return H_g2im, self.H_crop, H_im2ipm
-            else:
-                return P_g2im, self.H_crop, H_im2ipm
+            return H_g2im, P_g2im, self.H_crop, H_im2ipm
         else:
-            return self.H_g2im, self.H_crop, self.H_im2ipm
+            return self.H_g2im, self.P_g2im, self.H_crop, self.H_im2ipm
 
 
 def resample_laneline_in_y(input_lane, y_steps):

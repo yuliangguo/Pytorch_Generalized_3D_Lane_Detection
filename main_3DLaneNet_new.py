@@ -17,9 +17,9 @@ import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_3D_loss
-from Networks.LaneNet3D import Net
+from Dataloader.Load_Data_3DLane_new import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Networks.Loss_crit import Laneline_3D_loss_new
+from Networks.LaneNet3D_new import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, Visualizer
@@ -92,7 +92,7 @@ def train_net():
         anchor_dim = 2 * args.num_y_steps + 1
 
     # Define loss criteria
-    criterion = Laneline_3D_loss(num_lane_type, anchor_dim, args.pred_cam)
+    criterion = Laneline_3D_loss_new(num_lane_type, args.num_y_steps, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
@@ -255,8 +255,8 @@ def train_net():
 
             # Plot curves in two views
             if (i + 1) % args.save_freq == 0:
-                vs_saver.save_result(train_dataset, 'train', epoch, i, idx,
-                                     input, gt, output_net, pred_pitch, pred_hcam, aug_mat)
+                vs_saver.save_result_new(train_dataset, 'train', epoch, i, idx,
+                                         input, gt, output_net, pred_pitch, pred_hcam, aug_mat)
 
         losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file, epoch)
 
@@ -365,15 +365,17 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                               'Loss {loss.val:.8f} ({loss.avg:.8f})'.format(
                                i+1, len(loader), loss=losses))
 
+                # TODO: visualization and output results need to convert detection back to real 3D space
+
                 # Plot curves in two views
                 if (i + 1) % args.save_freq == 0 or args.evaluate:
-                    vs_saver.save_result(dataset, 'valid', epoch, i, idx,
-                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=args.evaluate)
+                    vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
+                                             input, gt, output_net, pred_pitch, pred_hcam, evaluate=args.evaluate)
 
                 # write results and evaluate
                 for j in range(num_el):
                     im_id = idx[j]
-                    H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[j])
+                    H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[j])
                     json_line = valid_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
@@ -386,8 +388,10 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
+                        P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
+                                                                               anchor_x_steps, args.anchor_y_steps,
+                                                                               pred_hcam, args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
@@ -471,6 +475,9 @@ if __name__ == '__main__':
         args.min_num_pixels = 10
         evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
+
+    # define the network model
+    args.mod = '3DLaneNet_new'
 
     # for the case only running evaluation
     args.evaluate = False

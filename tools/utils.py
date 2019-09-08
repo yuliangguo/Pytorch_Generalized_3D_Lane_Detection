@@ -132,7 +132,7 @@ def sim3d_config(args):
     args.no_centerline = False
     args.no_3d = False
     args.fix_cam = False
-    args.pred_cam = True
+    args.pred_cam = False
 
     # set camera parameters for the test datasets
     args.K = np.array([[2015., 0., 960.],
@@ -432,6 +432,56 @@ class Visualizer:
                 z_g = lane_anchor[j, 2*self.anchor_dim + self.num_y_steps:2*self.anchor_dim + 2*self.num_y_steps]
                 ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
 
+    def draw_3d_curves_new(self, ax, lane_anchor, h_cam, draw_type='laneline', color=[0, 0, 1]):
+        for j in range(lane_anchor.shape[0]):
+            # draw laneline
+            if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, :self.num_y_steps]
+                x_gflat = x_offsets + self.anchor_x_steps[j]
+                z_g = lane_anchor[j, self.num_y_steps:2*self.num_y_steps]
+                visibility = lane_anchor[j, 2*self.num_y_steps:3*self.num_y_steps]
+                x_gflat = x_gflat[np.where(visibility > self.prob_th)]
+                z_g = z_g[np.where(visibility > self.prob_th)]
+                if len(x_gflat) > 0:
+                    # transform lane detected in flat ground space to 3d ground space
+                    x_g, y_g = transform_lane_gflat2g(h_cam,
+                                                      x_gflat,
+                                                      self.anchor_y_steps[np.where(visibility > self.prob_th)],
+                                                      z_g)
+                    ax.plot(x_g, y_g, z_g, color=color)
+
+            # draw centerline
+            if draw_type is 'centerline' and lane_anchor[j, 2*self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, self.anchor_dim:self.anchor_dim + self.num_y_steps]
+                x_gflat = x_offsets + self.anchor_x_steps[j]
+                z_g = lane_anchor[j, self.anchor_dim + self.num_y_steps:self.anchor_dim + 2*self.num_y_steps]
+                visibility = lane_anchor[j, self.anchor_dim + 2*self.num_y_steps:self.anchor_dim + 3*self.num_y_steps]
+                x_gflat = x_gflat[np.where(visibility > self.prob_th)]
+                z_g = z_g[np.where(visibility > self.prob_th)]
+                if len(x_gflat) > 0:
+                    # transform lane detected in flat ground space to 3d ground space
+                    x_g, y_g = transform_lane_gflat2g(h_cam,
+                                                      x_gflat,
+                                                      self.anchor_y_steps[np.where(visibility > self.prob_th)],
+                                                      z_g)
+                    ax.plot(x_g, y_g, z_g, color=color)
+
+            # draw the additional centerline for the merging case
+            if draw_type is 'centerline' and lane_anchor[j, 3*self.anchor_dim - 1] > self.prob_th:
+                x_offsets = lane_anchor[j, 2*self.anchor_dim:2*self.anchor_dim + self.num_y_steps]
+                x_gflat = x_offsets + self.anchor_x_steps[j]
+                z_g = lane_anchor[j, 2*self.anchor_dim + self.num_y_steps:2*self.anchor_dim + 2*self.num_y_steps]
+                visibility = lane_anchor[j, 2*self.anchor_dim + 2*self.num_y_steps:2*self.anchor_dim + 3*self.num_y_steps]
+                x_gflat = x_gflat[np.where(visibility > self.prob_th)]
+                z_g = z_g[np.where(visibility > self.prob_th)]
+                if len(x_gflat) > 0:
+                    # transform lane detected in flat ground space to 3d ground space
+                    x_g, y_g = transform_lane_gflat2g(h_cam,
+                                                      x_gflat,
+                                                      self.anchor_y_steps[np.where(visibility > self.prob_th)],
+                                                      z_g)
+                    ax.plot(x_g, y_g, z_g, color=color)
+
     def save_result(self, dataset, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, aug_mat=np.identity(3, dtype=np.float), evaluate=False):
         if not dataset.data_aug:
             aug_mat = np.repeat(np.expand_dims(aug_mat, axis=0), idx.shape[0], axis=0)
@@ -458,8 +508,8 @@ class Visualizer:
                 pred_anchors[:, 2 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 2 * self.anchor_dim - 1])
                 pred_anchors[:, 3 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 3 * self.anchor_dim - 1])
 
+            H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
             if self.no_3d:
-                H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 P_gt = np.matmul(H_crop, H_g2im)
                 H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
                                                pred_cam_height[i], dataset.K)
@@ -469,7 +519,6 @@ class Visualizer:
                 P_gt = np.matmul(aug_mat[i, :, :], P_gt)
                 P_pred = np.matmul(aug_mat[i, :, :], P_pred)
             else:
-                P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 P_gt = np.matmul(H_crop, P_g2im)
                 P_g2im_pred = projection_g2im(pred_cam_pitch[i],
                                               pred_cam_height[i], dataset.K)
@@ -544,6 +593,135 @@ class Visualizer:
                 ax6.set_ylabel('y axis')
                 ax6.set_zlabel('z axis')
                 bottom, top = ax6.get_zlim()
+                ax6.set_zlim(min(bottom, -1), max(top, 1))
+
+            if evaluate:
+                fig.savefig(self.save_path + '/example/' + self.vis_folder + '/infer_{}'.format(idx[i]))
+            else:
+                fig.savefig(self.save_path + '/example/{}/epoch-{}_batch-{}_idx-{}'.format(train_or_val,
+                                                                                           epoch, batch_i, idx[i]))
+            plt.clf()
+            plt.close(fig)
+
+    def save_result_new(self, dataset, train_or_val, epoch, batch_i, idx, images, gt, pred, pred_cam_pitch, pred_cam_height, aug_mat=np.identity(3, dtype=np.float), evaluate=False):
+        if not dataset.data_aug:
+            aug_mat = np.repeat(np.expand_dims(aug_mat, axis=0), idx.shape[0], axis=0)
+
+        for i in range(idx.shape[0]):
+            # during training, only visualize the first sample of this batch
+            if i > 0 and not evaluate:
+                break
+            im = images.permute(0, 2, 3, 1).data.cpu().numpy()[i]
+            # the vgg_std and vgg_mean are for images in [0, 1] range
+            im = im * np.array(self.vgg_std)
+            im = im + np.array(self.vgg_mean)
+            im = np.clip(im, 0, 1)
+
+            gt_anchors = gt[i]
+            pred_anchors = pred[i]
+
+            # apply nms to avoid output directly neighbored lanes
+            # consider w/o centerline cases
+            if self.no_centerline:
+                pred_anchors[:, -1] = nms_1d(pred_anchors[:, -1])
+            else:
+                pred_anchors[:, self.anchor_dim - 1] = nms_1d(pred_anchors[:, self.anchor_dim - 1])
+                pred_anchors[:, 2 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 2 * self.anchor_dim - 1])
+                pred_anchors[:, 3 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 3 * self.anchor_dim - 1])
+
+            H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
+            if self.no_3d:
+                P_gt = np.matmul(H_crop, H_g2im)
+                H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
+                                               pred_cam_height[i], dataset.K)
+                P_pred = np.matmul(H_crop, H_g2im_pred)
+
+                # consider data augmentation
+                P_gt = np.matmul(aug_mat[i, :, :], P_gt)
+                P_pred = np.matmul(aug_mat[i, :, :], P_pred)
+            else:
+                P_gt = np.matmul(H_crop, P_g2im)
+                P_g2im_pred = projection_g2im(pred_cam_pitch[i],
+                                              pred_cam_height[i], dataset.K)
+                P_pred = np.matmul(H_crop, P_g2im_pred)
+
+                # consider data augmentation
+                P_gt = np.matmul(aug_mat[i, :, :], P_gt)
+                P_pred = np.matmul(aug_mat[i, :, :], P_pred)
+
+                P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
+
+            # update transformation with image augmentation
+            H_im2ipm = np.matmul(H_im2ipm, np.linalg.inv(aug_mat[i, :, :]))
+            im_ipm = cv2.warpPerspective(im, H_im2ipm, (self.ipm_w, self.ipm_h))
+            im_ipm = np.clip(im_ipm, 0, 1)
+
+            # draw lanes on image
+            im_laneline = im.copy()
+            im_laneline = self.draw_on_img_new(im_laneline, gt_anchors, P_gt, 'laneline', [0, 0, 1])
+            im_laneline = self.draw_on_img_new(im_laneline, pred_anchors, P_pred, 'laneline', [1, 0, 0])
+            if not self.no_centerline:
+                im_centerline = im.copy()
+                im_centerline = self.draw_on_img_new(im_centerline, gt_anchors, P_gt, 'centerline', [0, 0, 1])
+                im_centerline = self.draw_on_img_new(im_centerline, pred_anchors, P_pred, 'centerline', [1, 0, 0])
+
+            # draw lanes on ipm
+            ipm_laneline = im_ipm.copy()
+            ipm_laneline = self.draw_on_ipm_new(ipm_laneline, gt_anchors, 'laneline', [0, 0, 1])
+            ipm_laneline = self.draw_on_ipm_new(ipm_laneline, pred_anchors, 'laneline', [1, 0, 0])
+            if not self.no_centerline:
+                ipm_centerline = im_ipm.copy()
+                ipm_centerline = self.draw_on_ipm_new(ipm_centerline, gt_anchors, 'centerline', [0, 0, 1])
+                ipm_centerline = self.draw_on_ipm_new(ipm_centerline, pred_anchors, 'centerline', [1, 0, 0])
+
+            # plot on a single figure
+            if self.no_centerline and self.no_3d:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(121)
+                ax2 = fig.add_subplot(122)
+                ax1.imshow(im_laneline)
+                ax2.imshow(ipm_laneline)
+            elif not self.no_centerline and self.no_3d:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(221)
+                ax2 = fig.add_subplot(222)
+                ax3 = fig.add_subplot(223)
+                ax4 = fig.add_subplot(224)
+                ax1.imshow(im_laneline)
+                ax2.imshow(ipm_laneline)
+                ax3.imshow(im_centerline)
+                ax4.imshow(ipm_centerline)
+            elif not self.no_centerline and not self.no_3d:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(231)
+                ax2 = fig.add_subplot(232)
+                ax3 = fig.add_subplot(233, projection='3d')
+                ax4 = fig.add_subplot(234)
+                ax5 = fig.add_subplot(235)
+                ax6 = fig.add_subplot(236, projection='3d')
+                ax1.imshow(im_laneline)
+                ax2.imshow(ipm_laneline)
+                # TODO:use separate gt_cam_height when ready
+                self.draw_3d_curves_new(ax3, gt_anchors, pred_cam_height[i], 'laneline', [0, 0, 1])
+                self.draw_3d_curves_new(ax3, pred_anchors, pred_cam_height[i], 'laneline', [1, 0, 0])
+                bottom, top = ax3.get_zlim()
+                ax3.set_xlim(-40, 40)
+                ax3.set_ylim(0, 100)
+                ax3.set_zlim(min(bottom, -1), max(top, 1))
+                ax3.set_xlabel('x axis')
+                ax3.set_ylabel('y axis')
+                ax3.set_zlabel('z axis')
+                ax4.imshow(im_centerline)
+                ax5.imshow(ipm_centerline)
+                # TODO:use separate gt_cam_height when ready
+                self.draw_3d_curves_new(ax6, gt_anchors, pred_cam_height[i], 'centerline', [0, 0, 1])
+                self.draw_3d_curves_new(ax6, pred_anchors, pred_cam_height[i], 'centerline', [1, 0, 0])
+                ax6.set_xlabel('x axis')
+                ax6.set_ylabel('y axis')
+                ax6.set_zlabel('z axis')
+                bottom, top = ax6.get_zlim()
+                ax6.set_xlim(-40, 40)
+                ax6.set_ylim(0, 100)
                 ax6.set_zlim(min(bottom, -1), max(top, 1))
 
             if evaluate:
@@ -672,6 +850,49 @@ def projective_transformation(Matrix, x, y, z):
     y_vals = trans[1, :]/trans[2, :]
     return x_vals, y_vals
 
+
+def transform_lane_gflat2g(h_cam, X_gflat, Y_gflat, Z_g):
+    """
+        Given X coordinates in flat ground space, Y coordinates in flat ground space, and Z coordinates in real 3D ground space
+        with projection matrix from 3D ground to flat ground, compute real 3D coordinates X, Y in 3D ground space.
+
+    :param P_g2gflat: a 3 X 4 matrix transforms lane form 3d ground x,y,z to flat ground x, y
+    :param X_gflat: X coordinates in flat ground space
+    :param Y_gflat: Y coordinates in flat ground space
+    :param Z_g: Z coordinates in real 3D ground space
+    :return:
+    """
+
+    Y_g = Y_gflat - Y_gflat * Z_g / h_cam
+    X_g = X_gflat * Y_g / Y_gflat
+    X_g[np.where(Y_gflat == 0)] = X_gflat[np.where(Y_gflat == 0)]
+
+    return X_g, Y_g
+
+
+# def transform_lane_gflat2g(P_g2gflat, X_gflat, Y_gflat, Z_g):
+#     """
+#         Given X coordinates in flat ground space, Y coordinates in flat ground space, and Z coordinates in real 3D ground space
+#         with projection matrix from 3D ground to flat ground, compute real 3D coordinates X, Y in 3D ground space.
+#
+#     :param P_g2gflat: a 3 X 4 matrix transforms lane form 3d ground x,y,z to flat ground x, y
+#     :param X_gflat: X coordinates in flat ground space
+#     :param Y_gflat: Y coordinates in flat ground space
+#     :param Z_g: Z coordinates in real 3D ground space
+#     :return:
+#     """
+#     P_gflat2g = np.linalg.inv(np.vstack((P_g2gflat, np.array([[0, 0, 0, 1]]))))
+#     g_flat_coords = np.vstack((X_gflat, Y_gflat, np.ones_like(X_gflat), np.ones_like(X_gflat)))
+#     trans = np.matmul(P_gflat2g, g_flat_coords)
+#
+#     x = trans[0, :]/trans[3, :]
+#     y = trans[1, :]/trans[3, :]
+#     z = trans[2, :]/trans[3, :]
+#
+#     # scale with estimated Z_g
+#     X_g = x / z * Z_g
+#     Y_g = y / z * Z_g
+#     return X_g, Y_g
 
 def nms_1d(v):
     """

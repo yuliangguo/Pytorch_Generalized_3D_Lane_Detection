@@ -218,7 +218,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                 # write results and evaluate
                 for j in range(num_el):
                     im_id = idx[j]
-                    H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[j])
+                    H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[j])
                     json_line = test_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format

@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
-    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer
+    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, transform_lane_gflat2g
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -574,12 +574,9 @@ class LaneDataset(Dataset):
                                      self._label_cam_height_all[idx], self.K)
 
             H_im2ipm = np.linalg.inv(np.matmul(self.H_crop, np.matmul(H_g2im, self.H_ipm2g)))
-            # if self.no_3d:
-            return H_g2im, self.H_crop, H_im2ipm
-            # else:
-                # return P_g2im, self.H_crop, H_im2ipm
+            return H_g2im, P_g2im, self.H_crop, H_im2ipm
         else:
-            return self.H_g2im, self.H_crop, self.H_im2ipm
+            return self.H_g2im, self.P_g2im, self.H_crop, self.H_im2ipm
 
 
 def resample_laneline_in_y(input_lane, y_steps):
@@ -713,7 +710,7 @@ def compute_tusimple_lanes(pred_anchor, h_samples, H_g2im, anchor_x_steps, ancho
     return lanes_out
 
 
-def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, prob_th=0.5):
+def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, h_cam, prob_th=0.5):
     lanelines_out = []
     centerlines_out = []
     num_y_steps = anchor_y_steps.shape[0]
@@ -724,29 +721,48 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     pred_anchor[:, 2*anchor_dim - 1] = nms_1d(pred_anchor[:, 2*anchor_dim - 1])
     pred_anchor[:, 3*anchor_dim - 1] = nms_1d(pred_anchor[:, 3*anchor_dim - 1])
 
+    # output only the visible portion of lane
     for j in range(pred_anchor.shape[0]):
         # draw laneline
         if pred_anchor[j, anchor_dim - 1] > prob_th:
             x_offsets = pred_anchor[j, :num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
-            z_g = pred_anchor[j, num_y_steps:anchor_dim - 1]
+            z_g = pred_anchor[j, num_y_steps:2*num_y_steps]
+            visibility = pred_anchor[j, 2*num_y_steps:3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
+            line = line[np.where(visibility > prob_th), :]
+            # convert to 3D ground space
+            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+            line[:, 0] = x_g
+            line[:, 1] = y_g
             lanelines_out.append(line.data.tolist())
 
         # draw centerline
         if pred_anchor[j, 2*anchor_dim - 1] > prob_th:
             x_offsets = pred_anchor[j, anchor_dim:anchor_dim + num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
-            z_g = pred_anchor[j, anchor_dim + num_y_steps:2*anchor_dim - 1]
+            z_g = pred_anchor[j, anchor_dim + num_y_steps:anchor_dim + 2*num_y_steps]
+            visibility = pred_anchor[j, anchor_dim + 2*num_y_steps:anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
+            line = line[np.where(visibility > prob_th), :]
+            # convert to 3D ground space
+            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+            line[:, 0] = x_g
+            line[:, 1] = y_g
             centerlines_out.append(line.data.tolist())
 
         # draw the additional centerline for the merging case
         if pred_anchor[j, 3*anchor_dim - 1] > prob_th:
             x_offsets = pred_anchor[j, 2*anchor_dim:2*anchor_dim + num_y_steps]
             x_g = x_offsets + anchor_x_steps[j]
-            z_g = pred_anchor[j, 2*anchor_dim + num_y_steps:3*anchor_dim - 1]
+            z_g = pred_anchor[j, 2*anchor_dim + num_y_steps:2*anchor_dim + 2*num_y_steps]
+            visibility = pred_anchor[j, 2*anchor_dim + 2*num_y_steps:2*anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
+            line = line[np.where(visibility > prob_th), :]
+            # convert to 3D ground space
+            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+            line[:, 0] = x_g
+            line[:, 1] = y_g
             centerlines_out.append(line.data.tolist())
 
     return lanelines_out, centerlines_out
@@ -827,18 +843,12 @@ if __name__ == '__main__':
             img = np.clip(img, 0, 1)
 
             # if args.no_3d:
-            H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
+            H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
             M = np.matmul(H_crop, H_g2im)
             # update transformation with image augmentation
             M = np.matmul(aug_mat[i], M)
             x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
-            # else:
-            #     P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
-            #     M = np.matmul(H_crop, P_g2im)
-            #     # update transformation with image augmentation
-            #     M = np.matmul(aug_mat[i], M)
-            #     x_2d, y_2d = projective_transformation(M, vis_border_3d[:, 0],
-            #                                            vis_border_3d[:, 1], np.zeros(vis_border_3d.shape[0]))
+
             # update transformation with image augmentation
             H_im2ipm = np.matmul(H_im2ipm, np.linalg.inv(aug_mat[i]))
             im_ipm = cv2.warpPerspective(img, H_im2ipm, (args.ipm_w, args.ipm_h))
