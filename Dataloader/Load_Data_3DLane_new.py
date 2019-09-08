@@ -730,12 +730,13 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             z_g = pred_anchor[j, num_y_steps:2*num_y_steps]
             visibility = pred_anchor[j, 2*num_y_steps:3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
-            line = line[np.where(visibility > prob_th), :]
-            # convert to 3D ground space
-            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
-            line[:, 0] = x_g
-            line[:, 1] = y_g
-            lanelines_out.append(line.data.tolist())
+            line = line[visibility > prob_th, :]
+            if line.shape[0] > 1:
+                # convert to 3D ground space
+                x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+                line[:, 0] = x_g
+                line[:, 1] = y_g
+                lanelines_out.append(line.data.tolist())
 
         # draw centerline
         if pred_anchor[j, 2*anchor_dim - 1] > prob_th:
@@ -744,12 +745,13 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             z_g = pred_anchor[j, anchor_dim + num_y_steps:anchor_dim + 2*num_y_steps]
             visibility = pred_anchor[j, anchor_dim + 2*num_y_steps:anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
-            line = line[np.where(visibility > prob_th), :]
-            # convert to 3D ground space
-            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
-            line[:, 0] = x_g
-            line[:, 1] = y_g
-            centerlines_out.append(line.data.tolist())
+            line = line[visibility > prob_th, :]
+            if line.shape[0] > 1:
+                # convert to 3D ground space
+                x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+                line[:, 0] = x_g
+                line[:, 1] = y_g
+                centerlines_out.append(line.data.tolist())
 
         # draw the additional centerline for the merging case
         if pred_anchor[j, 3*anchor_dim - 1] > prob_th:
@@ -758,12 +760,13 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             z_g = pred_anchor[j, 2*anchor_dim + num_y_steps:2*anchor_dim + 2*num_y_steps]
             visibility = pred_anchor[j, 2*anchor_dim + 2*num_y_steps:2*anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
-            line = line[np.where(visibility > prob_th), :]
-            # convert to 3D ground space
-            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
-            line[:, 0] = x_g
-            line[:, 1] = y_g
-            centerlines_out.append(line.data.tolist())
+            line = line[visibility > prob_th, :]
+            if line.shape[0] > 1:
+                # convert to 3D ground space
+                x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+                line[:, 0] = x_g
+                line[:, 1] = y_g
+                centerlines_out.append(line.data.tolist())
 
     return lanelines_out, centerlines_out
 

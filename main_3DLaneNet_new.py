@@ -391,7 +391,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                         P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps,
-                                                                               pred_hcam, args.prob_th)
+                                                                               pred_hcam[j], args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
