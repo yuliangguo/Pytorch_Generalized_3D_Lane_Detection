@@ -123,8 +123,8 @@ class LaneDataset(Dataset):
                 self._gt_centerline_visibility_all = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
 
-        # normalize label values
-        self.normalize_lane_label()
+        # # normalize label values: manual execute in main function, in case overwriting stds is needed
+        # self.normalize_lane_label()
 
     def __len__(self):
         """
@@ -490,22 +490,6 @@ class LaneDataset(Dataset):
             vis_inds_lanes.append(vis_inds)
         return vis_inds_lanes, lane_anchors, ass_ids
 
-    def make_lane_y_mono_inc(self, lane):
-        """
-            Due to lose of height dim, projected lanes to flat ground plane may not have monotonically increasing y.
-            This function trace the y with monotonically increasing y, and output a pruned lane
-        :param lane:
-        :return:
-        """
-        idx2del = []
-        max_y = lane[0, 1]
-        for i in range(1, lane.shape[0]):
-            if lane[i, 1] <= max_y:
-                idx2del.append(i)
-            else:
-                max_y = lane[i, 1]
-        return np.delete(lane, idx2del, 0)
-
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
         """
             Convert a set of ground-truth lane points to the format of network anchor representation.
@@ -545,7 +529,7 @@ class LaneDataset(Dataset):
             gt_lane_3d = gt_lane_3d[::-1, :]
 
         # only keep the portion y is monotonically increasing
-        gt_lane_3d = self.make_lane_y_mono_inc(gt_lane_3d)
+        gt_lane_3d = make_lane_y_mono_inc(gt_lane_3d)
 
         # ignore GT does not pass y_ref
         if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -577,6 +561,23 @@ class LaneDataset(Dataset):
             return H_g2im, P_g2im, self.H_crop, H_im2ipm
         else:
             return self.H_g2im, self.P_g2im, self.H_crop, self.H_im2ipm
+
+
+def make_lane_y_mono_inc(lane):
+    """
+        Due to lose of height dim, projected lanes to flat ground plane may not have monotonically increasing y.
+        This function trace the y with monotonically increasing y, and output a pruned lane
+    :param lane:
+    :return:
+    """
+    idx2del = []
+    max_y = lane[0, 1]
+    for i in range(1, lane.shape[0]):
+        if lane[i, 1] <= max_y:
+            idx2del.append(i)
+        else:
+            max_y = lane[i, 1]
+    return np.delete(lane, idx2del, 0)
 
 
 def resample_laneline_in_y(input_lane, y_steps):

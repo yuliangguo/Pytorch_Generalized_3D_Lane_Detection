@@ -117,8 +117,8 @@ class LaneDataset(Dataset):
                 self._z_std = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
 
-        # normalize label values
-        self.normalize_lane_label()
+        # # normalize label values: manual execute in main function, in case overwriting stds is needed
+        # self.normalize_lane_label()
 
     def __len__(self):
         """
@@ -640,7 +640,7 @@ if __name__ == '__main__':
 
     # dataset_name 'tusimple' or 'sim3d'
     args.dataset_name = 'sim3d'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_2/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -653,6 +653,8 @@ if __name__ == '__main__':
     else:
         print('Not using a supported dataset')
         sys.exit()
+    args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
+    args.num_y_steps = len(args.anchor_y_steps)
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -660,7 +662,7 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'test2.json'), args, data_aug=True)
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps
 
@@ -689,14 +691,13 @@ if __name__ == '__main__':
                 print('found an invalid normalized sample')
             img = np.clip(img, 0, 1)
 
+            H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
             if args.no_3d:
-                H_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 M = np.matmul(H_crop, H_g2im)
                 # update transformation with image augmentation
                 M = np.matmul(aug_mat[i], M)
                 x_2d, y_2d = homographic_transformation(M, vis_border_3d[:, 0], vis_border_3d[:, 1])
             else:
-                P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
                 M = np.matmul(H_crop, P_g2im)
                 # update transformation with image augmentation
                 M = np.matmul(aug_mat[i], M)

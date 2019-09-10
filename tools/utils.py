@@ -158,12 +158,12 @@ def sim3d_config(args):
 
 class Visualizer:
     def __init__(self, args, vis_folder='eval_vis'):
+        self.save_path = args.save_path
         self.vis_folder = vis_folder
         self.no_3d = args.no_3d
         self.no_centerline = args.no_centerline
         self.vgg_mean = args.vgg_mean
         self.vgg_std = args.vgg_std
-        self.save_path = args.save_path
         self.ipm_w = args.ipm_w
         self.ipm_h = args.ipm_h
         self.num_y_steps = args.num_y_steps

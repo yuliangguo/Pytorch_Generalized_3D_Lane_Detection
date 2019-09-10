@@ -18,11 +18,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_3D_loss
-from Networks.LaneNet3D import Net
+from Dataloader.Load_Data_3DLane_new import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Networks.LaneNet3D_new import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, Visualizer
@@ -40,7 +38,6 @@ def main():
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
     train_dataset.normalize_lane_label()
     test_dataset = LaneDataset(args.test_dataset_dir, test_gt_file, args)
-    # assign std of test dataset to be consistent with train dataset
     test_dataset.set_x_off_std(train_dataset._x_off_std)
     if not args.no_3d:
         test_dataset.set_z_std(train_dataset._z_std)
@@ -210,8 +207,8 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     unormalize_lane_anchor(gt[j], dataset)
 
                 # Plot curves in two views
-                vs_saver.save_result(dataset, 'valid', epoch, i, idx,
-                                     input, gt, output_net, pred_pitch, pred_hcam, evaluate=True)
+                vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
+                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=True)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -230,7 +227,8 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
+                                                                               anchor_x_steps, args.anchor_y_steps,
+                                                                               pred_hcam[j], args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
@@ -266,7 +264,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global args
     parser = define_args()
@@ -287,7 +285,7 @@ if __name__ == '__main__':
         evaluator = eval_lane_tusimple.LaneEval
     elif args.dataset_name is 'sim3d':
         sim3d_config(args)
-        args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
+        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)
         # define evaluator
         args.pixel_per_meter = 10.
@@ -298,13 +296,13 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet'
+    args.mod = '3DLaneNet_new'
 
     # use batch 1 for testing
     args.batch_size = 1
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_2/'
     global vis_folder
     global test_gt_file

@@ -48,12 +48,14 @@ def train_net():
     # Dataloader for training and validation set
     val_gt_file = ops.join(args.data_dir, 'val.json')
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
+    train_dataset.normalize_lane_label()
     train_loader = get_loader(train_dataset, args)
     valid_dataset = LaneDataset(args.dataset_dir, val_gt_file, args)
     # assign std of valid dataset to be consistent with train dataset
     valid_dataset.set_x_off_std(train_dataset._x_off_std)
     if not args.no_3d:
         valid_dataset.set_z_std(train_dataset._z_std)
+    valid_dataset.normalize_lane_label()
     valid_loader = get_loader(valid_dataset, args)
 
     # extract valid set labels for evaluation later
@@ -80,19 +82,8 @@ def train_net():
                              args.learning_rate, args.weight_decay)
     scheduler = define_scheduler(optimizer, args)
 
-    if args.no_centerline:
-        num_lane_type = 1
-    else:
-        num_lane_type = 3
-
-    global anchor_dim
-    if args.no_3d:
-        anchor_dim = args.num_y_steps + 1
-    else:
-        anchor_dim = 2 * args.num_y_steps + 1
-
     # Define loss criteria
-    criterion = Laneline_3D_loss(num_lane_type, anchor_dim, args.pred_cam)
+    criterion = Laneline_3D_loss(train_dataset.num_types, train_dataset.anchor_dim, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
@@ -386,7 +377,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
-                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
+                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps, args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
@@ -464,6 +455,8 @@ if __name__ == '__main__':
         evaluator = eval_lane_tusimple.LaneEval
     elif args.dataset_name is 'sim3d':
         sim3d_config(args)
+        args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
+        args.num_y_steps = len(args.anchor_y_steps)
         # define evaluator
         args.pixel_per_meter = 10.
         args.dist_th = 1.5
@@ -471,6 +464,9 @@ if __name__ == '__main__':
         args.min_num_pixels = 10
         evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
+
+    # define the network model
+    args.mod = '3DLaneNet_new'
 
     # for the case only running evaluation
     args.evaluate = False

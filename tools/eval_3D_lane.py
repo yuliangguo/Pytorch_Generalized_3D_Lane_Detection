@@ -9,7 +9,7 @@ from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
     tusimple_config, sim3d_config
-from Dataloader.Load_Data_3DLane import resample_laneline_in_y
+from Dataloader.Load_Data_3DLane_new import resample_laneline_in_y, make_lane_y_mono_inc
 from tools.MinCostFlow import SolveMinCostFlow
 
 color = [[0, 0, 255],  # red
@@ -96,7 +96,9 @@ class LaneEval(object):
             gt_lanes[i] = np.vstack([x_values, z_values]).T
 
         for i in range(cnt_pred):
-            x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), y_samples)
+            # ATTENTION: ensure y mono increase before interpolation
+            pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
+            x_values, z_values = resample_laneline_in_y(pred_lanes[i], y_samples)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
@@ -125,7 +127,7 @@ class LaneEval(object):
                 x_dist_mat_far[i, j] = np.average(x_dist[close_range_idx:])
                 z_dist_mat_close[i, j] = np.average(z_dist[:close_range_idx])
                 z_dist_mat_far[i, j] = np.average(z_dist[close_range_idx:])
-                # ATTENTION: use sum and int here to meet the requirements of min cost flow optimization
+                # ATTENTION: use sum and int here to meet the requirements of min cost flow optimization (int type)
                 cost_mat[i, j] = np.sum(euclidean_dist).astype(np.int)
 
         # solve bipartite matching vis min cost flow solver
@@ -319,7 +321,7 @@ if __name__ == '__main__':
     args.min_num_pixels = 10
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d/Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True/val_pred_file.json'
+    pred_file = '../data/sim3d/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
     gt_file = '../data/sim3d/val.json'
 
     # try:

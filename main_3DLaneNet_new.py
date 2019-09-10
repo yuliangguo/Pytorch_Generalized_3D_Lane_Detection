@@ -54,6 +54,7 @@ def train_net():
     valid_dataset.set_x_off_std(train_dataset._x_off_std)
     if not args.no_3d:
         valid_dataset.set_z_std(train_dataset._z_std)
+    valid_dataset.normalize_lane_label()
     valid_loader = get_loader(valid_dataset, args)
 
     # extract valid set labels for evaluation later
@@ -80,19 +81,8 @@ def train_net():
                              args.learning_rate, args.weight_decay)
     scheduler = define_scheduler(optimizer, args)
 
-    if args.no_centerline:
-        num_lane_type = 1
-    else:
-        num_lane_type = 3
-
-    global anchor_dim
-    if args.no_3d:
-        anchor_dim = args.num_y_steps + 1
-    else:
-        anchor_dim = 2 * args.num_y_steps + 1
-
     # Define loss criteria
-    criterion = Laneline_3D_loss_new(num_lane_type, args.num_y_steps, args.pred_cam)
+    criterion = Laneline_3D_loss_new(train_dataset.num_types, args.num_y_steps, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
@@ -365,8 +355,6 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                               'Loss {loss.val:.8f} ({loss.avg:.8f})'.format(
                                i+1, len(loader), loss=losses))
 
-                # TODO: visualization and output results need to convert detection back to real 3D space
-
                 # Plot curves in two views
                 if (i + 1) % args.save_freq == 0 or args.evaluate:
                     vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
@@ -388,8 +376,8 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
-                        P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
-                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
+                        # P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
+                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps,
                                                                                pred_hcam[j], args.prob_th)
                         json_line["laneLines"] = lanelines_pred
@@ -468,6 +456,8 @@ if __name__ == '__main__':
         evaluator = eval_lane_tusimple.LaneEval
     elif args.dataset_name is 'sim3d':
         sim3d_config(args)
+        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
+        args.num_y_steps = len(args.anchor_y_steps)
         # define evaluator
         args.pixel_per_meter = 10.
         args.dist_th = 1.5
@@ -480,7 +470,7 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet_new'
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.print_freq = 50
