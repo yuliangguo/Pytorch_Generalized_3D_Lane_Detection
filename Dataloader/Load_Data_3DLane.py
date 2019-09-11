@@ -663,6 +663,7 @@ if __name__ == '__main__':
 
     # load data
     dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'test2.json'), args, data_aug=True)
+    dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps
 

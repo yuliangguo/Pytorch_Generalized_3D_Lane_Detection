@@ -276,8 +276,8 @@ class LaneDataset(Dataset):
         lane_z_all = []
         visibility_all_flat = []
         for idx in range(len(gt_laneline_pts_all)):
-            # if idx is 332:
-            #     print('here')
+            if idx == 483:
+                print('here')
             # fetch camera height and pitch
             if not self.fix_cam:
                 gt_cam_height = gt_cam_height_all[idx]
@@ -291,6 +291,9 @@ class LaneDataset(Dataset):
             P_g2gflat = np.matmul(H_im2g, P_g2im)
 
             gt_lanes = gt_laneline_pts_all[idx]
+            # prune far range before converting to flat ground space
+            gt_lanes = [self.prune_3d_lane_by_range(gt_lane) for gt_lane in gt_lanes]
+            gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 0]
             # convert 3d lanes to flat ground space
             self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
             gt_anchors = []
@@ -315,6 +318,9 @@ class LaneDataset(Dataset):
 
             if not self.no_centerline:
                 gt_lanes = gt_centerline_pts_all[idx]
+                # prune far range before converting to flat ground space
+                gt_lanes = [self.prune_3d_lane_by_range(gt_lane) for gt_lane in gt_lanes]
+                gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 0]
                 # convert 3d lanes to flat ground space
                 self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
                 gt_anchors = []
@@ -462,8 +468,12 @@ class LaneDataset(Dataset):
             return [], [], []
 
         vis_inds_lanes = []
-        # sort the lane_anchors by the order of ass_ids, such that lanes are recorded from left to right
-        sort_idx = np.argsort(ass_ids)
+        # sort the lane_anchors such that lanes are recorded from left to right
+        # sort the lane_anchors based on the x value at the closed anchor
+        # do NOT sort the lane_anchors by the order of ass_ids because there could be identical ass_ids
+
+        x_refs = [lane_anchors[i][0, 0] + self.anchor_x_steps[ass_ids[i]] for i in range(len(lane_anchors))]
+        sort_idx = np.argsort(x_refs)
         lane_anchors = [lane_anchors[i] for i in sort_idx]
         ass_ids = [ass_ids[i] for i in sort_idx]
 
@@ -473,7 +483,7 @@ class LaneDataset(Dataset):
             vis_inds = np.ones(lane.shape[0])
             for j in range(lane.shape[0]):
                 x_value = lane[j, 0] + self.anchor_x_steps[ass_ids[i]]
-                if x_value < 2*self.x_min or x_value > 2*self.x_max:
+                if x_value < 3*self.x_min or x_value > 3*self.x_max:
                     vis_inds[j:] = 0
                 # A point with x < the left most lane's current x is considered invisible
                 # A point with x > the right most lane's current x is considered invisible
@@ -484,11 +494,23 @@ class LaneDataset(Dataset):
                 if j > 0:
                     dx = lane[j, 0] - lane[j-1, 0]
                     dy = self.anchor_y_steps[j] - self.anchor_y_steps[j-1]
-                    if dx/dy > 10:
+                    if abs(dx/dy) > 5:
                         vis_inds[j:] = 0
                         break
             vis_inds_lanes.append(vis_inds)
         return vis_inds_lanes, lane_anchors, ass_ids
+
+    def prune_3d_lane_by_range(self, lane_3d):
+        # TODO: solve hard coded range later
+        # remove points with y out of range
+        # 3D label may miss super long straight-line with only two points: Not have to be 200, gt need a min-step
+        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
+        lane_3d = lane_3d[np.logical_and(lane_3d[:, 1] > 0, lane_3d[:, 1] < 200), ...]
+
+        # remove lane points out of x range
+        lane_3d = lane_3d[np.logical_and(lane_3d[:, 0] > 3 * self.x_min,
+                                               lane_3d[:, 0] < 3 * self.x_max), ...]
+        return lane_3d
 
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
         """
@@ -509,18 +531,8 @@ class LaneDataset(Dataset):
         else:  # For ground-truth in ground coordinates (Apollo Sim)
             gt_lane_3d = laneline_gt
 
-        # remove points with y out of range
-        # 3D label may miss super long straight-line with only two points
-        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
-        # TODO: change 200 to 2*self.top_view_region[0, 1]) when label step issue has been solved
-        gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 200), ...]
-        if gt_lane_3d.shape[0] < 2:
-            return -1, np.array([]), np.array([])
-
-        # remove lane points out of x range
-        gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 0] > 2*self.x_min,
-                                               gt_lane_3d[:, 0] < 2*self.x_max), ...]
-
+        # prune out points not in valid range
+        gt_lane_3d = self.prune_3d_lane_by_range(gt_lane_3d)
         if gt_lane_3d.shape[0] < 2:
             return -1, np.array([]), np.array([])
 
@@ -530,15 +542,17 @@ class LaneDataset(Dataset):
 
         # only keep the portion y is monotonically increasing
         gt_lane_3d = make_lane_y_mono_inc(gt_lane_3d)
+        if gt_lane_3d.shape[0] < 2:
+            return -1, np.array([]), np.array([])
 
-        # ignore GT does not pass y_ref
+        # ignore GT does not pass y_ref; TODO: should allow larger range, but need to solve gt merge first
         if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
             return -1, np.array([]), np.array([])
 
         # resample ground-truth laneline at anchor y steps
         x_values, z_values = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps)
 
-        # decide association at r_ref
+        # decide association at r_ref; TODO: x_values[1] is hard-coded
         ass_id = np.argmin((self.anchor_x_steps - x_values[1]) ** 2)
         # compute offset values
         x_off_values = x_values - self.anchor_x_steps[ass_id]
@@ -573,11 +587,32 @@ def make_lane_y_mono_inc(lane):
     idx2del = []
     max_y = lane[0, 1]
     for i in range(1, lane.shape[0]):
-        if lane[i, 1] <= max_y:
+        # TODO: hard-coded a smallest step, so the far-away near horizontal tail can be pruned
+        if lane[i, 1] <= max_y + 3:
             idx2del.append(i)
         else:
             max_y = lane[i, 1]
-    return np.delete(lane, idx2del, 0)
+    lane = np.delete(lane, idx2del, 0)
+
+    return lane
+
+
+# def make_lane_y_mono_inc(lane):
+#     """
+#         Due to lose of height dim, projected lanes to flat ground plane may not have monotonically increasing y.
+#         This function trace the y with monotonically increasing y, and output a pruned lane
+#     :param lane:
+#     :return:
+#     """
+#     idx2del = -1
+#     max_y = lane[0, 1]
+#     for i in range(1, lane.shape[0]):
+#         if lane[i, 1] <= max_y:
+#             idx2del = i
+#             break
+#     if idx2del:
+#         return lane[:idx2del, :]
+#     return lane
 
 
 def resample_laneline_in_y(input_lane, y_steps):
@@ -793,7 +828,7 @@ if __name__ == '__main__':
 
     # dataset_name 'tusimple' or 'sim3d'
     args.dataset_name = 'sim3d'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_2/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -809,6 +844,7 @@ if __name__ == '__main__':
 
     # define the network model
     args.mod = '3DLaneNet_new'
+    # args.y_ref = 10.0
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -816,7 +852,8 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'test2.json'), args, data_aug=True)
+    dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps
 
@@ -885,6 +922,7 @@ if __name__ == '__main__':
             if not args.no_centerline:
                 im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
+            # if idx[i] == 483:
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))

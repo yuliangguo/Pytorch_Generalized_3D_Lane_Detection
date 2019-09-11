@@ -26,7 +26,7 @@ img_width = 1920
 K = np.array([[2015.0,      0, 960.0],
              [      0, 2015.0, 540.0],
              [      0,      0,     1]])
-vis = False
+vis = True
 
 
 def get_lists(test_file):

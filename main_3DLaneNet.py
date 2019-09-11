@@ -466,10 +466,10 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_new'
+    args.mod = '3DLaneNet'
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.print_freq = 50
