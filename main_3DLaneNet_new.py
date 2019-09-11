@@ -48,6 +48,7 @@ def train_net():
     # Dataloader for training and validation set
     val_gt_file = ops.join(args.data_dir, 'val.json')
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
+    train_dataset.normalize_lane_label()
     train_loader = get_loader(train_dataset, args)
     valid_dataset = LaneDataset(args.dataset_dir, val_gt_file, args)
     # assign std of valid dataset to be consistent with train dataset
@@ -470,7 +471,7 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet_new'
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.print_freq = 50
