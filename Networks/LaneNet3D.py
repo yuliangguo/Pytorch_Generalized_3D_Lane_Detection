@@ -231,8 +231,8 @@ class LanePredictionHead(nn.Module):
 
         # reshape is needed before executing later layers
         dim_rt_layers = []
-        dim_rt_layers += make_one_layer(256, 64, kernel_size=1, padding=0, batch_norm=batch_norm)
-        dim_rt_layers += [nn.Conv2d(64, num_lane_type*anchor_dim, kernel_size=1, padding=0)]
+        dim_rt_layers += make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=batch_norm)
+        dim_rt_layers += [nn.Conv2d(128, num_lane_type*anchor_dim, kernel_size=1, padding=0)]
         self.dim_rt = nn.Sequential(*dim_rt_layers)
 
     def forward(self, x):

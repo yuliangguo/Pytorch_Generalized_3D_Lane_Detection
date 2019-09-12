@@ -11,7 +11,7 @@ if __name__ == '__main__':
     json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
 
     output_folder = '../data/sim3d/'
-    split_ratio = [0.8, 0.1]
+    split_ratio = [0.8, 0.2]
     if not ops.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -35,14 +35,16 @@ if __name__ == '__main__':
     # output folder: baidu_all_data_runs/run_1, run_2, ...
     random.shuffle(lines)
     lines_train = lines[0:N1]
-    lines_val = lines[N1:N1+N2]
-    lines_test = lines[N1+N2:]
     with open(output_folder + '/train.json', 'w') as f:
         f.writelines("%s" % l for l in lines_train)
     f.close()
+
+    lines_val = lines[N1:N1+N2]
     with open(output_folder + '/val.json', 'w') as f:
         f.writelines("%s" % l for l in lines_val)
     f.close()
-    with open(output_folder + '/test.json', 'w') as f:
-        f.writelines("%s" % l for l in lines_test)
-    f.close()
+
+    # lines_test = lines[N1+N2:]
+    # with open(output_folder + '/test.json', 'w') as f:
+    #     f.writelines("%s" % l for l in lines_test)
+    # f.close()

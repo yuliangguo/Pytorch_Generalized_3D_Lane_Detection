@@ -27,6 +27,7 @@ K = np.array([[2015.0,      0, 960.0],
              [      0, 2015.0, 540.0],
              [      0,      0,     1]])
 vis = True
+merge = True
 
 
 def get_lists(test_file):
@@ -48,6 +49,9 @@ def get_lists(test_file):
 def laneline_label_generator(base_folder, image_name, label_name, output_gt_file):
     img = cv2.imread(base_folder + image_name)
     # label_img = np.zeros((img_height, img_width), dtype=np.int8)
+
+    # if image_name == 'images/00/0000062.jpg':
+    #     print('here')
 
     # extract lanes and types from ground-truth label file
     centerlines, lanelines, cam_height, cam_pitch = process_lane_label_apollo_sim_3D(base_folder + label_name)
@@ -78,6 +82,9 @@ def laneline_label_generator(base_folder, image_name, label_name, output_gt_file
                            (int(lane2D[j-1, 0]), int(lane2D[j-1, 1])),
                            (int(lane2D[j, 0]), int(lane2D[j, 1])),
                            color=[255, 0, 0])
+        # draw end points
+        cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
+        cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
 
     for i, lane3D in enumerate(lanelines):
         lane3D = np.array(lane3D)
@@ -94,6 +101,9 @@ def laneline_label_generator(base_folder, image_name, label_name, output_gt_file
                            (int(lane2D[j-1, 0]), int(lane2D[j-1, 1])),
                            (int(lane2D[j, 0]), int(lane2D[j, 1])),
                            color=[0, 255, 0])
+        # draw end points
+        cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
+        cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
 
     # generate json
     result = {}
@@ -124,18 +134,85 @@ def process_lane_label_apollo_sim_3D(label_file):
     with open(label_file, 'r') as jf:
         lane_data = json.load(jf)
 
-    centerlanes_in = lane_data['laneList']
+    centerlines_in = lane_data['laneList']
     lanelines_in = lane_data['laneBoundaryList']
 
+    # register each lane by its id for access
+    centerline_dict = {lane['id']: lane for lane in centerlines_in}
+    centerline2del = {lane['id']: 0 for lane in centerlines_in}
+
+    laneline_dict = {lane['id']: lane for lane in lanelines_in}
+    laneline2del = {lane['id']: 0 for lane in lanelines_in}
+
+    # merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
+    for id, centerlane in centerline_dict.items():
+        if merge:
+            centerlane['successorList'] = [sid for sid in centerlane['successorList'] if sid in centerline_dict]
+            # handle 1 to 1 and 2 to 1 cases by extending the first, and marking the second segment to delete
+            if len(centerlane['successorList']) == 1:
+                centerlane2 = centerline_dict[centerlane['successorList'][0]]
+                # TODO: remove this condition when raw label successor list all corrected
+                if 0 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 1:
+                    centerlane['pos3DInCameraList'].extend(centerlane2['pos3DInCameraList'])
+                    centerline2del[centerlane2['id']] = 1
+
+                # merge associated lanelines
+                if centerlane['leftBoundaryId'] in laneline_dict and centerlane2['leftBoundaryId'] in laneline_dict:
+                    left_laneline = laneline_dict[centerlane['leftBoundaryId']]
+                    left_laneline2 = laneline_dict[centerlane2['leftBoundaryId']]
+                    # only merge those have not been dealt from other centerlane associations
+                    if 0 <= left_laneline2['pos3DInCameraList'][0]['z'] - left_laneline['pos3DInCameraList'][-1]['z'] < 1:
+                        left_laneline['pos3DInCameraList'].extend(left_laneline2['pos3DInCameraList'])
+                        laneline2del[left_laneline2['id']] = 1
+
+                if centerlane['rightBoundaryId'] in laneline_dict and centerlane2['rightBoundaryId'] in laneline_dict:
+                    right_laneline = laneline_dict[centerlane['rightBoundaryId']]
+                    right_laneline2 = laneline_dict[centerlane2['rightBoundaryId']]
+                    # only merge those have not been dealt from other centerlane associations
+                    if 0 <= right_laneline2['pos3DInCameraList'][0]['z'] - right_laneline['pos3DInCameraList'][-1]['z'] < 1:
+                        right_laneline['pos3DInCameraList'].extend(right_laneline2['pos3DInCameraList'])
+                        laneline2del[right_laneline2['id']] = 1
+
+            #  handle 1 to 2 case by extending the second and marking the first segment to delete
+            elif len(centerlane['successorList']) > 1:
+                for second_id in centerlane['successorList']:
+                    centerlane2 = centerline_dict[second_id]
+                    # TODO: remove this condition when raw label successor list all corrected
+                    if 0 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 1:
+                        centerlane2['pos3DInCameraList'] = centerlane['pos3DInCameraList'] + centerlane2['pos3DInCameraList']
+                        centerline2del[id] = 1
+
+                    # merge associated lanelines
+                    if centerlane['leftBoundaryId'] in laneline_dict and centerlane2['leftBoundaryId'] in laneline_dict:
+                        left_laneline = laneline_dict[centerlane['leftBoundaryId']]
+                        left_laneline2 = laneline_dict[centerlane2['leftBoundaryId']]
+                        # only merge those have not been dealt from other centerlane associations
+                        if 0 <= left_laneline2['pos3DInCameraList'][0]['z'] - left_laneline['pos3DInCameraList'][-1]['z'] < 1:
+                            left_laneline2['pos3DInCameraList'] = left_laneline['pos3DInCameraList'] + left_laneline2['pos3DInCameraList']
+                            laneline2del[left_laneline['id']] = 1
+
+                    if centerlane['rightBoundaryId'] in laneline_dict and centerlane2['rightBoundaryId'] in laneline_dict:
+                        right_laneline = laneline_dict[centerlane['rightBoundaryId']]
+                        right_laneline2 = laneline_dict[centerlane2['rightBoundaryId']]
+                        # only merge those have not been dealt from other centerlane associations
+                        if 0 <= right_laneline2['pos3DInCameraList'][0]['z'] - right_laneline['pos3DInCameraList'][-1]['z'] < 1:
+                            right_laneline2['pos3DInCameraList'] = right_laneline['pos3DInCameraList'] + right_laneline2['pos3DInCameraList']
+                            laneline2del[right_laneline['id']] = 1
+
+    # convert to output format
     centerlanes_out = []
-    for centerlane_in in centerlanes_in:
+    for i, centerlane_in in enumerate(centerlines_in):
+        if centerline2del[centerlane_in['id']]:
+            continue
         centerlane_out = []
         for pt_3d in centerlane_in['pos3DInCameraList']:
             centerlane_out.append([pt_3d['x'], pt_3d['y'], pt_3d['z']])
         centerlanes_out.append(centerlane_out)
 
     lanelines_out = []
-    for laneline_in in lanelines_in:
+    for i, laneline_in in enumerate(lanelines_in):
+        if laneline2del[laneline_in['id']]:
+            continue
         laneline_out = []
         for pt_3d in laneline_in['pos3DInCameraList']:
             laneline_out.append([pt_3d['x'], pt_3d['y'], pt_3d['z']])
