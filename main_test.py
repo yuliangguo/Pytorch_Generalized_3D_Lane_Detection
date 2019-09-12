@@ -266,7 +266,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
@@ -287,7 +287,8 @@ if __name__ == '__main__':
         evaluator = eval_lane_tusimple.LaneEval
     elif args.dataset_name is 'sim3d':
         sim3d_config(args)
-        args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
+        # args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
+        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)
         # define evaluator
         args.pixel_per_meter = 10.

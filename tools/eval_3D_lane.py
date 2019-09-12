@@ -96,9 +96,9 @@ class LaneEval(object):
             gt_lanes[i] = np.vstack([x_values, z_values]).T
 
         for i in range(cnt_pred):
-            # ATTENTION: ensure y mono increase before interpolation
-            pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
-            x_values, z_values = resample_laneline_in_y(pred_lanes[i], y_samples)
+            # # ATTENTION: ensure y mono increase before interpolation: but it can reduce size
+            # pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
+            x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), y_samples)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
@@ -164,11 +164,11 @@ class LaneEval(object):
                     os.makedirs(save_path)
                 except OSError as e:
                     print(e.message)
-        try:
-            pred_lines = open(pred_file).readlines()
-            json_pred = [json.loads(line) for line in pred_lines]
-        except BaseException as e:
-            raise Exception('Fail to load json file of the prediction.')
+        # try:
+        pred_lines = open(pred_file).readlines()
+        json_pred = [json.loads(line) for line in pred_lines]
+        # except BaseException as e:
+        #     raise Exception('Fail to load json file of the prediction.')
         json_gt = [json.loads(line) for line in open(gt_file).readlines()]
         if len(json_gt) != len(json_pred):
             raise Exception('We do not get the predictions of all the test tasks')
@@ -321,8 +321,8 @@ if __name__ == '__main__':
     args.min_num_pixels = 10
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d/val.json'
+    pred_file = '../data/sim3d/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test2_pred_file.json'
+    gt_file = '../data/sim3d/test2.json'
 
     # try:
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=True)

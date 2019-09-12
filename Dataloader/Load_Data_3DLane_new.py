@@ -767,7 +767,7 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             visibility = pred_anchor[j, 2*num_y_steps:3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
             line = line[visibility > prob_th, :]
-            if line.shape[0] > 1:
+            if line.shape[0] >= 2:
                 # convert to 3D ground space
                 x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
                 line[:, 0] = x_g
@@ -782,7 +782,7 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             visibility = pred_anchor[j, anchor_dim + 2*num_y_steps:anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
             line = line[visibility > prob_th, :]
-            if line.shape[0] > 1:
+            if line.shape[0] >= 2:
                 # convert to 3D ground space
                 x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
                 line[:, 0] = x_g
@@ -797,7 +797,7 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             visibility = pred_anchor[j, 2*anchor_dim + 2*num_y_steps:2*anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
             line = line[visibility > prob_th, :]
-            if line.shape[0] > 1:
+            if line.shape[0] >= 2:
                 # convert to 3D ground space
                 x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
                 line[:, 0] = x_g
