@@ -130,75 +130,76 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                 im = im * np.array(args.vgg_std)
                 im = im + np.array(args.vgg_mean)
 
-                # compute attention map for visualization
-                x1_feat = np.sum(np.square(x1_feat), axis=0)
-                x2_feat = np.sum(np.square(x2_feat), axis=0)
-                x3_feat = np.sum(np.square(x3_feat), axis=0)
-                x4_feat = np.sum(np.square(x4_feat), axis=0)
-                x1_proj = np.sum(np.square(x1_proj), axis=0)
-                x2_proj = np.sum(np.square(x2_proj), axis=0)
-                x3_proj = np.sum(np.square(x3_proj), axis=0)
-                x4_proj = np.sum(np.square(x4_proj), axis=0)
-                top_2 = np.sum(np.square(top_2), axis=0)
-                top_3 = np.sum(np.square(top_3), axis=0)
-                top_4 = np.sum(np.square(top_4), axis=0)
+                if vis_feat:
+                    # compute attention map for visualization
+                    x1_feat = np.sum(np.square(x1_feat), axis=0)
+                    x2_feat = np.sum(np.square(x2_feat), axis=0)
+                    x3_feat = np.sum(np.square(x3_feat), axis=0)
+                    x4_feat = np.sum(np.square(x4_feat), axis=0)
+                    x1_proj = np.sum(np.square(x1_proj), axis=0)
+                    x2_proj = np.sum(np.square(x2_proj), axis=0)
+                    x3_proj = np.sum(np.square(x3_proj), axis=0)
+                    x4_proj = np.sum(np.square(x4_proj), axis=0)
+                    top_2 = np.sum(np.square(top_2), axis=0)
+                    top_3 = np.sum(np.square(top_3), axis=0)
+                    top_4 = np.sum(np.square(top_4), axis=0)
 
-                x1_feat = x1_feat/np.max(x1_feat)
-                x2_feat = x2_feat/np.max(x2_feat)
-                x3_feat = x3_feat/np.max(x3_feat)
-                x4_feat = x4_feat/np.max(x4_feat)
-                x1_proj = x1_proj/np.max(x1_proj)
-                x2_proj = x2_proj/np.max(x2_proj)
-                x3_proj = x3_proj/np.max(x3_proj)
-                x4_proj = x4_proj/np.max(x4_proj)
-                top_2 = top_2/np.max(top_2)
-                top_3 = top_3/np.max(top_3)
-                top_4 = top_4/np.max(top_4)
+                    x1_feat = x1_feat/np.max(x1_feat)
+                    x2_feat = x2_feat/np.max(x2_feat)
+                    x3_feat = x3_feat/np.max(x3_feat)
+                    x4_feat = x4_feat/np.max(x4_feat)
+                    x1_proj = x1_proj/np.max(x1_proj)
+                    x2_proj = x2_proj/np.max(x2_proj)
+                    x3_proj = x3_proj/np.max(x3_proj)
+                    x4_proj = x4_proj/np.max(x4_proj)
+                    top_2 = top_2/np.max(top_2)
+                    top_3 = top_3/np.max(top_3)
+                    top_4 = top_4/np.max(top_4)
 
-                # visualize features
-                fig = plt.figure()
+                    # visualize features
+                    fig = plt.figure()
 
-                plt.subplot(341)
-                plt.title('img feat1', fontsize=30)
-                plt.imshow(x1_feat)
-                plt.subplot(342)
-                plt.title('img feat2', fontsize=30)
-                plt.imshow(x2_feat)
-                plt.subplot(343)
-                plt.title('img feat3', fontsize=30)
-                plt.imshow(x3_feat)
-                plt.subplot(344)
-                plt.title('img feat4', fontsize=30)
-                plt.imshow(x4_feat)
+                    plt.subplot(341)
+                    plt.title('img feat1', fontsize=30)
+                    plt.imshow(x1_feat)
+                    plt.subplot(342)
+                    plt.title('img feat2', fontsize=30)
+                    plt.imshow(x2_feat)
+                    plt.subplot(343)
+                    plt.title('img feat3', fontsize=30)
+                    plt.imshow(x3_feat)
+                    plt.subplot(344)
+                    plt.title('img feat4', fontsize=30)
+                    plt.imshow(x4_feat)
 
-                plt.subplot(345)
-                plt.title('proj feat1', fontsize=30)
-                plt.imshow(x1_proj)
-                plt.subplot(346)
-                plt.title('proj feat2', fontsize=30)
-                plt.imshow(x2_proj)
-                plt.subplot(347)
-                plt.title('proj feat3', fontsize=30)
-                plt.imshow(x3_proj)
-                plt.subplot(348)
-                plt.title('proj feat4', fontsize=30)
-                plt.imshow(x4_proj)
+                    plt.subplot(345)
+                    plt.title('proj feat1', fontsize=30)
+                    plt.imshow(x1_proj)
+                    plt.subplot(346)
+                    plt.title('proj feat2', fontsize=30)
+                    plt.imshow(x2_proj)
+                    plt.subplot(347)
+                    plt.title('proj feat3', fontsize=30)
+                    plt.imshow(x3_proj)
+                    plt.subplot(348)
+                    plt.title('proj feat4', fontsize=30)
+                    plt.imshow(x4_proj)
 
-                plt.subplot(349)
-                plt.title('image', fontsize=30)
-                plt.imshow(im)
-                plt.subplot(3, 4, 10)
-                plt.title('top feat2', fontsize=30)
-                plt.imshow(top_2)
-                plt.subplot(3, 4, 11)
-                plt.title('top feat3', fontsize=30)
-                plt.imshow(top_3)
-                plt.subplot(3, 4, 12)
-                plt.title('top feat4', fontsize=30)
-                plt.imshow(top_4)
+                    plt.subplot(349)
+                    plt.title('image', fontsize=30)
+                    plt.imshow(im)
+                    plt.subplot(3, 4, 10)
+                    plt.title('top feat2', fontsize=30)
+                    plt.imshow(top_2)
+                    plt.subplot(3, 4, 11)
+                    plt.title('top feat3', fontsize=30)
+                    plt.imshow(top_3)
+                    plt.subplot(3, 4, 12)
+                    plt.title('top feat4', fontsize=30)
+                    plt.imshow(top_4)
 
-                plt.savefig(args.save_path + '/example/' + vis_folder + '/features_{}'.format(idx[0]))
-                plt.close(fig)
+                    plt.savefig(args.save_path + '/example/' + vis_folder + '/features_{}'.format(idx[0]))
+                    plt.close(fig)
 
                 # unormalize lane outputs
                 num_el = input.size(0)
@@ -226,7 +227,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif args.dataset_name is 'sim3d':
-                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, anchor_dim,
+                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps,
                                                                                pred_hcam[j], args.prob_th)
                         json_line["laneLines"] = lanelines_pred
@@ -264,11 +265,14 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     global args
     parser = define_args()
     args = parser.parse_args()
+
+    global vis_feat
+    vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
     args.dataset_name = 'sim3d'
@@ -299,11 +303,11 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet_new'
 
     # use batch 1 for testing
-    args.batch_size = 1
+    args.batch_size = 8
 
     # settings for save and visualize
     args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
-    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_2/'
+    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
     global vis_folder
     global test_gt_file
     global lane_pred_file
