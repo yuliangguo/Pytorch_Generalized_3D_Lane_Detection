@@ -737,6 +737,59 @@ class Visualizer:
             plt.close(fig)
 
 
+def resample_laneline_in_y(input_lane, y_steps):
+    """
+        Interpolate x, z values at each anchor grid, including those beyond the range of input lnae y range
+    :param input_lane: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
+                       It requires y values of input lane in ascending order
+    :param y_steps: a vector of steps in y
+    :return:
+    """
+
+    # at least two points are included
+    assert(input_lane.shape[0] >= 2)
+
+    x_values = np.zeros_like(y_steps, dtype=np.float32)
+    z_values = np.zeros_like(y_steps, dtype=np.float32)
+
+    if input_lane.shape[1] < 3:
+        input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)
+
+    j = 0
+    for i, y_grid in enumerate(y_steps):
+        # search the next input point further than current y grid
+        while j < input_lane.shape[0] and input_lane[j, 1] < y_grid:
+            j += 1
+
+        # locate the two input points for interpolating x, z values at current y grid
+        if j < input_lane.shape[0]:
+            y1 = input_lane[j, 1]
+            x1 = input_lane[j, 0]
+            z1 = input_lane[j, 2]
+            if (j-1) >= 0:
+                y2 = input_lane[j - 1, 1]
+                x2 = input_lane[j - 1, 0]
+                z2 = input_lane[j - 1, 2]
+            elif (j+1) < input_lane.shape[0]:  # for a y grid closer than the closest ground-truth
+                y2 = input_lane[j + 1, 1]
+                x2 = input_lane[j + 1, 0]
+                z2 = input_lane[j + 1, 2]
+            else:  # only a single ground-truth point existing
+                continue
+        else:  # for the y_grid farther than the farthest ground-truth y range,
+            y1 = input_lane[-1, 1]
+            x1 = input_lane[-1, 0]
+            z1 = input_lane[-1, 2]
+            y2 = input_lane[-2, 1]
+            x2 = input_lane[-2, 0]
+            z2 = input_lane[-2, 2]
+
+        # interpolate x value and z value at anchor grid
+        x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
+        z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
+    return x_values, z_values
+
+
 def homography_im2ipm_norm(top_view_region, org_img_size, crop_y, resize_img_size, cam_pitch, cam_height, K):
     """
         Compute the normalized transformation such that image region are mapped to top_view region maps to

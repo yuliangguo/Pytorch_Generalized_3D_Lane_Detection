@@ -8,8 +8,7 @@ import ujson as json
 from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
-    tusimple_config, sim3d_config
-from Dataloader.Load_Data_3DLane_new import resample_laneline_in_y
+    tusimple_config, sim3d_config, resample_laneline_in_y
 from tools.MinCostFlow import SolveMinCostFlow
 
 color = [[0, 0, 255],  # red

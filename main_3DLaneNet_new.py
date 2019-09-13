@@ -471,7 +471,7 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet_new'
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.print_freq = 50

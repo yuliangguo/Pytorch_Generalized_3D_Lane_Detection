@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
-    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer
+    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, resample_laneline_in_y
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -59,7 +59,6 @@ class LaneDataset(Dataset):
         # self.x_ratio = float(self.w_net) / float(self.w_org)
         # self.y_ratio = float(self.h_net) / float(self.h_org - self.h_crop)
         self.top_view_region = args.top_view_region
-        self.y_ref = args.y_ref
 
         self.K = args.K
         self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_y, [args.resize_h, args.resize_w])
@@ -86,9 +85,12 @@ class LaneDataset(Dataset):
         # compute anchor steps
         x_min = self.top_view_region[0, 0]
         x_max = self.top_view_region[1, 0]
+        self.x_min = x_min
+        self.x_max = x_max
         self.anchor_x_steps = np.linspace(x_min, x_max, np.int(args.ipm_w/8), endpoint=True)
         self.anchor_y_steps = args.anchor_y_steps
         self.num_y_steps = len(self.anchor_y_steps)
+
         if self.no_centerline:
             self.num_types = 1
         else:
@@ -98,6 +100,9 @@ class LaneDataset(Dataset):
             self.anchor_dim = self.num_y_steps + 1
         else:
             self.anchor_dim = 2*self.num_y_steps + 1
+
+        self.y_ref = args.y_ref
+        self.ref_id = np.argmin(np.abs(self.num_y_steps - self.y_ref))
 
         # parse ground-truth file
         if self.dataset_name is 'tusimple':
@@ -399,6 +404,18 @@ class LaneDataset(Dataset):
                     if not self.no_3d:
                         lane[:, 1] = np.divide(lane[:, 1], self._z_std)
 
+    def prune_3d_lane_by_range(self, lane_3d):
+        # TODO: solve hard coded range later
+        # remove points with y out of range
+        # 3D label may miss super long straight-line with only two points: Not have to be 200, gt need a min-step
+        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
+        lane_3d = lane_3d[np.logical_and(lane_3d[:, 1] > 0, lane_3d[:, 1] < 200), ...]
+
+        # remove lane points out of x range
+        lane_3d = lane_3d[np.logical_and(lane_3d[:, 0] > 3 * self.x_min,
+                                         lane_3d[:, 0] < 3 * self.x_max), ...]
+        return lane_3d
+
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
         if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
             gt_lane_2d = laneline_gt
@@ -410,13 +427,10 @@ class LaneDataset(Dataset):
         else:  # For ground-truth in ground coordinates (Apollo Sim)
             gt_lane_3d = laneline_gt
 
-        # remove points with y out of range
-        # 3D label will miss super long straight-line with only two points
-        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
-        if self.dataset_name is 'tusimple':
-            gt_lane_3d = gt_lane_3d[np.logical_and(gt_lane_3d[:, 1] > 0, gt_lane_3d[:, 1] < 100), ...]
-            if gt_lane_3d.shape[0] < 2:
-                return -1, np.array([]), np.array([])
+        # prune out points not in valid range
+        gt_lane_3d = self.prune_3d_lane_by_range(gt_lane_3d)
+        if gt_lane_3d.shape[0] < 2:
+            return -1, np.array([]), np.array([])
 
         if self.dataset_name is 'tusimple':
             # reverse the order of 3d pints to make the first point the closest
@@ -430,7 +444,7 @@ class LaneDataset(Dataset):
         x_values, z_values = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps)
 
         # decide association at r_ref
-        ass_id = np.argmin((self.anchor_x_steps - x_values[1]) ** 2)
+        ass_id = np.argmin((self.anchor_x_steps - x_values[self.ref_id]) ** 2)
         # compute offset values
         x_off_values = x_values - self.anchor_x_steps[ass_id]
 
@@ -449,62 +463,9 @@ class LaneDataset(Dataset):
             return self.H_g2im, self.P_g2im, self.H_crop, self.H_im2ipm
 
 
-def resample_laneline_in_y(input_lane, y_steps):
-    """
-        Interpolate x, z values at each anchor grid, including those beyond the range of input lnae y range
-    :param input_lane: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
-                       It requires y values of input lane in ascending order
-    :param y_steps: a vector of steps in y
-    :return:
-    """
-
-    # at least two points are included
-    assert(input_lane.shape[0] >= 2)
-
-    x_values = np.zeros_like(y_steps, dtype=np.float32)
-    z_values = np.zeros_like(y_steps, dtype=np.float32)
-
-    if input_lane.shape[1] < 3:
-        input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)
-
-    j = 0
-    for i, y_grid in enumerate(y_steps):
-        # search the next input point further than current y grid
-        while j < input_lane.shape[0] and input_lane[j, 1] < y_grid:
-            j += 1
-
-        # locate the two input points for interpolating x, z values at current y grid
-        if j < input_lane.shape[0]:
-            y1 = input_lane[j, 1]
-            x1 = input_lane[j, 0]
-            z1 = input_lane[j, 2]
-            if (j-1) >= 0:
-                y2 = input_lane[j - 1, 1]
-                x2 = input_lane[j - 1, 0]
-                z2 = input_lane[j - 1, 2]
-            elif (j+1) < input_lane.shape[0]:  # for a y grid closer than the closest ground-truth
-                y2 = input_lane[j + 1, 1]
-                x2 = input_lane[j + 1, 0]
-                z2 = input_lane[j + 1, 2]
-            else:  # only a single ground-truth point existing
-                continue
-        else:  # for the y_grid farther than the farthest ground-truth y range,
-            y1 = input_lane[-1, 1]
-            x1 = input_lane[-1, 0]
-            z1 = input_lane[-1, 2]
-            y2 = input_lane[-2, 1]
-            x2 = input_lane[-2, 0]
-            z2 = input_lane[-2, 2]
-
-        # interpolate x value and z value at anchor grid
-        x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
-        z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
-    return x_values, z_values
-
-
 """
     Data Augmentation: 
-        idea 1:
+        idea 1: (currently in use)
             when initializing dataset, all labels will be prepared in 3D which do not need to be changed in image augmenting
             Image data augmentation would change the spatial transform matrix integrated in the network, provide 
             the transformation matrix related to random cropping, scaling and rotation
