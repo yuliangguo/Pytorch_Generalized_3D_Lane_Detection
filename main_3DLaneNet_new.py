@@ -144,7 +144,7 @@ def train_net():
             model.load_state_dict(checkpoint['state_dict'])
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
-        mkdir_if_missing(os.path.join(args.save_path, 'example/eval_vis'))
+        mkdir_if_missing(os.path.join(args.save_path, 'example/val_vis'))
         losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file)
         return
 
@@ -460,10 +460,6 @@ if __name__ == '__main__':
         args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)
         # define evaluator
-        args.pixel_per_meter = 10.
-        args.dist_th = 1.5
-        args.pt_th = 0.5
-        args.min_num_pixels = 10
         evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 

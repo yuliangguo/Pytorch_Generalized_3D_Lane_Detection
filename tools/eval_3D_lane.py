@@ -1,15 +1,19 @@
 import numpy as np
-from scipy import ndimage
 import cv2
 import os
 import os.path as ops
 import math
 import ujson as json
+import matplotlib
 from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
     tusimple_config, sim3d_config, resample_laneline_in_y
 from tools.MinCostFlow import SolveMinCostFlow
+from mpl_toolkits.mplot3d import Axes3D
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+plt.rcParams['figure.figsize'] = (35, 30)
 
 color = [[0, 0, 255],  # red
          [0, 255, 0],  # green
@@ -19,46 +23,15 @@ color = [[0, 0, 255],  # red
 
 class LaneEval(object):
     def __init__(self, args):
-        self.pt_th = args.pt_th
-        self.min_num_pixels = args.min_num_pixels
         self.dataset_dir = args.dataset_dir
-        self.top_view_region = args.top_view_region
-        self.org_h = args.org_h
-        self.org_w = args.org_w
-        self.crop_y = args.crop_y
-        self.resize_h = args.resize_h
-        self.resize_w = args.resize_w
         self.K = args.K
         self.no_centerline = args.no_centerline
 
-        # use ipm keeping the aspect ratio of top-view region
-        top_view_w = args.top_view_region[1, 0] - args.top_view_region[0, 0]
-        top_view_h = args.top_view_region[0, 1] - args.top_view_region[2, 1]
-        self.ipm_w = (top_view_w * args.pixel_per_meter).astype(np.int)
-        self.ipm_h = (top_view_h * args.pixel_per_meter).astype(np.int)
+        self.resize_h = args.resize_h
+        self.resize_w = args.resize_w
+        self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_y, [args.resize_h, args.resize_w])
 
-        # pixel distance threshold in IPM for matching lanes
-        self.dist_th = args.dist_th * args.pixel_per_meter
-
-        # scale up transforms the normalized homographic transformation from network input image to ipm image
-        self.S_ipm = np.array([[self.ipm_w, 0, 0],
-                              [0, self.ipm_h, 0],
-                              [0, 0, 1]], dtype=np.float)
-        self.S_im = np.array([[args.resize_w, 0, 0],
-                             [0, args.resize_h, 0],
-                             [0, 0, 1]], dtype=np.float)
-
-        # transformation from ipm to ground region
-        self.M_ipm2g = cv2.getPerspectiveTransform(np.float32([[0, 0],
-                                                              [self.ipm_w-1, 0],
-                                                              [0, self.ipm_h-1],
-                                                              [self.ipm_w-1, self.ipm_h-1]]),
-                                                   np.float32(args.top_view_region))
-        self.M_g2ipm = np.linalg.inv(self.M_ipm2g)
-
-        self.H_crop = homography_crop_resize([self.org_h, self.org_w], self.crop_y, [self.resize_h, self.resize_w])
-
-    def bench(self, pred_lanes, gt_lanes, raw_file, gt_cam_height, gt_cam_pitch, vis):
+    def bench(self, pred_lanes, gt_lanes, raw_file, gt_cam_height, gt_cam_pitch, vis, ax1, ax2):
         """
             Matching predicted lanes and ground-truth lanes in their IPM projection, ignoring z attributes.
             x error, y_error, and z error are all considered, although the matching does not rely on z
@@ -89,16 +62,38 @@ class LaneEval(object):
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
 
+        if vis:
+            P_g2im = projection_g2im(gt_cam_pitch, gt_cam_height, self.K)
+            P_gt = np.matmul(self.H_crop, P_g2im)
+            img = cv2.imread(ops.join(self.dataset_dir, raw_file))
+            img = cv2.warpPerspective(img, self.H_crop, (self.resize_w, self.resize_h))
+            img = img.astype(np.float)/255
         # resample gt and pred at y_samples
         for i in range(cnt_gt):
             x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), y_samples)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
+            if vis:
+                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [1, 0, 0], 2)
+                ax1.imshow(img[:, :, [2, 1, 0]])
+                ax2.plot(x_values, y_samples, z_values, color=[0, 0, 1])
 
         for i in range(cnt_pred):
             # # ATTENTION: ensure y mono increase before interpolation: but it can reduce size
             # pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
             x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), y_samples)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
+            if vis:
+                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 0, 1], 2)
+                ax1.imshow(img[:, :, [2, 1, 0]])
+                ax2.plot(x_values, y_samples, z_values, color=[1, 0, 0])
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
         # TODO: it is necessary to visualize here? as the visualization has been done in testing
@@ -194,6 +189,18 @@ class LaneEval(object):
             gt_cam_height = gt['cam_height']
             gt_cam_pitch = gt['cam_pitch']
 
+            if vis:
+                fig = plt.figure()
+                ax1 = fig.add_subplot(221)
+                ax2 = fig.add_subplot(222, projection='3d')
+                ax3 = fig.add_subplot(223)
+                ax4 = fig.add_subplot(224, projection='3d')
+            else:
+                ax1 = 0
+                ax2 = 0
+                ax3 = 0
+                ax4 = 0
+
             # evaluate lanelines
             gt_lanelines = gt['laneLines']
 
@@ -205,9 +212,7 @@ class LaneEval(object):
                                                         raw_file,
                                                         gt_cam_height,
                                                         gt_cam_pitch,
-                                                        vis)
-            # if math.isnan(p_pixel) or math.isnan(r_pixel) or math.isnan(p_lane) or math.isnan(r_pixel):
-            #     break
+                                                        vis, ax1, ax2)
             laneline_stats.append(np.array([r_lane, p_lane, cnt_gt, cnt_pred]))
             # consider x_error z_error only for the matched lanes
             if r_lane > 0 and p_lane > 0:
@@ -215,12 +220,6 @@ class LaneEval(object):
                 laneline_x_error_far.append(x_error_far)
                 laneline_z_error_close.append(z_error_close)
                 laneline_z_error_far.append(z_error_far)
-
-            # save visualize map
-            # if vis:
-            #     # img_name = raw_file.split('/')[-1]
-            #     img_name = raw_file.replace("/", "_")
-            #     cv2.imwrite(save_path + '/laneline_' + img_name, vis_map)
 
             # evaluate centerlines
             if not self.no_centerline:
@@ -235,7 +234,7 @@ class LaneEval(object):
                                                             raw_file,
                                                             gt_cam_height,
                                                             gt_cam_pitch,
-                                                            vis)
+                                                            vis, ax3, ax4)
                 centerline_stats.append(np.array([r_lane, p_lane, cnt_gt, cnt_pred]))
                 # consider x_error z_error only for the matched lanes
                 if r_lane > 0 and p_lane > 0:
@@ -243,13 +242,28 @@ class LaneEval(object):
                     centerline_x_error_far.append(x_error_far)
                     centerline_z_error_close.append(z_error_close)
                     centerline_z_error_far.append(z_error_far)
-                # # save visualize map
-                # if vis:
-                #     # img_name = raw_file.split('/')[-1]
-                #     img_name = raw_file.replace("/", "_")
-                #     cv2.imwrite(save_path + '/centerline_' + img_name, vis_map)
 
-            # print('processed sample: {}'.format(i))
+            if vis:
+                ax2.set_xlabel('x axis')
+                ax2.set_ylabel('y axis')
+                ax2.set_zlabel('z axis')
+                bottom, top = ax2.get_zlim()
+                ax2.set_zlim(min(bottom, -1), max(top, 1))
+                ax2.set_xlim(-20, 20)
+                ax2.set_ylim(0, 100)
+
+                ax4.set_xlabel('x axis')
+                ax4.set_ylabel('y axis')
+                ax4.set_zlabel('z axis')
+                bottom, top = ax4.get_zlim()
+                ax4.set_zlim(min(bottom, -1), max(top, 1))
+                ax4.set_xlim(-20, 20)
+                ax4.set_ylim(0, 100)
+
+                fig.savefig(ops.join(save_path, raw_file.replace("/", "_")))
+                plt.close(fig)
+                print('processed sample: {}'.format(i))
+
 
         output_stats = []
         laneline_stats = np.array(laneline_stats)
@@ -313,15 +327,10 @@ if __name__ == '__main__':
 
     # load configuration for certain dataset
     sim3d_config(args)
-
-    args.pixel_per_meter = 10.
-    args.dist_th = 1.5
-    args.pt_th = 0.5
-    args.min_num_pixels = 10
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test2_pred_file.json'
-    gt_file = '../data/sim3d/test2.json'
+    pred_file = '../data/sim3d/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d/val.json'
 
     # try:
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=True)

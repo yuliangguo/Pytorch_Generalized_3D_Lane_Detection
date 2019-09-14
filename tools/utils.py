@@ -157,7 +157,7 @@ def sim3d_config(args):
 
 
 class Visualizer:
-    def __init__(self, args, vis_folder='eval_vis'):
+    def __init__(self, args, vis_folder='val_vis'):
         self.save_path = args.save_path
         self.vis_folder = vis_folder
         self.no_3d = args.no_3d
@@ -921,6 +921,7 @@ def transform_lane_gflat2g(h_cam, X_gflat, Y_gflat, Z_g):
     """
 
     Y_g = Y_gflat - Y_gflat * Z_g / h_cam
+    # TODO: this formula to calculate x_g is wrong
     X_g = X_gflat * Y_g / Y_gflat
     X_g[np.where(Y_gflat == 0)] = X_gflat[np.where(Y_gflat == 0)]
 
