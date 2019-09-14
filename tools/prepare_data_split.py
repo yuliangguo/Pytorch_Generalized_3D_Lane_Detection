@@ -7,10 +7,10 @@ import math
 import glob
 
 if __name__ == '__main__':
-    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane'
+    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0913'
     json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
-
-    output_folder = '../data/sim3d/'
+    batch_size = 8
+    output_folder = '../data/sim3d_0913/'
     split_ratio = [0.8, 0.2]
     if not ops.exists(output_folder):
         os.makedirs(output_folder)
@@ -25,9 +25,9 @@ if __name__ == '__main__':
 
     N = len(lines)
     print('total number of sampels: ' + str(N))
-    N1 = int(math.floor(N * split_ratio[0]))
+    N1 = int(math.floor(N * split_ratio[0]//batch_size*batch_size))
     print('number of train sampels: ' + str(N1))
-    N2 = int(math.floor(N * split_ratio[1]))
+    N2 = int(math.floor(N * split_ratio[1]//batch_size*batch_size))
     print('number of val sampels: ' + str(N2))
     print('number of test sampels: ' + str(N - N1 - N2))
 

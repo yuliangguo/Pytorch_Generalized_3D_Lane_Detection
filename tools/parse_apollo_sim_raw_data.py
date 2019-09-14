@@ -68,6 +68,7 @@ def laneline_label_generator(base_folder, image_name, label_name, output_gt_file
     # visualize laneline by projecting to image
     for i, lane3D in enumerate(centerlines):
         lane3D = np.array(lane3D)
+        lane3D = lane3D[lane3D[:, 2] > 0.01, :]
         # project laneline 3D in camera coordinates to ground coordinates
         centerline = np.concatenate([lane3D, np.ones([lane3D.shape[0], 1])], axis=1)
         centerline_g = np.matmul(centerline, proj_c2g.T)
@@ -144,11 +145,13 @@ def process_lane_label_apollo_sim_3D(label_file):
     laneline_dict = {lane['id']: lane for lane in lanelines_in}
     laneline2del = {lane['id']: 0 for lane in lanelines_in}
 
-    # merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
-    for id, centerlane in centerline_dict.items():
-        if merge:
+    if merge:
+        # merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
+        for id, centerlane in centerline_dict.items():
             centerlane['successorList'] = [sid for sid in centerlane['successorList'] if sid in centerline_dict]
             # handle 1 to 1 and 2 to 1 cases by extending the first, and marking the second segment to delete
+            # TODO: this probably not record beyond merging 2 segments, the third will be ignored in output.
+            #       Need to update successorList of the first segment to make complete merging
             if len(centerlane['successorList']) == 1:
                 centerlane2 = centerline_dict[centerlane['successorList'][0]]
                 # TODO: remove this condition when raw label successor list all corrected
@@ -222,7 +225,7 @@ def process_lane_label_apollo_sim_3D(label_file):
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0913/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
     image_list, label_list, name_list = get_lists(input_file)
@@ -231,7 +234,7 @@ if __name__ == '__main__':
         os.mkdir(vis_folder)
     # save the full list
     f_out = open(output_gt_file, 'w')
-    for i in range(len(image_list)):
+    for i in range(88, len(image_list)):
         print(i)
         img_vis, valid_img = laneline_label_generator(base_folder, image_list[i], label_list[i], output_gt_file)
         if vis:
