@@ -62,38 +62,24 @@ class LaneEval(object):
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
 
-        if vis:
-            P_g2im = projection_g2im(gt_cam_pitch, gt_cam_height, self.K)
-            P_gt = np.matmul(self.H_crop, P_g2im)
-            img = cv2.imread(ops.join(self.dataset_dir, raw_file))
-            img = cv2.warpPerspective(img, self.H_crop, (self.resize_w, self.resize_h))
-            img = img.astype(np.float)/255
+        gt_visibility_mat = np.zeros((cnt_gt, 100))
+        pred_visibility_mat = np.zeros((cnt_pred, 100))
         # resample gt and pred at y_samples
         for i in range(cnt_gt):
+            min_y = np.min(np.array(gt_lanes[i])[:, 1])
+            max_y = np.max(np.array(gt_lanes[i])[:, 1])
+            gt_visibility_mat[i, :] = np.logical_and(y_samples >= min_y, y_samples <= max_y)
             x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), y_samples)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
-            if vis:
-                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
-                x_2d = x_2d.astype(np.int)
-                y_2d = y_2d.astype(np.int)
-                for k in range(1, x_2d.shape[0]):
-                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [1, 0, 0], 2)
-                ax1.imshow(img[:, :, [2, 1, 0]])
-                ax2.plot(x_values, y_samples, z_values, color=[0, 0, 1])
 
         for i in range(cnt_pred):
             # # ATTENTION: ensure y mono increase before interpolation: but it can reduce size
             # pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
+            min_y = np.min(np.array(pred_lanes[i])[:, 1])
+            max_y = np.max(np.array(pred_lanes[i])[:, 1])
+            pred_visibility_mat[i, :] = np.logical_and(y_samples >= min_y, y_samples <= max_y)
             x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), y_samples)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
-            if vis:
-                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
-                x_2d = x_2d.astype(np.int)
-                y_2d = y_2d.astype(np.int)
-                for k in range(1, x_2d.shape[0]):
-                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), [0, 0, 1], 2)
-                ax1.imshow(img[:, :, [2, 1, 0]])
-                ax2.plot(x_values, y_samples, z_values, color=[1, 0, 0])
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
         # TODO: it is necessary to visualize here? as the visualization has been done in testing
@@ -115,6 +101,10 @@ class LaneEval(object):
                 x_dist = np.abs(gt_lanes[i][:, 0] - pred_lanes[j][:, 0])
                 z_dist = np.abs(gt_lanes[i][:, 1] - pred_lanes[j][:, 1])
                 euclidean_dist = np.sqrt(x_dist**2 + z_dist**2)
+
+                # apply visibility to penalize different partial matching accordingly
+                euclidean_dist[np.logical_or(gt_visibility_mat[i, :] == 0, pred_visibility_mat[j, :] == 0)] = dist_th
+
                 # if np.average(euclidean_dist) < 2*dist_th: # don't prune here to encourage finding perfect match
                 adj_mat[i, j] = 1
                 x_dist_mat_close[i, j] = np.average(x_dist[:close_range_idx])
@@ -128,25 +118,63 @@ class LaneEval(object):
         match_results = SolveMinCostFlow(adj_mat, cost_mat)
         match_results = np.array(match_results)
 
-        if len(match_results) is not 0:
-            # only match with avg cost < dist_th is consider valid
-            r_lane = np.sum(match_results[:, 2] < dist_th * y_samples.shape[0])
-            p_lane = np.sum(match_results[:, 2] < dist_th * y_samples.shape[0])
+        # only a match with avg cost < dist_th is consider valid one
+        match_gt_ids = []
+        match_pred_ids = []
+        if match_results.shape[0] > 0 and np.sum(match_results[:, 2] < dist_th * y_samples.shape[0]) > 0:
+            r_lane = 0
+            p_lane = 0
             for i in range(len(match_results)):
-                x_error_close.append(x_dist_mat_close[match_results[i, 0], match_results[i, 1]])
-                x_error_far.append(x_dist_mat_far[match_results[i, 0], match_results[i, 1]])
-                z_error_close.append(z_dist_mat_close[match_results[i, 0], match_results[i, 1]])
-                z_error_far.append(z_dist_mat_far[match_results[i, 0], match_results[i, 1]])
+                if match_results[i, 2] < dist_th * y_samples.shape[0]:
+                    r_lane += 1
+                    p_lane += 1
+                    match_gt_ids.append(match_results[i, 0])
+                    match_pred_ids.append(match_results[i, 1])
+                    x_error_close.append(x_dist_mat_close[match_results[i, 0], match_results[i, 1]])
+                    x_error_far.append(x_dist_mat_far[match_results[i, 0], match_results[i, 1]])
+                    z_error_close.append(z_dist_mat_close[match_results[i, 0], match_results[i, 1]])
+                    z_error_far.append(z_dist_mat_far[match_results[i, 0], match_results[i, 1]])
 
-            x_error_close = np.average(np.array(x_error_close))
-            x_error_far = np.average(np.array(x_error_far))
-            z_error_close = np.average(np.array(z_error_close))
-            z_error_far = np.average(np.array(z_error_far))
-        else:
-            x_error_close = 1000
-            x_error_far = 1000
-            z_error_close = 1000
-            z_error_far = 1000
+        # visualize lanelines and matching results both in image and 3D
+        if vis:
+            P_g2im = projection_g2im(gt_cam_pitch, gt_cam_height, self.K)
+            P_gt = np.matmul(self.H_crop, P_g2im)
+            img = cv2.imread(ops.join(self.dataset_dir, raw_file))
+            img = cv2.warpPerspective(img, self.H_crop, (self.resize_w, self.resize_h))
+            img = img.astype(np.float)/255
+
+            for i in range(cnt_gt):
+                x_values = gt_lanes[i][:, 0]
+                z_values = gt_lanes[i][:, 1]
+                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+
+                if i in match_gt_ids:
+                    color = [0, 0, 1]
+                else:
+                    color = [0, 1, 1]
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
+                ax1.imshow(img[:, :, [2, 1, 0]])
+                ax2.plot(x_values, y_samples, z_values, color=color)
+
+            for i in range(cnt_pred):
+                x_values = pred_lanes[i][:, 0]
+                z_values = pred_lanes[i][:, 1]
+                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
+                x_2d = x_2d.astype(np.int)
+                y_2d = y_2d.astype(np.int)
+
+                if i in match_gt_ids:
+                    color = [1, 0, 0]
+                else:
+                    color = [1, 0, 1]
+                for k in range(1, x_2d.shape[0]):
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
+                ax1.imshow(img[:, :, [2, 1, 0]])
+                ax2.plot(x_values, y_samples, z_values, color=color)
+
         return r_lane, p_lane, cnt_gt, cnt_pred, x_error_close, x_error_far, z_error_close, z_error_far
 
     def bench_one_submit(self, pred_file, gt_file, vis=False):
@@ -216,10 +244,10 @@ class LaneEval(object):
             laneline_stats.append(np.array([r_lane, p_lane, cnt_gt, cnt_pred]))
             # consider x_error z_error only for the matched lanes
             if r_lane > 0 and p_lane > 0:
-                laneline_x_error_close.append(x_error_close)
-                laneline_x_error_far.append(x_error_far)
-                laneline_z_error_close.append(z_error_close)
-                laneline_z_error_far.append(z_error_far)
+                laneline_x_error_close.extend(x_error_close)
+                laneline_x_error_far.extend(x_error_far)
+                laneline_z_error_close.extend(z_error_close)
+                laneline_z_error_far.extend(z_error_far)
 
             # evaluate centerlines
             if not self.no_centerline:
@@ -238,10 +266,10 @@ class LaneEval(object):
                 centerline_stats.append(np.array([r_lane, p_lane, cnt_gt, cnt_pred]))
                 # consider x_error z_error only for the matched lanes
                 if r_lane > 0 and p_lane > 0:
-                    centerline_x_error_close.append(x_error_close)
-                    centerline_x_error_far.append(x_error_far)
-                    centerline_z_error_close.append(z_error_close)
-                    centerline_z_error_far.append(z_error_far)
+                    centerline_x_error_close.extend(x_error_close)
+                    centerline_x_error_far.extend(x_error_far)
+                    centerline_z_error_close.extend(z_error_close)
+                    centerline_z_error_far.extend(z_error_far)
 
             if vis:
                 ax2.set_xlabel('x axis')
@@ -262,7 +290,7 @@ class LaneEval(object):
 
                 fig.savefig(ops.join(save_path, raw_file.replace("/", "_")))
                 plt.close(fig)
-                print('processed sample: {}'.format(i))
+                print('processed sample: {}  {}'.format(i, raw_file))
 
 
         output_stats = []
@@ -317,23 +345,22 @@ class LaneEval(object):
 
 
 if __name__ == '__main__':
-
+    vis = True
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d'
-    args.data_dir = ops.join('../data', args.dataset_name)
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_name = 'sim3d_0906'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d/val.json'
+    pred_file = '../data/sim3d_0906/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d_0906/val.json'
 
     # try:
-    eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=True)
+    eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)
 
     print("===> Evaluation on validation set: \n"
           "laneline F-measure {:.8} \n"

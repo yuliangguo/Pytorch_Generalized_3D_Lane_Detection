@@ -253,9 +253,9 @@ def train_net():
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
-        if args.dataset_name is 'tusimple':
+        if 'tusimple' in args.dataset_name:
             print("===> Evaluation accuracy: {:3f}".format(eval_stats[0]))
-        elif args.dataset_name is 'sim3d':
+        elif 'sim3d' in args.dataset_name:
             print("===> Evaluation laneline F-measure: {:3f}".format(eval_stats[0]))
             print("===> Evaluation laneline Recall: {:3f}".format(eval_stats[1]))
             print("===> Evaluation laneline Precision: {:3f}".format(eval_stats[2]))
@@ -268,9 +268,9 @@ def train_net():
         if not args.no_tb:
             writer.add_scalars('3D-Lane-Loss', {'Training': losses.avg}, epoch)
             writer.add_scalars('3D-Lane-Loss', {'Validation': losses_valid}, epoch)
-            if args.dataset_name is 'tusimple':
+            if 'tusimple' in args.dataset_name:
                 writer.add_scalars('Evaluation', {'Accuracy': eval_stats[0]}, epoch)
-            elif args.dataset_name is 'sim3d':
+            elif 'sim3d' in args.dataset_name:
                 writer.add_scalars('Evaluation', {'laneline F-measure': eval_stats[0]}, epoch)
                 writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
                 writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
@@ -368,7 +368,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                     json_line = valid_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
-                    if args.dataset_name is 'tusimple':
+                    if 'tusimple' in args.dataset_name:
                         h_samples = json_line["h_samples"]
                         lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
                                                             anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
@@ -376,7 +376,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
-                    elif args.dataset_name is 'sim3d':
+                    elif 'sim3d' in args.dataset_name:
                         # P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps,
@@ -389,9 +389,9 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
         if args.evaluate:
             print("===> Average {}-loss on validation set is {:.8}".format(crit_string, losses.avg))
-            if args.dataset_name is 'tusimple':
+            if 'tusimple' in args.dataset_name:
                 print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
-            elif args.dataset_name is 'sim3d':
+            elif 'sim3d' in args.dataset_name:
                 print("===> Evaluation on validation set: \n"
                       "laneline F-measure {:.8} \n"
                       "laneline Recall  {:.8} \n"
@@ -443,19 +443,19 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_name = 'sim3d_0906'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
     global evaluator
-    if args.dataset_name is 'tusimple':
+    if 'tusimple' in args.dataset_name:
         tusimple_config(args)
         # define evaluator
         evaluator = eval_lane_tusimple.LaneEval
-    elif args.dataset_name is 'sim3d':
+    elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
         args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)

@@ -105,12 +105,12 @@ class LaneDataset(Dataset):
         self.ref_id = np.argmin(np.abs(self.num_y_steps - self.y_ref))
 
         # parse ground-truth file
-        if self.dataset_name is 'tusimple':
+        if 'tusimple' in self.dataset_name:
             self._label_image_path,\
                 self._label_laneline_all, \
                 self._laneline_ass_ids, \
                 self._x_off_std = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
-        elif self.dataset_name is 'sim3d':  # assume loading apollo sim 3D lane
+        elif 'sim3d' in self.dataset_name:  # assume loading apollo sim 3D lane
             self._label_image_path, \
                 self._label_laneline_all, \
                 self._label_centerline_all, \
@@ -607,9 +607,9 @@ if __name__ == '__main__':
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
-    if args.dataset_name is 'tusimple':
+    if 'tusimple' in args.dataset_name:
         tusimple_config(args)
-    elif args.dataset_name is 'sim3d':
+    elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
     else:
         print('Not using a supported dataset')

@@ -218,7 +218,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     json_line = test_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
-                    if args.dataset_name is 'tusimple':
+                    if 'tusimple' in args.dataset_name:
                         h_samples = json_line["h_samples"]
                         lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
                                                             anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
@@ -226,7 +226,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
-                    elif args.dataset_name is 'sim3d':
+                    elif 'sim3d' in args.dataset_name:
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
                                                                                anchor_x_steps, args.anchor_y_steps,
                                                                                pred_hcam[j], args.prob_th)
@@ -236,9 +236,9 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                         jsonFile.write('\n')
         eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file)
 
-        if args.dataset_name is 'tusimple':
+        if 'tusimple' in args.dataset_name:
             print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
-        elif args.dataset_name is 'sim3d':
+        elif 'sim3d' in args.dataset_name:
             print("===> Evaluation on validation set: \n"
                   "laneline F-measure {:.8} \n"
                   "laneline Recall  {:.8} \n"
@@ -275,19 +275,19 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_name = 'sim3d_0906'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
     global evaluator
-    if args.dataset_name is 'tusimple':
+    if 'tusimple' in args.dataset_name:
         tusimple_config(args)
         # define evaluator
         evaluator = eval_lane_tusimple.LaneEval
-    elif args.dataset_name is 'sim3d':
+    elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
         args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)

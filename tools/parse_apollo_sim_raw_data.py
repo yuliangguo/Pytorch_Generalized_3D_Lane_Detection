@@ -146,6 +146,16 @@ def process_lane_label_apollo_sim_3D(label_file):
     laneline2del = {lane['id']: 0 for lane in lanelines_in}
 
     if merge:
+        """
+        This merging algorithms serves the specific purpose of the 3D LaneNet representation where the sharing portion
+        are duplicated into two lanes when dealing with many-to-one and one-to-many connectivity.
+        
+        The algorithm is a two-iteration solution. The first iteration solves all the one-to-one connections. A 
+        recursive function is applied to keep merging second segment with its successors, delete second segment's id 
+        from first segment's successor list, and add the merged successor lane's successor id to the list. The second 
+        iteration deals will one-to-many connection case. The first segment will be marked and to delete, and the second
+        segment is augmented with the first segment at front.
+        """
         # merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
         for id, centerlane in centerline_dict.items():
             centerlane['successorList'] = [sid for sid in centerlane['successorList'] if sid in centerline_dict]
@@ -234,7 +244,7 @@ if __name__ == '__main__':
         os.mkdir(vis_folder)
     # save the full list
     f_out = open(output_gt_file, 'w')
-    for i in range(88, len(image_list)):
+    for i in range(len(image_list)):
         print(i)
         img_vis, valid_img = laneline_label_generator(base_folder, image_list[i], label_list[i], output_gt_file)
         if vis:
