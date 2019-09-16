@@ -26,6 +26,7 @@ class LaneEval(object):
         self.dataset_dir = args.dataset_dir
         self.K = args.K
         self.no_centerline = args.no_centerline
+        self.y_samples = np.linspace(1, 81, num=100, endpoint=False)
 
         self.resize_h = args.resize_h
         self.resize_w = args.resize_w
@@ -51,7 +52,7 @@ class LaneEval(object):
         """
 
         dist_th = 1.5
-        y_samples = np.linspace(1, 81, num=100, endpoint=False)
+        ratio_th = 0.5
         close_range_idx = np.int((30 - 1) / 0.8)
 
         r_lane, p_lane = 0., 0.
@@ -59,6 +60,8 @@ class LaneEval(object):
         x_error_far = []
         z_error_close = []
         z_error_far = []
+        # only consider those gt lanes overlapping with sampling range
+        gt_lanes = [lane for lane in gt_lanes if lane[0][1] < self.y_samples[-1] and lane[-1][1] > self.y_samples[0]]
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
 
@@ -68,8 +71,8 @@ class LaneEval(object):
         for i in range(cnt_gt):
             min_y = np.min(np.array(gt_lanes[i])[:, 1])
             max_y = np.max(np.array(gt_lanes[i])[:, 1])
-            gt_visibility_mat[i, :] = np.logical_and(y_samples >= min_y, y_samples <= max_y)
-            x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), y_samples)
+            gt_visibility_mat[i, :] = np.logical_and(self.y_samples >= min_y, self.y_samples <= max_y)
+            x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
 
         for i in range(cnt_pred):
@@ -77,8 +80,8 @@ class LaneEval(object):
             # pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
             min_y = np.min(np.array(pred_lanes[i])[:, 1])
             max_y = np.max(np.array(pred_lanes[i])[:, 1])
-            pred_visibility_mat[i, :] = np.logical_and(y_samples >= min_y, y_samples <= max_y)
-            x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), y_samples)
+            pred_visibility_mat[i, :] = np.logical_and(self.y_samples >= min_y, self.y_samples <= max_y)
+            x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), self.y_samples)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
@@ -87,6 +90,7 @@ class LaneEval(object):
         adj_mat = np.zeros((cnt_gt, cnt_pred), dtype=np.int)
         cost_mat = np.zeros((cnt_gt, cnt_pred), dtype=np.int)
         cost_mat.fill(1000)
+        num_match_mat = np.zeros((cnt_gt, cnt_pred), dtype=np.float)
         x_dist_mat_close = np.zeros((cnt_gt, cnt_pred), dtype=np.float)
         x_dist_mat_close.fill(1000.)
         x_dist_mat_far = np.zeros((cnt_gt, cnt_pred), dtype=np.float)
@@ -106,6 +110,7 @@ class LaneEval(object):
                 euclidean_dist[np.logical_or(gt_visibility_mat[i, :] == 0, pred_visibility_mat[j, :] == 0)] = dist_th
 
                 # if np.average(euclidean_dist) < 2*dist_th: # don't prune here to encourage finding perfect match
+                num_match_mat[i, j] = np.sum(euclidean_dist < dist_th)
                 adj_mat[i, j] = 1
                 x_dist_mat_close[i, j] = np.average(x_dist[:close_range_idx])
                 x_dist_mat_far[i, j] = np.average(x_dist[close_range_idx:])
@@ -121,19 +126,22 @@ class LaneEval(object):
         # only a match with avg cost < dist_th is consider valid one
         match_gt_ids = []
         match_pred_ids = []
-        if match_results.shape[0] > 0 and np.sum(match_results[:, 2] < dist_th * y_samples.shape[0]) > 0:
-            r_lane = 0
-            p_lane = 0
+        if match_results.shape[0] > 0 and np.sum(match_results[:, 2] < dist_th * self.y_samples.shape[0]) > 0:
             for i in range(len(match_results)):
-                if match_results[i, 2] < dist_th * y_samples.shape[0]:
-                    r_lane += 1
-                    p_lane += 1
-                    match_gt_ids.append(match_results[i, 0])
-                    match_pred_ids.append(match_results[i, 1])
-                    x_error_close.append(x_dist_mat_close[match_results[i, 0], match_results[i, 1]])
-                    x_error_far.append(x_dist_mat_far[match_results[i, 0], match_results[i, 1]])
-                    z_error_close.append(z_dist_mat_close[match_results[i, 0], match_results[i, 1]])
-                    z_error_far.append(z_dist_mat_far[match_results[i, 0], match_results[i, 1]])
+                if match_results[i, 2] < dist_th * self.y_samples.shape[0]:
+                    gt_i = match_results[i, 0]
+                    pred_i = match_results[i, 1]
+                    # consider match when the matched points is above a ratio
+                    if num_match_mat[gt_i, pred_i] / np.sum(gt_visibility_mat[gt_i, :]) > ratio_th:
+                        r_lane += 1
+                        match_gt_ids.append(gt_i)
+                    if num_match_mat[gt_i, pred_i] / np.sum(pred_visibility_mat[pred_i, :]) > ratio_th:
+                        p_lane += 1
+                        match_pred_ids.append(pred_i)
+                    x_error_close.append(x_dist_mat_close[gt_i, pred_i])
+                    x_error_far.append(x_dist_mat_far[gt_i, pred_i])
+                    z_error_close.append(z_dist_mat_close[gt_i, pred_i])
+                    z_error_far.append(z_dist_mat_far[gt_i, pred_i])
 
         # visualize lanelines and matching results both in image and 3D
         if vis:
@@ -146,7 +154,7 @@ class LaneEval(object):
             for i in range(cnt_gt):
                 x_values = gt_lanes[i][:, 0]
                 z_values = gt_lanes[i][:, 1]
-                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
+                x_2d, y_2d = projective_transformation(P_gt, x_values, self.y_samples, z_values)
                 x_2d = x_2d.astype(np.int)
                 y_2d = y_2d.astype(np.int)
 
@@ -155,25 +163,25 @@ class LaneEval(object):
                 else:
                     color = [0, 1, 1]
                 for k in range(1, x_2d.shape[0]):
-                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
+                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 3)
                 ax1.imshow(img[:, :, [2, 1, 0]])
-                ax2.plot(x_values, y_samples, z_values, color=color)
+                ax2.plot(x_values, self.y_samples, z_values, color=color)
 
             for i in range(cnt_pred):
                 x_values = pred_lanes[i][:, 0]
                 z_values = pred_lanes[i][:, 1]
-                x_2d, y_2d = projective_transformation(P_gt, x_values, y_samples, z_values)
+                x_2d, y_2d = projective_transformation(P_gt, x_values, self.y_samples, z_values)
                 x_2d = x_2d.astype(np.int)
                 y_2d = y_2d.astype(np.int)
 
-                if i in match_gt_ids:
+                if i in match_pred_ids:
                     color = [1, 0, 0]
                 else:
                     color = [1, 0, 1]
                 for k in range(1, x_2d.shape[0]):
                     img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
                 ax1.imshow(img[:, :, [2, 1, 0]])
-                ax2.plot(x_values, y_samples, z_values, color=color)
+                ax2.plot(x_values, self.y_samples, z_values, color=color)
 
         return r_lane, p_lane, cnt_gt, cnt_pred, x_error_close, x_error_far, z_error_close, z_error_far
 
@@ -243,11 +251,11 @@ class LaneEval(object):
                                                         vis, ax1, ax2)
             laneline_stats.append(np.array([r_lane, p_lane, cnt_gt, cnt_pred]))
             # consider x_error z_error only for the matched lanes
-            if r_lane > 0 and p_lane > 0:
-                laneline_x_error_close.extend(x_error_close)
-                laneline_x_error_far.extend(x_error_far)
-                laneline_z_error_close.extend(z_error_close)
-                laneline_z_error_far.extend(z_error_far)
+            # if r_lane > 0 and p_lane > 0:
+            laneline_x_error_close.extend(x_error_close)
+            laneline_x_error_far.extend(x_error_far)
+            laneline_z_error_close.extend(z_error_close)
+            laneline_z_error_far.extend(z_error_far)
 
             # evaluate centerlines
             if not self.no_centerline:
@@ -265,11 +273,11 @@ class LaneEval(object):
                                                             vis, ax3, ax4)
                 centerline_stats.append(np.array([r_lane, p_lane, cnt_gt, cnt_pred]))
                 # consider x_error z_error only for the matched lanes
-                if r_lane > 0 and p_lane > 0:
-                    centerline_x_error_close.extend(x_error_close)
-                    centerline_x_error_far.extend(x_error_far)
-                    centerline_z_error_close.extend(z_error_close)
-                    centerline_z_error_far.extend(z_error_far)
+                # if r_lane > 0 and p_lane > 0:
+                centerline_x_error_close.extend(x_error_close)
+                centerline_x_error_far.extend(x_error_far)
+                centerline_z_error_close.extend(z_error_close)
+                centerline_z_error_far.extend(z_error_far)
 
             if vis:
                 ax2.set_xlabel('x axis')
