@@ -920,10 +920,8 @@ def transform_lane_gflat2g(h_cam, X_gflat, Y_gflat, Z_g):
     :return:
     """
 
+    X_g = X_gflat - X_gflat * Z_g / h_cam
     Y_g = Y_gflat - Y_gflat * Z_g / h_cam
-    # TODO: this formula to calculate x_g is wrong
-    X_g = X_gflat * Y_g / Y_gflat
-    X_g[np.where(Y_gflat == 0)] = X_gflat[np.where(Y_gflat == 0)]
 
     return X_g, Y_g
 
