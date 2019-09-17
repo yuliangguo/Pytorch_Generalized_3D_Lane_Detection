@@ -132,10 +132,10 @@ class LaneEval(object):
                     gt_i = match_results[i, 0]
                     pred_i = match_results[i, 1]
                     # consider match when the matched points is above a ratio
-                    if num_match_mat[gt_i, pred_i] / np.sum(gt_visibility_mat[gt_i, :]) > ratio_th:
+                    if num_match_mat[gt_i, pred_i] / np.sum(gt_visibility_mat[gt_i, :]) >= ratio_th:
                         r_lane += 1
                         match_gt_ids.append(gt_i)
-                    if num_match_mat[gt_i, pred_i] / np.sum(pred_visibility_mat[pred_i, :]) > ratio_th:
+                    if num_match_mat[gt_i, pred_i] / np.sum(pred_visibility_mat[pred_i, :]) >= ratio_th:
                         p_lane += 1
                         match_pred_ids.append(pred_i)
                     x_error_close.append(x_dist_mat_close[gt_i, pred_i])
@@ -163,7 +163,9 @@ class LaneEval(object):
                 else:
                     color = [0, 1, 1]
                 for k in range(1, x_2d.shape[0]):
-                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 3)
+                    # only draw the visible portion
+                    if gt_visibility_mat[i, k-1] and gt_visibility_mat[i, k]:
+                        img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 3)
                 ax1.imshow(img[:, :, [2, 1, 0]])
                 ax2.plot(x_values, self.y_samples, z_values, color=color)
 
@@ -179,7 +181,9 @@ class LaneEval(object):
                 else:
                     color = [1, 0, 1]
                 for k in range(1, x_2d.shape[0]):
-                    img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
+                    # only draw the visible portion
+                    if pred_visibility_mat[i, k - 1] and pred_visibility_mat[i, k]:
+                        img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
                 ax1.imshow(img[:, :, [2, 1, 0]])
                 ax2.plot(x_values, self.y_samples, z_values, color=color)
 
