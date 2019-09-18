@@ -17,9 +17,9 @@ import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane_new import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_3D_loss_new
-from Networks.LaneNet3D_new import Net
+from Dataloader.Load_Data_3DLane_new_v1 import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Networks.Loss_crit import Laneline_3D_loss_new_v1
+from Networks.LaneNet3D_new_v1 import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, Visualizer
@@ -83,7 +83,7 @@ def train_net():
     scheduler = define_scheduler(optimizer, args)
 
     # Define loss criteria
-    criterion = Laneline_3D_loss_new(train_dataset.num_types, args.num_y_steps, args.pred_cam)
+    criterion = Laneline_3D_loss_new_v1(train_dataset.num_types, args.num_y_steps, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
@@ -443,8 +443,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0906'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
+    args.dataset_name = 'sim3d_0917'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -464,10 +464,10 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_new'
+    args.mod = '3DLaneNet_new_v1'
 
     # for the case only running evaluation
-    args.evaluate = True
+    args.evaluate = False
 
     # settings for save and visualize
     args.print_freq = 50

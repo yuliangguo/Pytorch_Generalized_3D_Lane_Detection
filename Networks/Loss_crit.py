@@ -52,7 +52,7 @@ class Laneline_3D_loss(nn.Module):
         return loss1+loss2+loss3
 
 
-class Laneline_3D_loss_new(nn.Module):
+class Laneline_3D_loss_new_v1(nn.Module):
     """
     compute the loss between predicted 3D lanelines in anchor representation,
     and the ground-truth 3D lanelines in anchor representation.
@@ -62,7 +62,7 @@ class Laneline_3D_loss_new(nn.Module):
     loss3: error in estimating pitch and camera heights
     """
     def __init__(self, num_types, num_y_steps, pred_cam):
-        super(Laneline_3D_loss_new, self).__init__()
+        super(Laneline_3D_loss_new_v1, self).__init__()
         self.num_types = num_types
         self.num_y_steps = num_y_steps
         self.anchor_dim = 3*self.num_y_steps + 1
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     num_y_steps = 6
     anchor_dim = 3*num_y_steps + 1
     pred_cam = True
-    criterion = Laneline_3D_loss_new(num_types, num_y_steps, pred_cam)
+    criterion = Laneline_3D_loss_new_v1(num_types, num_y_steps, pred_cam)
     criterion = criterion.cuda()
 
     pred_3D_lanes = torch.rand(8, 26, num_types*anchor_dim).cuda()

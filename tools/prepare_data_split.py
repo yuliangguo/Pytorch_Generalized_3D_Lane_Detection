@@ -7,10 +7,10 @@ import math
 import glob
 
 if __name__ == '__main__':
-    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0913'
+    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917'
     json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
     batch_size = 8
-    output_folder = '../data/sim3d_0913/'
+    output_folder = '../data/sim3d_0917/'
     split_ratio = [0.8, 0.2]
     if not ops.exists(output_folder):
         os.makedirs(output_folder)
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     print('number of train sampels: ' + str(N1))
     N2 = int(math.floor(N * split_ratio[1]//batch_size*batch_size))
     print('number of val sampels: ' + str(N2))
-    print('number of test sampels: ' + str(N - N1 - N2))
+    # print('number of test sampels: ' + str(N - N1 - N2))
 
     # split int into train.txt val.txt test.txt,
     # output folder: baidu_all_data_runs/run_1, run_2, ...

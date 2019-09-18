@@ -600,8 +600,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_2/'
+    args.dataset_name = 'sim3d_0906'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -623,7 +623,7 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'test2.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args, data_aug=True)
     dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps

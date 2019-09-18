@@ -441,8 +441,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0906'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
+    args.dataset_name = 'sim3d_0917'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -465,7 +465,7 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet'
 
     # for the case only running evaluation
-    args.evaluate = True
+    args.evaluate = False
 
     # settings for save and visualize
     args.print_freq = 50

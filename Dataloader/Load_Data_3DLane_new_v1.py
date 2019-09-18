@@ -101,7 +101,7 @@ class LaneDataset(Dataset):
             self.anchor_dim = self.num_y_steps + 1
         elif args.mod is '3DLaneNet':
             self.anchor_dim = 2 * args.num_y_steps + 1
-        elif args.mod is '3DLaneNet_new':
+        elif '3DLaneNet_new' in args.mod:
             self.anchor_dim = 3 * args.num_y_steps + 1
 
         self.y_ref = args.y_ref

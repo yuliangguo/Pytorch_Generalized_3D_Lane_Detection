@@ -133,7 +133,7 @@ def merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerl
         centerlane['successorList'] = new_succssorList
 
         # TODO: remove this condition when raw label successor list all corrected
-        if 0 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 2:
+        if -0.01 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 0.01:
             centerlane['pos3DInCameraList'].extend(centerlane2['pos3DInCameraList'])
             centerline2del[centerlane2['id']] = 1
 
@@ -142,7 +142,7 @@ def merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerl
             left_laneline = laneline_dict[centerlane['leftBoundaryId']]
             left_laneline2 = laneline_dict[centerlane2['leftBoundaryId']]
             # only merge those have not been dealt from other centerlane associations
-            if 0 <= left_laneline2['pos3DInCameraList'][0]['z'] - left_laneline['pos3DInCameraList'][-1]['z'] < 2:
+            if -0.01 <= left_laneline2['pos3DInCameraList'][0]['z'] - left_laneline['pos3DInCameraList'][-1]['z'] < 0.01:
                 left_laneline['pos3DInCameraList'].extend(left_laneline2['pos3DInCameraList'])
                 laneline2del[left_laneline2['id']] = 1
 
@@ -150,7 +150,7 @@ def merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerl
             right_laneline = laneline_dict[centerlane['rightBoundaryId']]
             right_laneline2 = laneline_dict[centerlane2['rightBoundaryId']]
             # only merge those have not been dealt from other centerlane associations
-            if 0 <= right_laneline2['pos3DInCameraList'][0]['z'] - right_laneline['pos3DInCameraList'][-1]['z'] < 2:
+            if -0.01 <= right_laneline2['pos3DInCameraList'][0]['z'] - right_laneline['pos3DInCameraList'][-1]['z'] < 0.01:
                 right_laneline['pos3DInCameraList'].extend(right_laneline2['pos3DInCameraList'])
                 laneline2del[right_laneline2['id']] = 1
 
@@ -202,7 +202,7 @@ def process_lane_label_apollo_sim_3D(label_file):
                 for second_id in centerlane['successorList']:
                     centerlane2 = centerline_dict[second_id]
                     # TODO: remove this condition when raw label successor list all corrected
-                    if 0 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 2:
+                    if -0.01 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 0.01:
                         centerlane2['pos3DInCameraList'] = centerlane['pos3DInCameraList'] + centerlane2['pos3DInCameraList']
                         centerline2del[id] = 1
 
@@ -211,7 +211,7 @@ def process_lane_label_apollo_sim_3D(label_file):
                         left_laneline = laneline_dict[centerlane['leftBoundaryId']]
                         left_laneline2 = laneline_dict[centerlane2['leftBoundaryId']]
                         # only merge those have not been dealt from other centerlane associations
-                        if 0 <= left_laneline2['pos3DInCameraList'][0]['z'] - left_laneline['pos3DInCameraList'][-1]['z'] < 2:
+                        if -0.01 <= left_laneline2['pos3DInCameraList'][0]['z'] - left_laneline['pos3DInCameraList'][-1]['z'] < 0.01:
                             left_laneline2['pos3DInCameraList'] = left_laneline['pos3DInCameraList'] + left_laneline2['pos3DInCameraList']
                             laneline2del[left_laneline['id']] = 1
 
@@ -219,14 +219,14 @@ def process_lane_label_apollo_sim_3D(label_file):
                         right_laneline = laneline_dict[centerlane['rightBoundaryId']]
                         right_laneline2 = laneline_dict[centerlane2['rightBoundaryId']]
                         # only merge those have not been dealt from other centerlane associations
-                        if 0 <= right_laneline2['pos3DInCameraList'][0]['z'] - right_laneline['pos3DInCameraList'][-1]['z'] < 2:
+                        if -0.01 <= right_laneline2['pos3DInCameraList'][0]['z'] - right_laneline['pos3DInCameraList'][-1]['z'] < 0.01:
                             right_laneline2['pos3DInCameraList'] = right_laneline['pos3DInCameraList'] + right_laneline2['pos3DInCameraList']
                             laneline2del[right_laneline['id']] = 1
 
     # convert to output format
     centerlanes_out = []
     for i, centerlane_in in enumerate(centerlines_in):
-        if centerline2del[centerlane_in['id']]:
+        if centerline2del[centerlane_in['id']] or centerlane_in['type'] == 'SHOULDER':
             continue
         centerlane_out = []
         for pt_3d in centerlane_in['pos3DInCameraList']:
@@ -246,7 +246,7 @@ def process_lane_label_apollo_sim_3D(label_file):
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0913/"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
     image_list, label_list, name_list = get_lists(input_file)
