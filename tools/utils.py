@@ -634,26 +634,14 @@ class Visualizer:
                 pred_anchors[:, 3 * self.anchor_dim - 1] = nms_1d(pred_anchors[:, 3 * self.anchor_dim - 1])
 
             H_g2im, P_g2im, H_crop, H_im2ipm = dataset.transform_mats(idx[i])
-            if self.no_3d:
-                P_gt = np.matmul(H_crop, H_g2im)
-                H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
-                                               pred_cam_height[i], dataset.K)
-                P_pred = np.matmul(H_crop, H_g2im_pred)
+            P_gt = np.matmul(H_crop, H_g2im)
+            H_g2im_pred = homograpthy_g2im(pred_cam_pitch[i],
+                                           pred_cam_height[i], dataset.K)
+            P_pred = np.matmul(H_crop, H_g2im_pred)
 
-                # consider data augmentation
-                P_gt = np.matmul(aug_mat[i, :, :], P_gt)
-                P_pred = np.matmul(aug_mat[i, :, :], P_pred)
-            else:
-                P_gt = np.matmul(H_crop, P_g2im)
-                P_g2im_pred = projection_g2im(pred_cam_pitch[i],
-                                              pred_cam_height[i], dataset.K)
-                P_pred = np.matmul(H_crop, P_g2im_pred)
-
-                # consider data augmentation
-                P_gt = np.matmul(aug_mat[i, :, :], P_gt)
-                P_pred = np.matmul(aug_mat[i, :, :], P_pred)
-
-                P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
+            # consider data augmentation
+            P_gt = np.matmul(aug_mat[i, :, :], P_gt)
+            P_pred = np.matmul(aug_mat[i, :, :], P_pred)
 
             # update transformation with image augmentation
             H_im2ipm = np.matmul(H_im2ipm, np.linalg.inv(aug_mat[i, :, :]))

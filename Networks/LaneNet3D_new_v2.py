@@ -4,14 +4,18 @@ Modifications:
     1. Prediction head's lane representation is in X_g, Y_g in flat ground space and Z in real 3D ground space.
     Y_g is sampled equally, X_g, Z is regressed from network output.
     2. In addition, visibility of each point is added into the anchor representation and regressed from network.
-    3. For training X, Y are computed from its associated X_g, Y_g, Z, which will be used for an additional cost term
+    3. Additional tensor output X, Y computed from its associated X_g, Y_g, Z. This full computation of tensor is only
+        necessuary in training, for the purpose of auto-gradient and back propagation.
 
-    Overall dimension of the output tensor would be: N * W * 3 *(3 * K + 1), where
+    Output tensor 1 dimension: N * W * 3 *(3 * K + 1), where
         K          : number of y samples.
         (3 * K + 1): Each lane includes K attributes for X_g offset + K attributes for Z + K attributes for visibility + 1 lane probability
         3          : Each anchor column include one laneline and two centerlines --> 3
         W          : Number of columns for the output tensor each corresponds to a IPM X_g location
         N          : batch size
+
+    Output tensor 2 dimension: N * W * 3 *(2 * K)
+        2 * K      : K attributes of X,  K attributes of Y
 
     Use of this network requires to use its corresponding data loader and loss criterion.
 """

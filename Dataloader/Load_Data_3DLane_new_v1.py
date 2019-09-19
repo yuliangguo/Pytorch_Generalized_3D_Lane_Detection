@@ -280,6 +280,8 @@ class LaneDataset(Dataset):
         lane_z_all = []
         visibility_all_flat = []
         for idx in range(len(gt_laneline_pts_all)):
+            # if idx == 333:
+            #     print(label_image_path[idx])
             # fetch camera height and pitch
             if not self.fix_cam:
                 gt_cam_height = gt_cam_height_all[idx]
@@ -547,8 +549,9 @@ class LaneDataset(Dataset):
         if gt_lane_3d.shape[0] < 2:
             return -1, np.array([]), np.array([])
 
-        # ignore GT does not pass y_ref TODO: should allow larger range, but need to solve gt merge first
-        if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
+        # ATTENTION: ignore GT does ends before y_ref, for those start at y > y_ref, use its interpolated value at y_ref
+        # if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
+        if gt_lane_3d[-1, 1] < self.y_ref:
             return -1, np.array([]), np.array([])
 
         # resample ground-truth laneline at anchor y steps
@@ -758,8 +761,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.dataset_name = 'sim3d_0917'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -769,12 +772,14 @@ if __name__ == '__main__':
         tusimple_config(args)
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
+        # ATTENTION: because detection in gflat domain, y_ref need to be smaller
+        args.y_ref = 5
     else:
         print('Not using a supported dataset')
         sys.exit()
 
     # define the network model
-    args.mod = '3DLaneNet_new'
+    args.mod = '3DLaneNet_new_v1'
     # args.y_ref = 10.0
 
     # set 3D ground area for visualization
@@ -853,11 +858,11 @@ if __name__ == '__main__':
             if not args.no_centerline:
                 im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
-            # if idx[i] == 483:
+            # if idx[i] == 333:
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))
             cv2.waitKey()
-            print('image: {:d} in batch: {:d}'.format(i, batch_ndx))
+            print('image: {:d} in batch: {:d}'.format(idx[i], batch_ndx))
 
     print('done')
