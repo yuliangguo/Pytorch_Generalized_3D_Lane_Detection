@@ -20,7 +20,7 @@ import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
     homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, transform_lane_gflat2g,\
-    resample_laneline_in_y
+    resample_laneline_in_y, prune_3d_lane_by_range
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -280,7 +280,7 @@ class LaneDataset(Dataset):
         lane_z_all = []
         visibility_all_flat = []
         for idx in range(len(gt_laneline_pts_all)):
-            # if idx == 333:
+            # if idx == 936:
             #     print(label_image_path[idx])
             # fetch camera height and pitch
             if not self.fix_cam:
@@ -296,8 +296,8 @@ class LaneDataset(Dataset):
 
             gt_lanes = gt_laneline_pts_all[idx]
             # prune far range before converting to flat ground space
-            gt_lanes = [self.prune_3d_lane_by_range(gt_lane) for gt_lane in gt_lanes]
-            gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 0]
+            gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+            gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
             # convert 3d lanes to flat ground space
             self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
             gt_anchors = []
@@ -323,8 +323,8 @@ class LaneDataset(Dataset):
             if not self.no_centerline:
                 gt_lanes = gt_centerline_pts_all[idx]
                 # prune far range before converting to flat ground space
-                gt_lanes = [self.prune_3d_lane_by_range(gt_lane) for gt_lane in gt_lanes]
-                gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 0]
+                gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+                gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
                 # convert 3d lanes to flat ground space
                 self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
                 gt_anchors = []
@@ -498,23 +498,11 @@ class LaneDataset(Dataset):
                 if j > 0:
                     dx = lane[j, 0] - lane[j-1, 0]
                     dy = self.anchor_y_steps[j] - self.anchor_y_steps[j-1]
-                    if abs(dx/dy) > 5:
+                    if abs(dx/dy) > 10:
                         vis_inds[j:] = 0
                         break
             vis_inds_lanes.append(vis_inds)
         return vis_inds_lanes, lane_anchors, ass_ids
-
-    def prune_3d_lane_by_range(self, lane_3d):
-        # TODO: solve hard coded range later
-        # remove points with y out of range
-        # 3D label may miss super long straight-line with only two points: Not have to be 200, gt need a min-step
-        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
-        lane_3d = lane_3d[np.logical_and(lane_3d[:, 1] > 0, lane_3d[:, 1] < 200), ...]
-
-        # remove lane points out of x range
-        lane_3d = lane_3d[np.logical_and(lane_3d[:, 0] > 3 * self.x_min,
-                                         lane_3d[:, 0] < 3 * self.x_max), ...]
-        return lane_3d
 
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
         """
@@ -535,9 +523,11 @@ class LaneDataset(Dataset):
         else:  # For ground-truth in ground coordinates (Apollo Sim)
             gt_lane_3d = laneline_gt
 
-        # prune out points not in valid range
-        gt_lane_3d = self.prune_3d_lane_by_range(gt_lane_3d)
-        if gt_lane_3d.shape[0] < 2:
+        # prune out points not in valid range, requires additional points to interpolate better
+        gt_lane_3d = prune_3d_lane_by_range(gt_lane_3d, 3*self.x_min, 3*self.x_max)
+        # use more restricted range to determine deletion or not
+        if gt_lane_3d.shape[0] < 2 or np.sum(np.logical_and(gt_lane_3d[:, 0] > self.x_min,
+                                                            gt_lane_3d[:, 0] < self.x_max)) < 2:
             return -1, np.array([]), np.array([])
 
         if self.dataset_name is 'tusimple':
@@ -772,15 +762,15 @@ if __name__ == '__main__':
         tusimple_config(args)
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
-        # ATTENTION: because detection in gflat domain, y_ref need to be smaller
-        args.y_ref = 5
+        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
+        args.num_y_steps = len(args.anchor_y_steps)
     else:
         print('Not using a supported dataset')
         sys.exit()
 
     # define the network model
     args.mod = '3DLaneNet_new_v1'
-    # args.y_ref = 10.0
+    args.y_ref = 5.0
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -788,7 +778,7 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'test2.json'), args, data_aug=True)
     dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps
@@ -858,7 +848,8 @@ if __name__ == '__main__':
             if not args.no_centerline:
                 im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
-            # if idx[i] == 333:
+            # if idx[i] == 936:
+            # if '05/0000327' in dataset._label_image_path[idx[i]]:
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))

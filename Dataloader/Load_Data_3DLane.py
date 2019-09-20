@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
-    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, resample_laneline_in_y
+    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, resample_laneline_in_y, prune_3d_lane_by_range
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -283,6 +283,8 @@ class LaneDataset(Dataset):
                 H_im2g = self.H_im2g
 
             gt_lanes = gt_laneline_pts_all[idx]
+            gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+            gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
             gt_anchors = []
             ass_ids = []
             for i in range(len(gt_lanes)):
@@ -298,6 +300,8 @@ class LaneDataset(Dataset):
 
             if not self.no_centerline:
                 gt_lanes = gt_centerline_pts_all[idx]
+                gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+                gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
                 gt_anchors = []
                 ass_ids = []
                 for i in range(len(gt_lanes)):
@@ -404,18 +408,6 @@ class LaneDataset(Dataset):
                     if not self.no_3d:
                         lane[:, 1] = np.divide(lane[:, 1], self._z_std)
 
-    def prune_3d_lane_by_range(self, lane_3d):
-        # TODO: solve hard coded range later
-        # remove points with y out of range
-        # 3D label may miss super long straight-line with only two points: Not have to be 200, gt need a min-step
-        # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
-        lane_3d = lane_3d[np.logical_and(lane_3d[:, 1] > 0, lane_3d[:, 1] < 200), ...]
-
-        # remove lane points out of x range
-        lane_3d = lane_3d[np.logical_and(lane_3d[:, 0] > 3 * self.x_min,
-                                         lane_3d[:, 0] < 3 * self.x_max), ...]
-        return lane_3d
-
     def convert_label_to_anchor(self, laneline_gt, H_im2g):
         if self.no_3d:  # For ground-truth in 2D image coordinates (TuSimple)
             gt_lane_2d = laneline_gt
@@ -428,8 +420,9 @@ class LaneDataset(Dataset):
             gt_lane_3d = laneline_gt
 
         # prune out points not in valid range
-        gt_lane_3d = self.prune_3d_lane_by_range(gt_lane_3d)
-        if gt_lane_3d.shape[0] < 2:
+        gt_lane_3d = prune_3d_lane_by_range(gt_lane_3d, 3*self.x_min, 3*self.x_max)
+        if gt_lane_3d.shape[0] < 2 or np.sum(np.logical_and(gt_lane_3d[:, 0] > self.x_min,
+                                                            gt_lane_3d[:, 0] < self.x_max)) < 2:
             return -1, np.array([]), np.array([])
 
         if self.dataset_name is 'tusimple':
@@ -611,6 +604,8 @@ if __name__ == '__main__':
         tusimple_config(args)
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
+        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
+        args.num_y_steps = len(args.anchor_y_steps)
     else:
         print('Not using a supported dataset')
         sys.exit()

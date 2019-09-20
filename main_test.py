@@ -261,7 +261,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     global args
     parser = define_args()
@@ -271,8 +271,8 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0906'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
+    args.dataset_name = 'sim3d_0917'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -300,7 +300,7 @@ if __name__ == '__main__':
 
     # settings for save and visualize
     args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
-    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_2/'
+    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
     global vis_folder
     global test_gt_file
     global lane_pred_file

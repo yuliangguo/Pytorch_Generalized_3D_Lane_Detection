@@ -459,13 +459,13 @@ if __name__ == '__main__':
         sim3d_config(args)
         args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)
-        args.y_ref = 5
         # define evaluator
         evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 
     # define the network model
     args.mod = '3DLaneNet_new_v1'
+    args.y_ref = 5
 
     # for the case only running evaluation
     args.evaluate = False

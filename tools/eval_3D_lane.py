@@ -8,7 +8,7 @@ import matplotlib
 from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
-    tusimple_config, sim3d_config, resample_laneline_in_y
+    tusimple_config, sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range
 from tools.MinCostFlow import SolveMinCostFlow
 from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
@@ -26,11 +26,15 @@ class LaneEval(object):
         self.dataset_dir = args.dataset_dir
         self.K = args.K
         self.no_centerline = args.no_centerline
-        self.y_samples = np.linspace(1, 81, num=100, endpoint=False)
-
         self.resize_h = args.resize_h
         self.resize_w = args.resize_w
         self.H_crop = homography_crop_resize([args.org_h, args.org_w], args.crop_y, [args.resize_h, args.resize_w])
+
+        self.x_min = args.top_view_region[0, 0]
+        self.x_max = args.top_view_region[1, 0]
+        self.y_samples = np.linspace(1, 81, num=100, endpoint=False)
+        self.dist_th = 1.5
+        self.ratio_th = 0.75
 
     def bench(self, pred_lanes, gt_lanes, raw_file, gt_cam_height, gt_cam_pitch, vis, ax1, ax2):
         """
@@ -51,8 +55,9 @@ class LaneEval(object):
         :return:
         """
 
-        dist_th = 1.5
-        ratio_th = 0.5
+        # if raw_file == 'images/05/0000347.jpg':
+        #     print('here')
+
         close_range_idx = np.int((30 - 1) / 0.8)
 
         r_lane, p_lane = 0., 0.
@@ -62,6 +67,8 @@ class LaneEval(object):
         z_error_far = []
         # only consider those gt lanes overlapping with sampling range
         gt_lanes = [lane for lane in gt_lanes if lane[0][1] < self.y_samples[-1] and lane[-1][1] > self.y_samples[0]]
+        gt_lanes = [prune_3d_lane_by_range(np.array(gt_lane), 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+        gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
 
@@ -71,18 +78,25 @@ class LaneEval(object):
         for i in range(cnt_gt):
             min_y = np.min(np.array(gt_lanes[i])[:, 1])
             max_y = np.max(np.array(gt_lanes[i])[:, 1])
-            gt_visibility_mat[i, :] = np.logical_and(self.y_samples >= min_y, self.y_samples <= max_y)
             x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
+            gt_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
+                                                     np.logical_and(x_values <= self.x_max,
+                                                                    np.logical_and(self.y_samples >= min_y,
+                                                                                   self.y_samples <= max_y)))
 
         for i in range(cnt_pred):
             # # ATTENTION: ensure y mono increase before interpolation: but it can reduce size
             # pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
+            # pred_lane = prune_3d_lane_by_range(np.array(pred_lanes[i]), self.x_min, self.x_max)
             min_y = np.min(np.array(pred_lanes[i])[:, 1])
             max_y = np.max(np.array(pred_lanes[i])[:, 1])
-            pred_visibility_mat[i, :] = np.logical_and(self.y_samples >= min_y, self.y_samples <= max_y)
             x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), self.y_samples)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
+            pred_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
+                                                       np.logical_and(x_values <= self.x_max,
+                                                                      np.logical_and(self.y_samples >= min_y,
+                                                                                     self.y_samples <= max_y)))
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
         # TODO: it is necessary to visualize here? as the visualization has been done in testing
@@ -107,10 +121,11 @@ class LaneEval(object):
                 euclidean_dist = np.sqrt(x_dist**2 + z_dist**2)
 
                 # apply visibility to penalize different partial matching accordingly
-                euclidean_dist[np.logical_or(gt_visibility_mat[i, :] == 0, pred_visibility_mat[j, :] == 0)] = dist_th
+                euclidean_dist[np.logical_or(gt_visibility_mat[i, :] == 0, pred_visibility_mat[j, :] == 0)] = self.dist_th
 
-                # if np.average(euclidean_dist) < 2*dist_th: # don't prune here to encourage finding perfect match
-                num_match_mat[i, j] = np.sum(euclidean_dist < dist_th)
+                # if np.average(euclidean_dist) < 2*self.dist_th: # don't prune here to encourage finding perfect match
+                # TODO: why not just use num_match_mat as cost_mat?
+                num_match_mat[i, j] = np.sum(euclidean_dist < self.dist_th)
                 adj_mat[i, j] = 1
                 x_dist_mat_close[i, j] = np.average(x_dist[:close_range_idx])
                 x_dist_mat_far[i, j] = np.average(x_dist[close_range_idx:])
@@ -123,19 +138,19 @@ class LaneEval(object):
         match_results = SolveMinCostFlow(adj_mat, cost_mat)
         match_results = np.array(match_results)
 
-        # only a match with avg cost < dist_th is consider valid one
+        # only a match with avg cost < self.dist_th is consider valid one
         match_gt_ids = []
         match_pred_ids = []
-        if match_results.shape[0] > 0 and np.sum(match_results[:, 2] < dist_th * self.y_samples.shape[0]) > 0:
+        if match_results.shape[0] > 0 and np.sum(match_results[:, 2] < self.dist_th * self.y_samples.shape[0]) > 0:
             for i in range(len(match_results)):
-                if match_results[i, 2] < dist_th * self.y_samples.shape[0]:
+                if match_results[i, 2] < self.dist_th * self.y_samples.shape[0]:
                     gt_i = match_results[i, 0]
                     pred_i = match_results[i, 1]
                     # consider match when the matched points is above a ratio
-                    if num_match_mat[gt_i, pred_i] / np.sum(gt_visibility_mat[gt_i, :]) >= ratio_th:
+                    if num_match_mat[gt_i, pred_i] / np.sum(gt_visibility_mat[gt_i, :]) >= self.ratio_th:
                         r_lane += 1
                         match_gt_ids.append(gt_i)
-                    if num_match_mat[gt_i, pred_i] / np.sum(pred_visibility_mat[pred_i, :]) >= ratio_th:
+                    if num_match_mat[gt_i, pred_i] / np.sum(pred_visibility_mat[pred_i, :]) >= self.ratio_th:
                         p_lane += 1
                         match_pred_ids.append(pred_i)
                     x_error_close.append(x_dist_mat_close[gt_i, pred_i])
@@ -166,8 +181,9 @@ class LaneEval(object):
                     # only draw the visible portion
                     if gt_visibility_mat[i, k-1] and gt_visibility_mat[i, k]:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 3)
-                ax1.imshow(img[:, :, [2, 1, 0]])
-                ax2.plot(x_values, self.y_samples, z_values, color=color)
+                ax2.plot(x_values[np.where(gt_visibility_mat[i, :])],
+                         self.y_samples[np.where(gt_visibility_mat[i, :])],
+                         z_values[np.where(gt_visibility_mat[i, :])], color=color)
 
             for i in range(cnt_pred):
                 x_values = pred_lanes[i][:, 0]
@@ -184,8 +200,15 @@ class LaneEval(object):
                     # only draw the visible portion
                     if pred_visibility_mat[i, k - 1] and pred_visibility_mat[i, k]:
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
-                ax1.imshow(img[:, :, [2, 1, 0]])
-                ax2.plot(x_values, self.y_samples, z_values, color=color)
+                ax2.plot(x_values[np.where(pred_visibility_mat[i, :])],
+                         self.y_samples[np.where(pred_visibility_mat[i, :])],
+                         z_values[np.where(pred_visibility_mat[i, :])], color=color)
+
+            cv2.putText(img, 'Recall: {:.3f}'.format(r_lane / (cnt_gt + 1e-6)),
+                        (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            cv2.putText(img, 'Precision: {:.3f}'.format(p_lane / (cnt_pred + 1e-6)),
+                        (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            ax1.imshow(img[:, :, [2, 1, 0]])
 
         return r_lane, p_lane, cnt_gt, cnt_pred, x_error_close, x_error_far, z_error_close, z_error_far
 
@@ -222,6 +245,9 @@ class LaneEval(object):
             if 'raw_file' not in pred or 'laneLines' not in pred:
                 raise Exception('raw_file or lanelines not in some predictions.')
             raw_file = pred['raw_file']
+
+            # if raw_file != 'images/05/0000347.jpg':
+            #     continue
             pred_lanelines = pred['laneLines']
             if raw_file not in gts:
                 raise Exception('Some raw_file from your predictions do not exist in the test tasks.')
@@ -361,15 +387,15 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0906'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
+    args.dataset_name = 'sim3d_0917'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0906/Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d_0906/val.json'
+    pred_file = '../data/sim3d_0917/Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d_0917/val.json'
 
     # try:
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)

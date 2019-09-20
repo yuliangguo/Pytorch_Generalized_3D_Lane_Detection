@@ -297,13 +297,14 @@ if __name__ == '__main__':
 
     # define the network model
     args.mod = '3DLaneNet_new_v1'
+    args.y_ref = 5
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_new_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
-    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane/'
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_new_v1_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/'
     global vis_folder
     global test_gt_file
     global lane_pred_file

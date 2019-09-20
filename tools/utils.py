@@ -725,6 +725,19 @@ class Visualizer:
             plt.close(fig)
 
 
+def prune_3d_lane_by_range(lane_3d, x_min, x_max):
+    # TODO: solve hard coded range later
+    # remove points with y out of range
+    # 3D label may miss super long straight-line with only two points: Not have to be 200, gt need a min-step
+    # 2D dataset requires this to rule out those points projected to ground, but out of meaningful range
+    lane_3d = lane_3d[np.logical_and(lane_3d[:, 1] > 0, lane_3d[:, 1] < 200), ...]
+
+    # remove lane points out of x range
+    lane_3d = lane_3d[np.logical_and(lane_3d[:, 0] > x_min,
+                                     lane_3d[:, 0] < x_max), ...]
+    return lane_3d
+
+
 def resample_laneline_in_y(input_lane, y_steps):
     """
         Interpolate x, z values at each anchor grid, including those beyond the range of input lnae y range
