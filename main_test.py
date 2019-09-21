@@ -21,7 +21,7 @@ from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
 from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_3D_loss
+from Networks.Loss_crit import Laneline_loss_3D
 from Networks.LaneNet3D import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\

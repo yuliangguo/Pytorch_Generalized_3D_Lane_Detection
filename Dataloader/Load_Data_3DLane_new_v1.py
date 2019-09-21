@@ -122,6 +122,7 @@ class LaneDataset(Dataset):
                 self._laneline_ass_ids, \
                 self._centerline_ass_ids, \
                 self._x_off_std, \
+                self._y_off_std, \
                 self._z_std, \
                 self._gt_laneline_visibility_all, \
                 self._gt_centerline_visibility_all = self.init_dataset_3D(dataset_base_dir, json_file_path)
@@ -278,14 +279,15 @@ class LaneDataset(Dataset):
         gt_centerline_ass_ids = []
         lane_x_off_all = []
         lane_z_all = []
+        lane_y_off_all = []  # this is the offset of y when transformed back 3 3D
         visibility_all_flat = []
         for idx in range(len(gt_laneline_pts_all)):
             # if idx == 936:
             #     print(label_image_path[idx])
             # fetch camera height and pitch
+            gt_cam_height = gt_cam_height_all[idx]
+            gt_cam_pitch = gt_cam_pitch_all[idx]
             if not self.fix_cam:
-                gt_cam_height = gt_cam_height_all[idx]
-                gt_cam_pitch = gt_cam_pitch_all[idx]
                 P_g2im = projection_g2im(gt_cam_pitch, gt_cam_height, self.K)
                 H_g2im = homograpthy_g2im(gt_cam_pitch, gt_cam_height, self.K)
                 H_im2g = np.linalg.inv(H_g2im)
@@ -315,6 +317,8 @@ class LaneDataset(Dataset):
             for i in range(len(gt_anchors)):
                 lane_x_off_all.append(gt_anchors[i][:, 0])
                 lane_z_all.append(gt_anchors[i][:, 1])
+                # compute y offset when transformed back to 3D space
+                lane_y_off_all.append(-gt_anchors[i][:, 1]*self.anchor_y_steps/gt_cam_height)
             visibility_all_flat.extend(gt_visibilty)
             gt_laneline_ass_ids.append(ass_ids)
             gt_laneline_pts_all[idx] = gt_anchors
@@ -342,21 +346,24 @@ class LaneDataset(Dataset):
                 for i in range(len(gt_anchors)):
                     lane_x_off_all.append(gt_anchors[i][:, 0])
                     lane_z_all.append(gt_anchors[i][:, 1])
+                    # compute y offset when transformed back to 3D space
+                    lane_y_off_all.append(-gt_anchors[i][:, 1] * self.anchor_y_steps / gt_cam_height)
                 visibility_all_flat.extend(gt_visibilty)
                 gt_centerline_ass_ids.append(ass_ids)
                 gt_centerline_pts_all[idx] = gt_anchors
                 gt_centerline_visibility_all[idx] = gt_visibilty
 
         lane_x_off_all = np.array(lane_x_off_all)
+        lane_y_off_all = np.array(lane_y_off_all)
         lane_z_all = np.array(lane_z_all)
         visibility_all_flat = np.array(visibility_all_flat)
 
         # computed weighted std based on visibility
         lane_x_off_std = np.sqrt(np.average(lane_x_off_all**2, weights=visibility_all_flat, axis=0))
+        lane_y_off_std = np.sqrt(np.average(lane_y_off_all**2, weights=visibility_all_flat, axis=0))
         lane_z_std = np.sqrt(np.average(lane_z_all**2, weights=visibility_all_flat, axis=0))
-
         return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all,\
-               gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_z_std,\
+               gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_y_off_std, lane_z_std,\
                gt_laneline_visibility_all, gt_centerline_visibility_all
 
     def init_dataset_tusimple(self, dataset_base_dir, json_file_path):
@@ -427,6 +434,9 @@ class LaneDataset(Dataset):
 
     def set_x_off_std(self, x_off_std):
         self._x_off_std = x_off_std
+
+    def set_y_off_std(self, y_off_std):
+        self._y_off_std = y_off_std
 
     def set_z_std(self, z_std):
         self._z_std = z_std

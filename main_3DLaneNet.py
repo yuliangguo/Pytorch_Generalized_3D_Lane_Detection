@@ -18,7 +18,7 @@ from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
 from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_3D_loss
+from Networks.Loss_crit import Laneline_loss_3D
 from Networks.LaneNet3D import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
@@ -34,8 +34,9 @@ def train_net():
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define save path
-    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
+    save_id = 'Model_{}_crit_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
               .format(args.mod,
+                      crit_string,
                       args.optimizer,
                       args.learning_rate,
                       args.batch_size,
@@ -83,14 +84,10 @@ def train_net():
     scheduler = define_scheduler(optimizer, args)
 
     # Define loss criteria
-    criterion = Laneline_3D_loss(train_dataset.num_types, train_dataset.anchor_dim, args.pred_cam)
+    criterion = Laneline_loss_3D(train_dataset.num_types, train_dataset.anchor_dim, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
-
-    # Name
-    global crit_string
-    crit_string = '3Dlaneline loss'
 
     # Logging setup
     best_epoch = 0
@@ -463,6 +460,8 @@ if __name__ == '__main__':
 
     # define the network model
     args.mod = '3DLaneNet'
+    global crit_string
+    crit_string = 'loss_3D'
 
     # for the case only running evaluation
     args.evaluate = False

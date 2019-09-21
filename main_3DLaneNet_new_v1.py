@@ -18,7 +18,7 @@ from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
 from Dataloader.Load_Data_3DLane_new_v1 import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_3D_loss_new_v1
+from Networks import Loss_crit
 from Networks.LaneNet3D_new_v1 import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
@@ -34,8 +34,9 @@ def train_net():
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define save path
-    save_id = 'Model_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
+    save_id = 'Model_{}_crit_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
               .format(args.mod,
+                      crit_string,
                       args.optimizer,
                       args.learning_rate,
                       args.batch_size,
@@ -55,6 +56,7 @@ def train_net():
     valid_dataset.set_x_off_std(train_dataset._x_off_std)
     if not args.no_3d:
         valid_dataset.set_z_std(train_dataset._z_std)
+        valid_dataset.set_y_off_std(train_dataset._y_off_std)
     valid_dataset.normalize_lane_label()
     valid_loader = get_loader(valid_dataset, args)
 
@@ -83,14 +85,16 @@ def train_net():
     scheduler = define_scheduler(optimizer, args)
 
     # Define loss criteria
-    criterion = Laneline_3D_loss_new_v1(train_dataset.num_types, args.num_y_steps, args.pred_cam)
+    if crit_string == 'loss_gflat_3D':
+        criterion = Loss_crit.Laneline_loss_gflat_3D(args.batch_size, train_dataset.num_types,
+                                                     train_dataset.anchor_x_steps, train_dataset.anchor_y_steps,
+                                                     train_dataset._x_off_std, train_dataset._y_off_std,
+                                                     train_dataset._z_std, args.pred_cam, args.no_cuda)
+    else:
+        criterion = Loss_crit.Laneline_loss_gflat(train_dataset.num_types, args.num_y_steps, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
-
-    # Name
-    global crit_string
-    crit_string = '3Dlaneline loss'
 
     # Logging setup
     best_epoch = 0
@@ -464,8 +468,10 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_new_v1'
+    args.mod = '3DLaneNet_new_v1x'
     args.y_ref = 5
+    global crit_string
+    crit_string = 'loss_gflat_3D'
 
     # for the case only running evaluation
     args.evaluate = False
