@@ -7,10 +7,10 @@ import math
 import glob
 
 if __name__ == '__main__':
-    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917'
+    dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0920'
     json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
     batch_size = 8
-    output_folder = '../data/sim3d_0917/'
+    output_folder = '../data/sim3d_0920/'
     split_ratio = [0.8, 0.2]
     if not ops.exists(output_folder):
         os.makedirs(output_folder)

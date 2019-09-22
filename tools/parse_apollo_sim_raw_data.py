@@ -246,9 +246,9 @@ def process_lane_label_apollo_sim_3D(label_file):
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0917/"
-    input_file = base_folder + "test2.txt"
-    output_gt_file = base_folder + "test2.json"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0920/"
+    input_file = base_folder + "img_list.txt"
+    output_gt_file = base_folder + "laneline_label.json"
     image_list, label_list, name_list = get_lists(input_file)
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:

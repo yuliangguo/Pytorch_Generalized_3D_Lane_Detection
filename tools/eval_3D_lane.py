@@ -394,7 +394,7 @@ if __name__ == '__main__':
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0917/Model_3DLaneNet_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    pred_file = '../data/sim3d_0917/Model_3DLaneNet_new_v1x_crit_loss_gflat_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
     gt_file = '../data/sim3d_0917/val.json'
 
     # try:
