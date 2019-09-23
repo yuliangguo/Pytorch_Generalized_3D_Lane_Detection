@@ -28,6 +28,8 @@ K = np.array([[2015.0,      0, 960.0],
              [      0,      0,     1]])
 vis = True
 merge = True
+parse_visibility = True
+vis_dist_th = 3
 
 
 def get_lists(test_file):
@@ -36,91 +38,18 @@ def get_lists(test_file):
 
     image_list = []
     label_list = []
+    seg_list = []
+    depth_list = []
     name_list = []
     for line in test_list:
         line = line.replace("\n", "")
         line = line.replace("./", "")
         image_list.append("images/" + line)
         label_list.append("labels/" + line[:-4] + ".txt")
+        seg_list.append("segmentation/" + line[:-4] + ".png")
+        depth_list.append("depth/" + line[:-4] + ".png")
         name_list.append(line[:-4].replace("/", "_"))
-    return image_list, label_list, name_list
-
-
-def laneline_label_generator(base_folder, image_name, label_name, output_gt_file):
-    img = cv2.imread(base_folder + image_name)
-    # label_img = np.zeros((img_height, img_width), dtype=np.int8)
-
-    # if image_name == 'images/00/0000062.jpg':
-    #     print('here')
-
-    # extract lanes and types from ground-truth label file
-    centerlines, lanelines, cam_height, cam_pitch = process_lane_label_apollo_sim_3D(base_folder + label_name)
-
-    # compute projection matrix
-    proj_g2c = np.array([[1,                             0,                              0,          0],
-                         [0, np.cos(np.pi / 2 + cam_pitch), -np.sin(np.pi / 2 + cam_pitch), cam_height],
-                         [0, np.sin(np.pi / 2 + cam_pitch),  np.cos(np.pi / 2 + cam_pitch),          0],
-                         [0,                             0,                              0,          1]])
-    proj_c2g = np.linalg.inv(proj_g2c)
-    centerlines_g = []
-    lanelines_g = []
-
-    # visualize laneline by projecting to image
-    for i, lane3D in enumerate(centerlines):
-        lane3D = np.array(lane3D)
-        lane3D = lane3D[lane3D[:, 2] > 0.01, :]
-        # project laneline 3D in camera coordinates to ground coordinates
-        centerline = np.concatenate([lane3D, np.ones([lane3D.shape[0], 1])], axis=1)
-        centerline_g = np.matmul(centerline, proj_c2g.T)
-        centerlines_g.append(centerline_g[:, :3].tolist())
-
-        # project to image (camera coordinates to image coordinates)
-        lane2D = np.matmul(lane3D, K.T)
-        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1))
-        # draw on image
-        for j in range(1, lane2D.shape[0]):
-            img = cv2.line(img,
-                           (int(lane2D[j-1, 0]), int(lane2D[j-1, 1])),
-                           (int(lane2D[j, 0]), int(lane2D[j, 1])),
-                           color=[255, 0, 0])
-        # draw end points
-        cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
-        cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
-
-    for i, lane3D in enumerate(lanelines):
-        lane3D = np.array(lane3D)
-        # project laneline 3D in camera coordinates to ground coordinates
-        laneline = np.concatenate([lane3D, np.ones([lane3D.shape[0], 1])], axis=1)
-        laneline_g = np.matmul(laneline, proj_c2g.T)
-        lanelines_g.append(laneline_g[:, :3].tolist())
-        # project to image (camera coordinates to image coordinates)
-        lane2D = np.matmul(np.array(lane3D), K.T)
-        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1))
-        # draw on image
-        for j in range(1, lane2D.shape[0]):
-            img = cv2.line(img,
-                           (int(lane2D[j-1, 0]), int(lane2D[j-1, 1])),
-                           (int(lane2D[j, 0]), int(lane2D[j, 1])),
-                           color=[0, 255, 0])
-        # draw end points
-        cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
-        cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
-
-    # generate json
-    result = {}
-    valid_img = True
-    result["raw_file"] = image_name
-    result['cam_height'] = cam_height
-    result['cam_pitch'] = cam_pitch
-    result["centerLines"] = np.asarray(centerlines_g).tolist()
-    result["laneLines"] = np.asarray(lanelines_g).tolist()
-
-    with open(output_gt_file, "a") as outfile:
-        outfile.write(json.dumps(result))
-        outfile.write("\n")
-        outfile.close()
-
-    return img, valid_img
+    return image_list, label_list, seg_list, depth_list, name_list
 
 
 def merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerline2del, laneline2del):
@@ -132,7 +61,7 @@ def merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerl
         new_succssorList = merge_segments_recursive(centerlane2, centerline_dict, laneline_dict, centerline2del, laneline2del)
         centerlane['successorList'] = new_succssorList
 
-        # TODO: remove this condition when raw label successor list all corrected
+        # this condition could be removed, but kept for safe
         if -0.01 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 0.01:
             centerlane['pos3DInCameraList'].extend(centerlane2['pos3DInCameraList'])
             centerline2del[centerlane2['id']] = 1
@@ -245,19 +174,186 @@ def process_lane_label_apollo_sim_3D(label_file):
     return centerlanes_out, lanelines_out, lane_data['cameraHeight'], lane_data['cameraPitch']
 
 
+def prune_invisible_portion(centerlines, lanelines, seg_file, depth_file):
+    seg_image = cv2.imread(base_folder + seg_file)
+    depth_image = cv2.imread(base_folder + depth_file)
+    depth_label_map = (depth_image[:, :, 2] + depth_image[:, :, 1]/255)/100
+
+    for lanline in lanelines:
+        # project to image (camera coordinates to image coordinates)
+        lane2D = np.matmul(np.array(lanline), K.T)
+        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1))
+
+        # refer to depth map, decide visibility based on the consistency between z
+        return centerlines, lanelines
+
+
+def laneline_label_generator(base_folder, image_file, label_file, seg_file, depth_file, output_gt_file):
+    img = cv2.imread(base_folder + image_file)
+    seg_img = cv2.imread(base_folder + seg_file)
+    depth_img = cv2.imread(base_folder + depth_file).astype(np.float32)/255
+    depth_label_map = (depth_img[:, :, 2] + depth_img[:, :, 1]/255)*655.36
+    # label_img = np.zeros((img_height, img_width), dtype=np.int8)
+
+    # if image_name == 'images/00/0000062.jpg':
+    #     print('here')
+
+    # extract lanes and types from ground-truth label file
+    centerlines, lanelines, cam_height, cam_pitch = process_lane_label_apollo_sim_3D(base_folder + label_file)
+
+    # compute projection matrix
+    proj_g2c = np.array([[1,                             0,                              0,          0],
+                         [0, np.cos(np.pi / 2 + cam_pitch), -np.sin(np.pi / 2 + cam_pitch), cam_height],
+                         [0, np.sin(np.pi / 2 + cam_pitch),  np.cos(np.pi / 2 + cam_pitch),          0],
+                         [0,                             0,                              0,          1]])
+    proj_c2g = np.linalg.inv(proj_g2c)
+    centerlines_g = []
+    lanelines_g = []
+    centerlines_visibility = []
+    lanelines_visibility = []
+
+    # convert laneline to ground coordinate and visualize therm by projecting to image
+    for i, lane3D in enumerate(centerlines):
+        lane3D = np.array(lane3D)
+        # project laneline 3D in camera coordinates to ground coordinates
+        centerline = np.concatenate([lane3D, np.ones([lane3D.shape[0], 1])], axis=1)
+        centerline_g = np.matmul(centerline, proj_c2g.T)
+        # centerline_g = centerline_g[centerline_g[:, 2] > 0.01, :]
+        centerlines_g.append(centerline_g[:, :3].tolist())
+
+        # project to image (camera coordinates to image coordinates)
+        lane2D = np.matmul(lane3D, K.T)
+        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1)).astype(np.int)
+
+        # determine visibility
+        visibility_vec = np.ones(lane2D.shape[0])
+        for j in range(lane2D.shape[0]):
+            if lane2D[j, 0] < 1 or lane2D[j, 0] >= img_width-1:
+                visibility_vec[j] = 0
+                continue
+            if lane2D[j, 1] < 1 or lane2D[j, 1] >= img_height-1:
+                visibility_vec[j] = 0
+                continue
+            if np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1]+1, lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1]-1, lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]+1] - centerline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]-1] - centerline[j][2]) > vis_dist_th:
+                visibility_vec[j] = 0
+                continue
+        # TODO: replace this part when segmentation label map ready
+        # find the first and last visible index, assume all points in between visible
+        visible_indices = np.where(visibility_vec > 0)[0]
+        if visible_indices.shape[0] > 0:
+            vis_start = visible_indices[0]
+            vis_end = visible_indices[-1]
+            visibility_vec[vis_start:vis_end] = 1
+        centerlines_visibility.append(visibility_vec.tolist())
+
+        # determine visibility and draw on image
+        for j in range(1, lane2D.shape[0]):
+            if visibility_vec[j] > 0:
+                img = cv2.line(img,
+                               (lane2D[j-1, 0], lane2D[j-1, 1]),
+                               (lane2D[j, 0], lane2D[j, 1]),
+                               color=[255, 0, 0])
+            else:
+                img = cv2.line(img,
+                               (lane2D[j - 1, 0], lane2D[j - 1, 1]),
+                               (lane2D[j, 0], lane2D[j, 1]),
+                               color=[0, 0, 0])
+        # draw end points
+        cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
+        cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
+
+    for i, lane3D in enumerate(lanelines):
+        lane3D = np.array(lane3D)
+        # project laneline 3D in camera coordinates to ground coordinates
+        laneline = np.concatenate([lane3D, np.ones([lane3D.shape[0], 1])], axis=1)
+        laneline_g = np.matmul(laneline, proj_c2g.T)
+        # laneline_g = laneline_g[laneline_g[:, 2] > 0.01, :]
+        lanelines_g.append(laneline_g[:, :3].tolist())
+        # project to image (camera coordinates to image coordinates)
+        lane2D = np.matmul(np.array(lane3D), K.T)
+        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1)).astype(np.int)
+
+        # determine visibility
+        visibility_vec = np.ones(lane2D.shape[0])
+        for j in range(lane2D.shape[0]):
+            if lane2D[j, 0] < 1 or lane2D[j, 0] >= img_width-1:
+                visibility_vec[j] = 0
+                continue
+            if lane2D[j, 1] < 1 or lane2D[j, 1] >= img_height-1:
+                visibility_vec[j] = 0
+                continue
+            if np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1]+1, lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1]-1, lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]+1] - laneline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]-1] - laneline[j][2]) > vis_dist_th:
+                visibility_vec[j] = 0
+                continue
+        # TODO: replace this part when segmentation label map ready
+        # find the first and last visible index, assume all points in between visible
+        visible_indices = np.where(visibility_vec > 0)[0]
+        if visible_indices.shape[0] > 0:
+            vis_start = visible_indices[0]
+            vis_end = visible_indices[-1]
+            visibility_vec[vis_start:vis_end] = 1
+        lanelines_visibility.append(visibility_vec.tolist())
+
+        # draw on image
+        for j in range(1, lane2D.shape[0]):
+            if visibility_vec[j] > 0:
+                img = cv2.line(img,
+                               (lane2D[j-1, 0], lane2D[j-1, 1]),
+                               (lane2D[j, 0], lane2D[j, 1]),
+                               color=[0, 255, 0])
+            else:
+                img = cv2.line(img,
+                               (lane2D[j - 1, 0], lane2D[j - 1, 1]),
+                               (lane2D[j, 0], lane2D[j, 1]),
+                               color=[0, 0, 0])
+        # draw end points
+        cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
+        cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
+
+    # generate json
+    result = {}
+    valid_img = True
+    result["raw_file"] = image_file
+    result['cam_height'] = cam_height
+    result['cam_pitch'] = cam_pitch
+    result["centerLines"] = np.asarray(centerlines_g).tolist()
+    result["laneLines"] = np.asarray(lanelines_g).tolist()
+    result["centerLines_visibility"] = np.asarray(centerlines_g).tolist()
+    result["laneLines_visibility"] = np.asarray(lanelines_g).tolist()
+
+    with open(output_gt_file, "a") as outfile:
+        outfile.write(json.dumps(result))
+        outfile.write("\n")
+        outfile.close()
+
+    return img, valid_img
+
+
 if __name__ == '__main__':
     base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0920/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
-    image_list, label_list, name_list = get_lists(input_file)
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:
         os.mkdir(vis_folder)
-    # save the full list
+
+    # get lists of file names
+    image_list, label_list, seg_list, depth_list, name_list = get_lists(input_file)
+
+    # generate label associated with each image
     f_out = open(output_gt_file, 'w')
     for i in range(len(image_list)):
         print(i)
-        img_vis, valid_img = laneline_label_generator(base_folder, image_list[i], label_list[i], output_gt_file)
+        img_vis, valid_img = laneline_label_generator(base_folder, image_list[i], label_list[i],
+                                                      seg_list[i], depth_list[i], output_gt_file)
         if vis:
             img_name = image_list[i].split('/')
             img_name = img_name[-1]

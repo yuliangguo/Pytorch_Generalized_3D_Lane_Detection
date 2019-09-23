@@ -474,7 +474,7 @@ if __name__ == '__main__':
     crit_string = 'loss_gflat_3D'
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.print_freq = 50
