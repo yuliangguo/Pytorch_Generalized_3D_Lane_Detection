@@ -209,7 +209,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
                 # Plot curves in two views
                 vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
-                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=False)
+                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=True)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -308,9 +308,9 @@ if __name__ == '__main__':
     global vis_folder
     global test_gt_file
     global lane_pred_file
-    vis_folder = 'val_vis'
-    test_gt_file = ops.join(args.data_dir, 'val.json')
-    lane_pred_file = ops.join(args.save_path, 'val_pred_file.json')
+    vis_folder = 'test2_vis'
+    test_gt_file = ops.join(args.data_dir, 'test2.json')
+    lane_pred_file = ops.join(args.save_path, 'test2_pred_file.json')
 
     # run the training
     main()

@@ -72,12 +72,14 @@ class LaneEval(object):
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
 
+
         gt_visibility_mat = np.zeros((cnt_gt, 100))
         pred_visibility_mat = np.zeros((cnt_pred, 100))
         # resample gt and pred at y_samples
         for i in range(cnt_gt):
             min_y = np.min(np.array(gt_lanes[i])[:, 1])
             max_y = np.max(np.array(gt_lanes[i])[:, 1])
+            # TODO: use gt visibility label and perform logical AND
             x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
             gt_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
@@ -394,8 +396,8 @@ if __name__ == '__main__':
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0920/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d_0920/val.json'
+    pred_file = '../data/sim3d_0920/Model_3DLaneNet_new_v1_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test2_pred_file.json'
+    gt_file = '../data/sim3d_0920/test2.json'
 
     # try:
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)

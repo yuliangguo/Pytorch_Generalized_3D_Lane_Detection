@@ -15,11 +15,32 @@ import json
 from json import encoder
 encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
+"""
+Segmentation background class color coding: R G B
+
+Untagged 0 0 0
+LaneMarking 255 255 255
+Road 171 99 36
+Sidewalk 169 94 30
+SpeedBump 192 134 83
+GuardRail 174 92 20
+Terrain 114 75 41
+Building 113 67 173
+TrafficLight 118 67 185
+Pole 104 71 147
+StreetLight 73 50 103
+GarageMarker 60 27 103
+TrafficSign 101 24 201
+Vegetation 0 204 20
+Sky 0 197 204
+TrafficCone 42 92 110
+Barricade 205 205 205
+"""
 # color coding of different lane labels
-colors = np.array([[0, 0, 0], [60, 10, 0], [120, 20, 0], [180, 30, 0], [240, 40, 0],
-                   [0, 250, 0], [0, 40, 190], [0, 30, 130], [0, 20, 70], [0, 10, 10],
-                   [0, 0, 0], [125, 0, 125], [125, 250, 125]], dtype=np.uint16)
-colors = np.reshape(colors, [-1, 3])
+bg_colors = [[0, 0, 0], [255, 255, 255], [171, 99, 36], [169, 94, 30], [192, 134, 83],
+             [174, 92, 20], [114, 75, 41], [113, 67, 173], [118, 67, 185], [104, 71, 147],
+             [73, 50, 103], [60, 27, 103], [101, 24, 201], [0, 204, 20], [0, 197, 204],
+             [42, 92, 110], [205, 205, 205]]
 
 img_height = 1080
 img_width = 1920
@@ -121,16 +142,16 @@ def process_lane_label_apollo_sim_3D(label_file):
         iteration deals will one-to-many connection case. The first segment will be marked and to delete, and the second
         segment is augmented with the first segment at front.
         """
-        # merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
+        # iter1: merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
         for id, centerlane in centerline_dict.items():
             merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerline2del, laneline2del)
 
+        # iter2: handle 1 to 2 case by extending the second and marking the first segment to delete
         for id, centerlane in centerline_dict.items():
-            #  handle 1 to 2 case by extending the second and marking the first segment to delete
             if len(centerlane['successorList']) > 1:
                 for second_id in centerlane['successorList']:
                     centerlane2 = centerline_dict[second_id]
-                    # TODO: remove this condition when raw label successor list all corrected
+                    # this condition could be removed, but kept for safe
                     if -0.01 <= centerlane2['pos3DInCameraList'][0]['z'] - centerlane['pos3DInCameraList'][-1]['z'] < 0.01:
                         centerlane2['pos3DInCameraList'] = centerlane['pos3DInCameraList'] + centerlane2['pos3DInCameraList']
                         centerline2del[id] = 1
@@ -234,14 +255,22 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
             if lane2D[j, 1] < 1 or lane2D[j, 1] >= img_height-1:
                 visibility_vec[j] = 0
                 continue
+
+            class_color = [seg_img[lane2D[j, 1], lane2D[j, 0], 2],
+                           seg_img[lane2D[j, 1], lane2D[j, 0], 1],
+                           seg_img[lane2D[j, 1], lane2D[j, 0], 0]]
             if np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and \
-                    np.abs(depth_label_map[lane2D[j, 1]+1, lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and \
-                    np.abs(depth_label_map[lane2D[j, 1]-1, lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and\
-                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]+1] - centerline[j][2]) > vis_dist_th and\
-                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]-1] - centerline[j][2]) > vis_dist_th:
+                    np.abs(depth_label_map[lane2D[j, 1] + 1, lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] - 1, lane2D[j, 0]] - centerline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0] + 1] - centerline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0] - 1] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] + 1, lane2D[j, 0] + 1] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] - 1, lane2D[j, 0] + 1] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] + 1, lane2D[j, 0] - 1] - centerline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] - 1, lane2D[j, 0] - 1] - centerline[j][2]) > vis_dist_th and \
+                    class_color in bg_colors:
                 visibility_vec[j] = 0
                 continue
-        # TODO: replace this part when segmentation label map ready
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
         if visible_indices.shape[0] > 0:
@@ -286,14 +315,21 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
             if lane2D[j, 1] < 1 or lane2D[j, 1] >= img_height-1:
                 visibility_vec[j] = 0
                 continue
+            class_color = [seg_img[lane2D[j, 1], lane2D[j, 0], 2],
+                           seg_img[lane2D[j, 1], lane2D[j, 0], 1],
+                           seg_img[lane2D[j, 1], lane2D[j, 0], 0]]
             if np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and \
-                    np.abs(depth_label_map[lane2D[j, 1]+1, lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and \
-                    np.abs(depth_label_map[lane2D[j, 1]-1, lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and\
-                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]+1] - laneline[j][2]) > vis_dist_th and\
-                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0]-1] - laneline[j][2]) > vis_dist_th:
+                    np.abs(depth_label_map[lane2D[j, 1] + 1, lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] - 1, lane2D[j, 0]] - laneline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0] + 1] - laneline[j][2]) > vis_dist_th and\
+                    np.abs(depth_label_map[lane2D[j, 1], lane2D[j, 0] - 1] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] + 1, lane2D[j, 0] + 1] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] - 1, lane2D[j, 0] + 1] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] + 1, lane2D[j, 0] - 1] - laneline[j][2]) > vis_dist_th and \
+                    np.abs(depth_label_map[lane2D[j, 1] - 1, lane2D[j, 0] - 1] - laneline[j][2]) > vis_dist_th and \
+                    class_color in bg_colors:
                 visibility_vec[j] = 0
                 continue
-        # TODO: replace this part when segmentation label map ready
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
         if visible_indices.shape[0] > 0:
@@ -326,8 +362,8 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
     result['cam_pitch'] = cam_pitch
     result["centerLines"] = np.asarray(centerlines_g).tolist()
     result["laneLines"] = np.asarray(lanelines_g).tolist()
-    result["centerLines_visibility"] = np.asarray(centerlines_g).tolist()
-    result["laneLines_visibility"] = np.asarray(lanelines_g).tolist()
+    result["centerLines_visibility"] = np.asarray(centerlines_visibility).tolist()
+    result["laneLines_visibility"] = np.asarray(lanelines_visibility).tolist()
 
     with open(output_gt_file, "a") as outfile:
         outfile.write(json.dumps(result))
@@ -338,7 +374,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0920/"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
     vis_folder = base_folder + "laneline_vis/"

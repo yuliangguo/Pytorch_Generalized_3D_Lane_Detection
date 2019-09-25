@@ -202,13 +202,13 @@ class TopViewPathway(nn.Module):
     def forward(self, a, b, c, d):
         x = self.features1(a)
         feat_1 = x
-        x = torch.cat([x, b], 1)
+        x = torch.cat((x, b), 1)
         x = self.features2(x)
         feat_2 = x
-        x = torch.cat([x, c], 1)
+        x = torch.cat((x, c), 1)
         x = self.features3(x)
         feat_3 = x
-        x = torch.cat([x, d], 1)
+        x = torch.cat((x, d), 1)
         return x, feat_1, feat_2, feat_3
 
     def _initialize_weights(self):
@@ -248,10 +248,11 @@ class LanePredictionHead(nn.Module):
         layers += make_one_layer(64, 64, kernel_size=5, padding=(0, 2), batch_norm=batch_norm)
         self.features = nn.Sequential(*layers)
 
-        # reshape is needed before executing later layers
+        # x suppose to be N X 64 X 4 X ipm_w/8, need to be reshaped to N X 256 X ipm_w/8 X 1
+        # TODO: use large kernel_size in x or fc layer to estimate z with global parallelism
         dim_rt_layers = []
-        dim_rt_layers += make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=batch_norm)
-        dim_rt_layers += [nn.Conv2d(128, self.num_lane_type*self.anchor_dim, kernel_size=1, padding=0)]
+        dim_rt_layers += make_one_layer(256, 128, kernel_size=(5, 1), padding=(2, 0), batch_norm=batch_norm)
+        dim_rt_layers += [nn.Conv2d(128, self.num_lane_type*self.anchor_dim, kernel_size=(5, 1), padding=(2, 0))]
         self.dim_rt = nn.Sequential(*dim_rt_layers)
 
     def forward(self, x):
