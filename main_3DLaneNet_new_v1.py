@@ -17,7 +17,7 @@ import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
-from Dataloader.Load_Data_3DLane_new_v1 import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Dataloader.Load_Data_3DLane_new_v1x import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
 from Networks import Loss_crit
 from Networks.LaneNet3D_new_v1 import Net
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
@@ -440,15 +440,15 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     global args
     parser = define_args()
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0920'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0920/'
+    args.dataset_name = 'sim3d_0924'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -471,7 +471,7 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet_new_v1'
     args.y_ref = 5
     global crit_string
-    crit_string = 'loss_gflat_3D'
+    crit_string = 'loss_gflat'
 
     # for the case only running evaluation
     args.evaluate = False

@@ -725,6 +725,11 @@ class Visualizer:
             plt.close(fig)
 
 
+def prune_3d_lane_by_visibility(lane_3d, visibility):
+    lane_3d = lane_3d[visibility > 0, ...]
+    return lane_3d
+
+
 def prune_3d_lane_by_range(lane_3d, x_min, x_max):
     # TODO: solve hard coded range later
     # remove points with y out of range
@@ -738,13 +743,13 @@ def prune_3d_lane_by_range(lane_3d, x_min, x_max):
     return lane_3d
 
 
-def resample_laneline_in_y(input_lane, y_steps, input_visibility=np.array([])):
+def resample_laneline_in_y(input_lane, y_steps, out_vis=False):
     """
         Interpolate x, z values at each anchor grid, including those beyond the range of input lnae y range
     :param input_lane: N x 2 or N x 3 ndarray, one row for a point (x, y, z-optional).
                        It requires y values of input lane in ascending order
     :param y_steps: a vector of steps in y
-    :param input_visibility: a vector indicating each point's visibility
+    :param out_vis: whether to output visibility indicator which only depends on input y range
     :return:
     """
 
@@ -753,10 +758,8 @@ def resample_laneline_in_y(input_lane, y_steps, input_visibility=np.array([])):
 
     x_values = np.zeros_like(y_steps, dtype=np.float32)
     z_values = np.zeros_like(y_steps, dtype=np.float32)
-    use_visibiltiy = False
-    if input_visibility.shape[0] > 0:
-        use_visibiltiy = True
-        output_visibility = np.zeros_like(y_steps, dtype=np.float32)
+    y_min = np.min(input_lane[:, 1])
+    y_max = np.max(input_lane[:, 1])
 
     if input_lane.shape[1] < 3:
         input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)
@@ -772,21 +775,15 @@ def resample_laneline_in_y(input_lane, y_steps, input_visibility=np.array([])):
             y1 = input_lane[j, 1]
             x1 = input_lane[j, 0]
             z1 = input_lane[j, 2]
-            if use_visibiltiy:
-                vs1 = input_visibility[j]
 
             if (j-1) >= 0:
                 y2 = input_lane[j - 1, 1]
                 x2 = input_lane[j - 1, 0]
                 z2 = input_lane[j - 1, 2]
-                if use_visibiltiy:
-                    vs2 = input_visibility[j - 1]
             elif (j+1) < input_lane.shape[0]:  # for a y grid closer than the closest ground-truth
                 y2 = input_lane[j + 1, 1]
                 x2 = input_lane[j + 1, 0]
                 z2 = input_lane[j + 1, 2]
-                if use_visibiltiy:
-                    vs2 = input_visibility[j + 1]
             else:  # only a single ground-truth point existing
                 continue
         else:  # for the y_grid farther than the farthest ground-truth y range,
@@ -796,18 +793,18 @@ def resample_laneline_in_y(input_lane, y_steps, input_visibility=np.array([])):
             y2 = input_lane[-2, 1]
             x2 = input_lane[-2, 0]
             z2 = input_lane[-2, 2]
-            if use_visibiltiy:
-                vs1 = input_visibility[-1]
-                vs2 = input_visibility[-2]
 
         # interpolate x value and z value at anchor grid
-        x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
-        z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
-        if use_visibiltiy:
-            output_visibility[i] = vs1 or vs2
+        if np.abs(y2-y1) < 1e-6:
+            x_values[i] = x1
+            z_values[i] = z1
+        else:
+            x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
+            z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
 
-    if use_visibiltiy:
-        return x_values, z_values, output_visibility
+    if out_vis:
+        output_visibility = np.logical_and(y_steps >= y_min, y_steps <= y_max)
+        return x_values, z_values, output_visibility.astype(np.float32) + 1e-9
     return x_values, z_values
 
 

@@ -333,7 +333,8 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
         if visible_indices.shape[0] > 0:
-            vis_start = visible_indices[0]
+            # vis_start = visible_indices[0]
+            vis_start = 0
             vis_end = visible_indices[-1]
             visibility_vec[vis_start:vis_end] = 1
         lanelines_visibility.append(visibility_vec.tolist())

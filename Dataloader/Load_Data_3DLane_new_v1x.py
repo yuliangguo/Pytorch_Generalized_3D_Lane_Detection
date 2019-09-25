@@ -20,7 +20,7 @@ import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
     homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, transform_lane_gflat2g,\
-    resample_laneline_in_y, prune_3d_lane_by_range
+    resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -308,14 +308,11 @@ class LaneDataset(Dataset):
             gt_lanes = gt_laneline_pts_all[idx]
             gt_visibility = gt_laneline_visibility_all[idx]
 
+            # prune gt lanes by visibility labels
+            gt_lanes = [prune_3d_lane_by_visibility(gt_lane, gt_visibility[k]) for k, gt_lane in enumerate(gt_lanes)]
             # prune out-of-range points are necessary before transformation
-            for i in range(len(gt_lanes)):
-                # prune out-of-range points after transforming to flat ground space, update visibility vector
-                valid_indices = np.logical_and(np.logical_and(gt_lanes[i][:, 1] > 0, gt_lanes[i][:, 1] < 200),
-                                               np.logical_and(gt_lanes[i][:, 0] > 3 * self.x_min,
-                                                              gt_lanes[i][:, 0] < 3 * self.x_max))
-                gt_lanes[i] = gt_lanes[i][valid_indices, ...]
-                gt_visibility[i] = gt_visibility[i][valid_indices]
+            gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+            gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
 
             # convert 3d lanes to flat ground space
             self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
@@ -327,9 +324,7 @@ class LaneDataset(Dataset):
 
                 # convert gt label to anchor label
                 # consider individual out-of-range interpolation still visible
-                ass_id, x_off_values, z_values, visibility_vec = self.convert_label_to_anchor(gt_lanes[i],
-                                                                                                gt_visibility[i],
-                                                                                                H_im2g)
+                ass_id, x_off_values, z_values, visibility_vec = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
                 if ass_id >= 0:
                     gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                     ass_ids.append(ass_id)
@@ -349,14 +344,12 @@ class LaneDataset(Dataset):
                 gt_lanes = gt_centerline_pts_all[idx]
                 gt_visibility = gt_centerline_visibility_all[idx]
 
+                # prune gt lanes by visibility labels
+                gt_lanes = [prune_3d_lane_by_visibility(gt_lane, gt_visibility[k]) for k, gt_lane in
+                            enumerate(gt_lanes)]
                 # prune out-of-range points are necessary before transformation
-                for i in range(len(gt_lanes)):
-                    # prune out-of-range points after transforming to flat ground space, update visibility vector
-                    valid_indices = np.logical_and(np.logical_and(gt_lanes[i][:, 1] > 0, gt_lanes[i][:, 1] < 200),
-                                                   np.logical_and(gt_lanes[i][:, 0] > 3 * self.x_min,
-                                                                  gt_lanes[i][:, 0] < 3 * self.x_max))
-                    gt_lanes[i] = gt_lanes[i][valid_indices, ...]
-                    gt_visibility[i] = gt_visibility[i][valid_indices]
+                gt_lanes = [prune_3d_lane_by_range(gt_lane, 3 * self.x_min, 3 * self.x_max) for gt_lane in gt_lanes]
+                gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
 
                 # convert 3d lanes to flat ground space
                 self.convert_lanes_3d_to_gflat(gt_lanes, P_g2gflat)
@@ -367,9 +360,7 @@ class LaneDataset(Dataset):
                 for i in range(len(gt_lanes)):
                     # convert gt label to anchor label
                     # consider individual out-of-range interpolation still visible
-                    ass_id, x_off_values, z_values, visibility_vec = self.convert_label_to_anchor(gt_lanes[i],
-                                                                                                    gt_visibility[i],
-                                                                                                    H_im2g)
+                    ass_id, x_off_values, z_values, visibility_vec = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
                     if ass_id >= 0:
                         gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                         ass_ids.append(ass_id)
@@ -447,12 +438,11 @@ class LaneDataset(Dataset):
         lane_x_off_all = []
         for idx in range(len(gt_laneline_pts_all)):
             gt_lanes = gt_laneline_pts_all[idx]
-            gt_visiblity = [np.ones(lane.shape[0]) for lane in gt_lanes]
             gt_anchors = []
             ass_ids = []
             for i in range(len(gt_lanes)):
                 # convert gt label to anchor label
-                ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], gt_visiblity[i], H_im2g)
+                ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
                 if ass_id >= 0:
                     gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                     ass_ids.append(ass_id)
@@ -503,11 +493,12 @@ class LaneDataset(Dataset):
             lane[:, 0] = lane_gflat_x
             lane[:, 1] = lane_gflat_y
 
-    def convert_label_to_anchor(self, laneline_gt, visibility_gt, H_im2g):
+    def convert_label_to_anchor(self, laneline_gt, H_im2g):
         """
             Convert a set of ground-truth lane points to the format of network anchor representation.
+
+            All the given laneline only include visible points. The interpolated points will be marked invisible
         :param laneline_gt: a list of arrays where each array is a set of point coordinates in [x, y, z]
-        :param visibility_gt: visibility vector indicating each point visible or not from image
         :param H_im2g: homographic transformation only used for tusimple dataset
         :return: ass_id: the column id of current lane in anchor representation
                  x_off_values: current lane's x offset from it associated anchor column
@@ -529,7 +520,6 @@ class LaneDataset(Dataset):
                                        np.logical_and(gt_lane_3d[:, 0] > 3 * self.x_min,
                                                       gt_lane_3d[:, 0] < 3 * self.x_max))
         gt_lane_3d = gt_lane_3d[valid_indices, ...]
-        visibility_gt = visibility_gt[valid_indices]
         # use more restricted range to determine deletion or not
         if gt_lane_3d.shape[0] < 2 or np.sum(np.logical_and(gt_lane_3d[:, 0] > self.x_min,
                                                             gt_lane_3d[:, 0] < self.x_max)) < 2:
@@ -539,10 +529,10 @@ class LaneDataset(Dataset):
             # reverse the order of 3d pints to make the first point the closest
             gt_lane_3d = gt_lane_3d[::-1, :]
 
-        # only keep the portion y is monotonically increasing above a threshold, to prune those near-horizontal portion
-        gt_lane_3d, visibility_gt = make_lane_y_mono_inc(gt_lane_3d, visibility_gt)
-        if gt_lane_3d.shape[0] < 2:
-            return -1, np.array([]), np.array([]), np.array([])
+        # # only keep the portion y is monotonically increasing above a threshold, to prune those near-horizontal portion
+        # gt_lane_3d, visibility_gt = make_lane_y_mono_inc(gt_lane_3d, visibility_gt)
+        # if gt_lane_3d.shape[0] < 2:
+        #     return -1, np.array([]), np.array([]), np.array([])
 
         # ignore GT ends before y_ref, for those start at y > y_ref, use its interpolated value at y_ref for association
         # if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -550,7 +540,10 @@ class LaneDataset(Dataset):
             return -1, np.array([]), np.array([]), np.array([])
 
         # resample ground-truth laneline at anchor y steps
-        x_values, z_values, visibility_vec = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps, visibility_gt)
+        x_values, z_values, visibility_vec = resample_laneline_in_y(gt_lane_3d, self.anchor_y_steps, out_vis=True)
+
+        if np.sum(visibility_vec) < 2:
+            return -1, np.array([]), np.array([]), np.array([])
 
         # decide association at r_ref
         ass_id = np.argmin((self.anchor_x_steps - x_values[self.ref_id]) ** 2)
