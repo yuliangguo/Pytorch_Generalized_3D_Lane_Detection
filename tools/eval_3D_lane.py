@@ -8,7 +8,7 @@ import matplotlib
 from tools.utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
-    tusimple_config, sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range
+    tusimple_config, sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
 from tools.MinCostFlow import SolveMinCostFlow
 from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
@@ -36,7 +36,7 @@ class LaneEval(object):
         self.dist_th = 1.5
         self.ratio_th = 0.75
 
-    def bench(self, pred_lanes, gt_lanes, raw_file, gt_cam_height, gt_cam_pitch, vis, ax1, ax2):
+    def bench(self, pred_lanes, gt_lanes, gt_visibility, raw_file, gt_cam_height, gt_cam_pitch, vis, ax1, ax2):
         """
             Matching predicted lanes and ground-truth lanes in their IPM projection, ignoring z attributes.
             x error, y_error, and z error are all considered, although the matching does not rely on z
@@ -65,13 +65,16 @@ class LaneEval(object):
         x_error_far = []
         z_error_close = []
         z_error_far = []
+
+        # only keep the visible portion
+        gt_lanes = [prune_3d_lane_by_visibility(np.array(gt_lane), np.array(gt_visibility[k])) for k, gt_lane in enumerate(gt_lanes)]
+        gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
         # only consider those gt lanes overlapping with sampling range
-        gt_lanes = [lane for lane in gt_lanes if lane[0][1] < self.y_samples[-1] and lane[-1][1] > self.y_samples[0]]
+        gt_lanes = [lane for lane in gt_lanes if lane[0, 1] < self.y_samples[-1] and lane[-1, 1] > self.y_samples[0]]
         gt_lanes = [prune_3d_lane_by_range(np.array(gt_lane), 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
         gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
         cnt_gt = len(gt_lanes)
         cnt_pred = len(pred_lanes)
-
 
         gt_visibility_mat = np.zeros((cnt_gt, 100))
         pred_visibility_mat = np.zeros((cnt_pred, 100))
@@ -79,13 +82,13 @@ class LaneEval(object):
         for i in range(cnt_gt):
             min_y = np.min(np.array(gt_lanes[i])[:, 1])
             max_y = np.max(np.array(gt_lanes[i])[:, 1])
-            # TODO: use gt visibility label and perform logical AND
-            x_values, z_values = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples)
+            x_values, z_values, visibility_vec = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples, out_vis=True)
             gt_lanes[i] = np.vstack([x_values, z_values]).T
             gt_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
                                                      np.logical_and(x_values <= self.x_max,
                                                                     np.logical_and(self.y_samples >= min_y,
                                                                                    self.y_samples <= max_y)))
+            gt_visibility_mat[i, :] = np.logical_and(gt_visibility_mat[i, :], visibility_vec)
 
         for i in range(cnt_pred):
             # # ATTENTION: ensure y mono increase before interpolation: but it can reduce size
@@ -93,12 +96,13 @@ class LaneEval(object):
             # pred_lane = prune_3d_lane_by_range(np.array(pred_lanes[i]), self.x_min, self.x_max)
             min_y = np.min(np.array(pred_lanes[i])[:, 1])
             max_y = np.max(np.array(pred_lanes[i])[:, 1])
-            x_values, z_values = resample_laneline_in_y(np.array(pred_lanes[i]), self.y_samples)
+            x_values, z_values, visibility_vec = resample_laneline_in_y(np.array(pred_lanes[i]), self.y_samples, out_vis=True)
             pred_lanes[i] = np.vstack([x_values, z_values]).T
             pred_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
                                                        np.logical_and(x_values <= self.x_max,
                                                                       np.logical_and(self.y_samples >= min_y,
                                                                                      self.y_samples <= max_y)))
+            pred_visibility_mat[i, :] = np.logical_and(pred_visibility_mat[i, :], visibility_vec)
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
         # TODO: it is necessary to visualize here? as the visualization has been done in testing
@@ -126,15 +130,17 @@ class LaneEval(object):
                 euclidean_dist[np.logical_or(gt_visibility_mat[i, :] == 0, pred_visibility_mat[j, :] == 0)] = self.dist_th
 
                 # if np.average(euclidean_dist) < 2*self.dist_th: # don't prune here to encourage finding perfect match
-                # TODO: why not just use num_match_mat as cost_mat?
                 num_match_mat[i, j] = np.sum(euclidean_dist < self.dist_th)
                 adj_mat[i, j] = 1
+                # TODO: including distance at invisbile portion can make the overall value vary large
                 x_dist_mat_close[i, j] = np.average(x_dist[:close_range_idx])
                 x_dist_mat_far[i, j] = np.average(x_dist[close_range_idx:])
                 z_dist_mat_close[i, j] = np.average(z_dist[:close_range_idx])
                 z_dist_mat_far[i, j] = np.average(z_dist[close_range_idx:])
                 # ATTENTION: use sum and int here to meet the requirements of min cost flow optimization (int type)
+                # TODO: why it does not work to use num_match_mat as cost_mat?
                 cost_mat[i, j] = np.sum(euclidean_dist).astype(np.int)
+                # cost_mat[i, j] = num_match_mat[i, j]
 
         # solve bipartite matching vis min cost flow solver
         match_results = SolveMinCostFlow(adj_mat, cost_mat)
@@ -143,7 +149,7 @@ class LaneEval(object):
         # only a match with avg cost < self.dist_th is consider valid one
         match_gt_ids = []
         match_pred_ids = []
-        if match_results.shape[0] > 0 and np.sum(match_results[:, 2] < self.dist_th * self.y_samples.shape[0]) > 0:
+        if match_results.shape[0] > 0:
             for i in range(len(match_results)):
                 if match_results[i, 2] < self.dist_th * self.y_samples.shape[0]:
                     gt_i = match_results[i, 0]
@@ -271,12 +277,13 @@ class LaneEval(object):
 
             # evaluate lanelines
             gt_lanelines = gt['laneLines']
-
+            gt_visibility = gt['laneLines_visibility']
             # N to N matching of lanelines
             r_lane, p_lane, cnt_gt, cnt_pred, \
                 x_error_close, x_error_far, \
                 z_error_close, z_error_far = self.bench(pred_lanelines,
                                                         gt_lanelines,
+                                                        gt_visibility,
                                                         raw_file,
                                                         gt_cam_height,
                                                         gt_cam_pitch,
@@ -293,12 +300,14 @@ class LaneEval(object):
             if not self.no_centerline:
                 pred_centerlines = pred['centerLines']
                 gt_centerlines = gt['centerLines']
+                gt_visibility = gt['centerLines_visibility']
 
                 # N to N matching of lanelines
                 r_lane, p_lane, cnt_gt, cnt_pred, \
                     x_error_close, x_error_far, \
                     z_error_close, z_error_far = self.bench(pred_centerlines,
                                                             gt_centerlines,
+                                                            gt_visibility,
                                                             raw_file,
                                                             gt_cam_height,
                                                             gt_cam_pitch,
@@ -385,19 +394,19 @@ class LaneEval(object):
 
 
 if __name__ == '__main__':
-    vis = True
+    vis = False
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0920'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0920/'
+    args.dataset_name = 'sim3d_0924'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0920/Model_3DLaneNet_new_v1_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test2_pred_file.json'
-    gt_file = '../data/sim3d_0920/test2.json'
+    pred_file = '../data/sim3d_0924/Model_3DLaneNet_new_v1_crit_loss_gflat_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d_0924/val.json'
 
     # try:
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)

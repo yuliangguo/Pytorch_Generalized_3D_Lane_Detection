@@ -758,8 +758,9 @@ def resample_laneline_in_y(input_lane, y_steps, out_vis=False):
 
     x_values = np.zeros_like(y_steps, dtype=np.float32)
     z_values = np.zeros_like(y_steps, dtype=np.float32)
-    y_min = np.min(input_lane[:, 1])
-    y_max = np.max(input_lane[:, 1])
+    # locate the visible limits, and allow some guessing range
+    y_min = np.min(input_lane[:, 1])-5
+    y_max = np.max(input_lane[:, 1])+5
 
     if input_lane.shape[1] < 3:
         input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)

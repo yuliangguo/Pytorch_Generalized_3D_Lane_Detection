@@ -440,7 +440,7 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
     global args
     parser = define_args()
@@ -461,7 +461,7 @@ if __name__ == '__main__':
         evaluator = eval_lane_tusimple.LaneEval
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
-        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
+        args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)
         # define evaluator
         evaluator = eval_3D_lane.LaneEval(args)
@@ -471,7 +471,7 @@ if __name__ == '__main__':
     args.mod = '3DLaneNet_new_v1'
     args.y_ref = 5
     global crit_string
-    crit_string = 'loss_gflat'
+    crit_string = 'loss_gflat_3D'
 
     # for the case only running evaluation
     args.evaluate = False

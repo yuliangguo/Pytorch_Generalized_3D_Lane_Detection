@@ -529,10 +529,10 @@ class LaneDataset(Dataset):
             # reverse the order of 3d pints to make the first point the closest
             gt_lane_3d = gt_lane_3d[::-1, :]
 
-        # # only keep the portion y is monotonically increasing above a threshold, to prune those near-horizontal portion
-        # gt_lane_3d, visibility_gt = make_lane_y_mono_inc(gt_lane_3d, visibility_gt)
-        # if gt_lane_3d.shape[0] < 2:
-        #     return -1, np.array([]), np.array([]), np.array([])
+        # only keep the portion y is monotonically increasing above a threshold, to prune those super close points
+        gt_lane_3d = make_lane_y_mono_inc(gt_lane_3d)
+        if gt_lane_3d.shape[0] < 2:
+            return -1, np.array([]), np.array([]), np.array([])
 
         # ignore GT ends before y_ref, for those start at y > y_ref, use its interpolated value at y_ref for association
         # if gt_lane_3d[0, 1] > self.y_ref or gt_lane_3d[-1, 1] < self.y_ref:
@@ -570,7 +570,7 @@ class LaneDataset(Dataset):
             return self.H_g2im, self.P_g2im, self.H_crop, self.H_im2ipm
 
 
-def make_lane_y_mono_inc(lane, visibility):
+def make_lane_y_mono_inc(lane):
     """
         Due to lose of height dim, projected lanes to flat ground plane may not have monotonically increasing y.
         This function trace the y with monotonically increasing y, and output a pruned lane
@@ -586,8 +586,7 @@ def make_lane_y_mono_inc(lane, visibility):
         else:
             max_y = lane[i, 1]
     lane = np.delete(lane, idx2del, 0)
-    visibility = np.delete(visibility, idx2del, 0)
-    return lane, visibility
+    return lane
 
 
 """
@@ -740,7 +739,7 @@ def unormalize_lane_anchor(anchor, dataset):
                 np.multiply(anchor[:, i*anchor_dim + num_y_steps: i*anchor_dim + 2*num_y_steps], dataset._z_std)
 
 
-# unit test
+# unit testR
 if __name__ == '__main__':
     import sys
     from tools.utils import define_args
@@ -760,7 +759,7 @@ if __name__ == '__main__':
         tusimple_config(args)
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
-        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
+        args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
         args.num_y_steps = len(args.anchor_y_steps)
     else:
         print('Not using a supported dataset')

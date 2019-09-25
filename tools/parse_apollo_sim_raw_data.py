@@ -274,7 +274,8 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
         if visible_indices.shape[0] > 0:
-            vis_start = visible_indices[0]
+            # vis_start = visible_indices[0]
+            vis_start = 0
             vis_end = visible_indices[-1]
             visibility_vec[vis_start:vis_end] = 1
         centerlines_visibility.append(visibility_vec.tolist())
@@ -376,8 +377,8 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 if __name__ == '__main__':
     base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/"
-    input_file = base_folder + "img_list.txt"
-    output_gt_file = base_folder + "laneline_label.json"
+    input_file = base_folder + "test2.txt"
+    output_gt_file = base_folder + "test2.json"
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:
         os.mkdir(vis_folder)
