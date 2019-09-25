@@ -142,7 +142,8 @@ def process_lane_label_apollo_sim_3D(label_file):
         iteration deals will one-to-many connection case. The first segment will be marked and to delete, and the second
         segment is augmented with the first segment at front.
         """
-        # iter1: merge centerlines based on successorList: all the modification refer back to centerlines_in and lanelines_in
+
+        # iter1: merge centerlines based on successorList: all the modification applies directly back to centerlines_in and lanelines_in
         for id, centerlane in centerline_dict.items():
             merge_segments_recursive(centerlane, centerline_dict, laneline_dict, centerline2del, laneline2del)
 
@@ -193,20 +194,6 @@ def process_lane_label_apollo_sim_3D(label_file):
         lanelines_out.append(laneline_out)
 
     return centerlanes_out, lanelines_out, lane_data['cameraHeight'], lane_data['cameraPitch']
-
-
-def prune_invisible_portion(centerlines, lanelines, seg_file, depth_file):
-    seg_image = cv2.imread(base_folder + seg_file)
-    depth_image = cv2.imread(base_folder + depth_file)
-    depth_label_map = (depth_image[:, :, 2] + depth_image[:, :, 1]/255)/100
-
-    for lanline in lanelines:
-        # project to image (camera coordinates to image coordinates)
-        lane2D = np.matmul(np.array(lanline), K.T)
-        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1))
-
-        # refer to depth map, decide visibility based on the consistency between z
-        return centerlines, lanelines
 
 
 def laneline_label_generator(base_folder, image_file, label_file, seg_file, depth_file, output_gt_file):

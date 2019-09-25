@@ -759,8 +759,6 @@ if __name__ == '__main__':
         tusimple_config(args)
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
-        args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
-        args.num_y_steps = len(args.anchor_y_steps)
     else:
         print('Not using a supported dataset')
         sys.exit()

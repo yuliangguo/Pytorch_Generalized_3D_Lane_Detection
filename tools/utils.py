@@ -145,9 +145,10 @@ def sim3d_config(args):
         args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
         args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     """
-    args.top_view_region = np.array([[-10, 83], [10, 83], [-10, 3], [10, 3]])
+    # args.top_view_region = np.array([[-10, 83], [10, 83], [-10, 3], [10, 3]])
     # args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
-    args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
+    args.top_view_region = np.array([[-10, 103], [10, 103], [-10, 3], [10, 3]])
+    args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
