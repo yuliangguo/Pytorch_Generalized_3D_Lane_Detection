@@ -179,11 +179,11 @@ def process_lane_label_apollo_sim_3D(label_file):
     centerlanes_out = []
     for i, centerlane_in in enumerate(centerlines_in):
         if centerline2del[centerlane_in['id']] or centerlane_in['type'] == 'SHOULDER':
-            # add its outer side associated laneline into delete list
-            if centerlane_in['pos3DInCameraList'][0]['x'] < 0 and centerlane_in['leftBoundaryId'] in laneline_dict:
-                laneline2del[centerlane_in['leftBoundaryId']] = 1
-            elif centerlane_in['pos3DInCameraList'][0]['x'] > 0 and centerlane_in['rightBoundaryId'] in laneline_dict:
+            # add its inner side associated laneline into delete list
+            if centerlane_in['pos3DInCameraList'][0]['x'] < 0 and centerlane_in['rightBoundaryId'] in laneline_dict:
                 laneline2del[centerlane_in['rightBoundaryId']] = 1
+            elif centerlane_in['pos3DInCameraList'][0]['x'] > 0 and centerlane_in['leftBoundaryId'] in laneline_dict:
+                laneline2del[centerlane_in['leftBoundaryId']] = 1
             continue
         centerlane_out = []
         for pt_3d in centerlane_in['pos3DInCameraList']:

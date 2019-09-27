@@ -414,7 +414,7 @@ class LaneEval(object):
 
 
 if __name__ == '__main__':
-    vis = False
+    vis = True
     parser = define_args()
     args = parser.parse_args()
 
