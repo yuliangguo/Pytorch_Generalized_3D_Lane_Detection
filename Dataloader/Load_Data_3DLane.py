@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
 from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
-    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, resample_laneline_in_y, prune_3d_lane_by_range
+    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, resample_laneline_in_y, \
+    prune_3d_lane_by_range, prune_3d_lane_by_visibility
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -225,6 +226,8 @@ class LaneDataset(Dataset):
         label_image_path = []
         gt_laneline_pts_all = []
         gt_centerline_pts_all = []
+        gt_laneline_visibility_all = []
+        gt_centerline_visibility_all = []
         gt_cam_height_all = []
         gt_cam_pitch_all = []
 
@@ -240,21 +243,27 @@ class LaneDataset(Dataset):
                 label_image_path.append(image_path)
 
                 gt_lane_pts = info_dict['laneLines']
+                gt_lane_visibility = info_dict['laneLines_visibility']
                 for i, lane in enumerate(gt_lane_pts):
                     # A GT lane can be either 2D or 3D
                     # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
                     lane = np.array(lane)
                     gt_lane_pts[i] = lane
+                    gt_lane_visibility[i] = np.array(gt_lane_visibility[i])
                 gt_laneline_pts_all.append(gt_lane_pts)
+                gt_laneline_visibility_all.append(gt_lane_visibility)
 
                 if not self.no_centerline:
                     gt_lane_pts = info_dict['centerLines']
+                    gt_lane_visibility = info_dict['centerLines_visibility']
                     for i, lane in enumerate(gt_lane_pts):
                         # A GT lane can be either 2D or 3D
                         # if a GT lane is 3D, the height is intact from 3D GT, so keep it intact here too
                         lane = np.array(lane)
                         gt_lane_pts[i] = lane
+                        gt_lane_visibility[i] = np.array(gt_lane_visibility[i])
                     gt_centerline_pts_all.append(gt_lane_pts)
+                    gt_centerline_visibility_all.append(gt_lane_visibility)
 
                 if not self.fix_cam:
                     gt_cam_height = info_dict['cam_height']
@@ -283,6 +292,10 @@ class LaneDataset(Dataset):
                 H_im2g = self.H_im2g
 
             gt_lanes = gt_laneline_pts_all[idx]
+            gt_visibility = gt_laneline_visibility_all[idx]
+
+            # prune gt lanes by visibility labels
+            gt_lanes = [prune_3d_lane_by_visibility(gt_lane, gt_visibility[k]) for k, gt_lane in enumerate(gt_lanes)]
             gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
             gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
             gt_anchors = []
@@ -300,6 +313,11 @@ class LaneDataset(Dataset):
 
             if not self.no_centerline:
                 gt_lanes = gt_centerline_pts_all[idx]
+                gt_visibility = gt_centerline_visibility_all[idx]
+
+                # prune gt lanes by visibility labels
+                gt_lanes = [prune_3d_lane_by_visibility(gt_lane, gt_visibility[k]) for k, gt_lane in
+                            enumerate(gt_lanes)]
                 gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
                 gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
                 gt_anchors = []
@@ -317,7 +335,7 @@ class LaneDataset(Dataset):
 
         lane_x_off_all = np.array(lane_x_off_all)
         lane_z_all = np.array(lane_z_all)
-        # TODO: should not direct compute std, it will be based on the actual mean, but we want to enforce mean 0
+        #  direct compute std might cause problem, as it will be based on the actual mean. But we want to enforce mean 0
         lane_x_off_std = np.std(lane_x_off_all, axis=0)
         lane_z_std = np.std(lane_z_all, axis=0)
         return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all, gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_z_std

@@ -48,3 +48,12 @@ if __name__ == '__main__':
     # with open(output_folder + '/test.json', 'w') as f:
     #     f.writelines("%s" % l for l in lines_test)
     # f.close()
+
+    # extract a subset of hard samples
+    with open(output_folder + '/val.json') as f:
+        lines_val = f.readlines()
+    f.close()
+
+    with open(output_folder + '/test2.json', 'w') as f:
+        f.writelines("%s" % l for l in lines_val if ('/06/' in l or '/07/' in l or '/08/' in l or '/09/' in l or '/10/' in l or '/11/' in l))
+    f.close()

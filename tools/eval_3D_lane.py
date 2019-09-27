@@ -32,9 +32,10 @@ class LaneEval(object):
 
         self.x_min = args.top_view_region[0, 0]
         self.x_max = args.top_view_region[1, 0]
-        self.y_samples = np.linspace(1, 81, num=100, endpoint=False)
+        self.y_samples = np.linspace(args.anchor_y_steps[0], args.anchor_y_steps[-1], num=100, endpoint=False)
         self.dist_th = 1.5
         self.ratio_th = 0.75
+        self.close_range = 30
 
     def bench(self, pred_lanes, gt_lanes, gt_visibility, raw_file, gt_cam_height, gt_cam_pitch, vis, ax1, ax2):
         """
@@ -58,7 +59,7 @@ class LaneEval(object):
         # if raw_file == 'images/05/0000347.jpg':
         #     print('here')
 
-        close_range_idx = np.int((30 - 1) / 0.8)
+        close_range_idx = np.int((self.close_range - 1) / 0.8)
 
         r_lane, p_lane = 0., 0.
         x_error_close = []
@@ -127,20 +128,39 @@ class LaneEval(object):
                 euclidean_dist = np.sqrt(x_dist**2 + z_dist**2)
 
                 # apply visibility to penalize different partial matching accordingly
-                euclidean_dist[np.logical_or(gt_visibility_mat[i, :] == 0, pred_visibility_mat[j, :] == 0)] = self.dist_th
+                euclidean_dist[np.logical_or(gt_visibility_mat[i, :] < 0.5, pred_visibility_mat[j, :] < 0.5)] = self.dist_th
 
                 # if np.average(euclidean_dist) < 2*self.dist_th: # don't prune here to encourage finding perfect match
                 num_match_mat[i, j] = np.sum(euclidean_dist < self.dist_th)
                 adj_mat[i, j] = 1
-                # TODO: including distance at invisbile portion can make the overall value vary large
-                x_dist_mat_close[i, j] = np.average(x_dist[:close_range_idx])
-                x_dist_mat_far[i, j] = np.average(x_dist[close_range_idx:])
-                z_dist_mat_close[i, j] = np.average(z_dist[:close_range_idx])
-                z_dist_mat_far[i, j] = np.average(z_dist[close_range_idx:])
-                # ATTENTION: use sum and int here to meet the requirements of min cost flow optimization (int type)
-                # TODO: why it does not work to use num_match_mat as cost_mat?
+                # ATTENTION: use the sum as int type to meet the requirements of min cost flow optimization (int type)
+                # TODO: why using num_match_mat as cost does not work?
                 cost_mat[i, j] = np.sum(euclidean_dist).astype(np.int)
                 # cost_mat[i, j] = num_match_mat[i, j]
+
+                # use the both visible portion to calculate distance error
+                both_visible_indices = np.logical_and(gt_visibility_mat[i, :] > 0.5, pred_visibility_mat[j, :] > 0.5)
+                if np.sum(both_visible_indices[:close_range_idx]) > 0:
+                    x_dist_mat_close[i, j] = np.sum(
+                        x_dist[:close_range_idx]*both_visible_indices[:close_range_idx])/np.sum(
+                        both_visible_indices[:close_range_idx])
+                    z_dist_mat_close[i, j] = np.sum(
+                        z_dist[:close_range_idx] * both_visible_indices[:close_range_idx]) / np.sum(
+                        both_visible_indices[:close_range_idx])
+                else:
+                    x_dist_mat_close[i, j] = self.dist_th
+                    z_dist_mat_close[i, j] = self.dist_th
+
+                if np.sum(both_visible_indices[close_range_idx:]) > 0:
+                    x_dist_mat_far[i, j] = np.sum(
+                        x_dist[close_range_idx:] * both_visible_indices[close_range_idx:]) / np.sum(
+                        both_visible_indices[close_range_idx:])
+                    z_dist_mat_far[i, j] = np.sum(
+                        z_dist[close_range_idx:] * both_visible_indices[close_range_idx:]) / np.sum(
+                        both_visible_indices[close_range_idx:])
+                else:
+                    x_dist_mat_far[i, j] = self.dist_th
+                    z_dist_mat_far[i, j] = self.dist_th
 
         # solve bipartite matching vis min cost flow solver
         match_results = SolveMinCostFlow(adj_mat, cost_mat)
@@ -405,7 +425,7 @@ if __name__ == '__main__':
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_new_v1_crit_loss_gflat_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    pred_file = '../data/sim3d_0924/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
     gt_file = '../data/sim3d_0924/val.json'
 
     # try:
@@ -427,7 +447,7 @@ if __name__ == '__main__':
           "centerline z error (close)  {:.8} m\n"
           "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
                                                        eval_stats[2], eval_stats[3],
-                                                       eval_stats[3], eval_stats[5],
+                                                       eval_stats[4], eval_stats[5],
                                                        eval_stats[6], eval_stats[7],
                                                        eval_stats[8], eval_stats[9],
                                                        eval_stats[10], eval_stats[11],

@@ -9,6 +9,7 @@ import time
 
 import cv2
 import numpy as np
+from scipy.signal import medfilt
 import matplotlib.pyplot as plt
 import math
 import json
@@ -178,6 +179,11 @@ def process_lane_label_apollo_sim_3D(label_file):
     centerlanes_out = []
     for i, centerlane_in in enumerate(centerlines_in):
         if centerline2del[centerlane_in['id']] or centerlane_in['type'] == 'SHOULDER':
+            # add its outer side associated laneline into delete list
+            if centerlane_in['pos3DInCameraList'][0]['x'] < 0 and centerlane_in['leftBoundaryId'] in laneline_dict:
+                laneline2del[centerlane_in['leftBoundaryId']] = 1
+            elif centerlane_in['pos3DInCameraList'][0]['x'] > 0 and centerlane_in['rightBoundaryId'] in laneline_dict:
+                laneline2del[centerlane_in['rightBoundaryId']] = 1
             continue
         centerlane_out = []
         for pt_3d in centerlane_in['pos3DInCameraList']:
@@ -258,6 +264,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                     class_color in bg_colors:
                 visibility_vec[j] = 0
                 continue
+        # visibility_vec = medfilt(visibility_vec, 5)
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
         if visible_indices.shape[0] > 0:
@@ -318,6 +325,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                     class_color in bg_colors:
                 visibility_vec[j] = 0
                 continue
+        # visibility_vec = medfilt(visibility_vec, 5)
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
         if visible_indices.shape[0] > 0:
@@ -364,8 +372,8 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 if __name__ == '__main__':
     base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/"
-    input_file = base_folder + "test2.txt"
-    output_gt_file = base_folder + "test2.json"
+    input_file = base_folder + "img_list.txt"
+    output_gt_file = base_folder + "laneline_label.json"
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:
         os.mkdir(vis_folder)
