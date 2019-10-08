@@ -153,7 +153,7 @@ class ProjectiveGridGenerator(nn.Module):
         :param no_cuda:
         """
         super().__init__()
-        self.N, self.C, self.H, self.W = size_ipm
+        self.N, self.H, self.W = size_ipm
         # self.im_h = im_h
         # self.im_w = im_w
         linear_points_W = torch.linspace(0, 1 - 1/self.W, self.W)
@@ -177,7 +177,7 @@ class ProjectiveGridGenerator(nn.Module):
         # compute the grid mapping based on the input transformation matrix M
         # if base_grid is top-view, M should be ipm-to-img homography transformation, and vice versa
         grid = torch.bmm(self.base_grid.view(self.N, self.H * self.W, 3), M.transpose(1, 2))
-        grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape([self.N, self.H, self.W, 2])
+        grid = torch.div(grid[:, :, 0:2], grid[:, :, 2:]).reshape((self.N, self.H, self.W, 2))
         #
         """
         output grid to be used for grid_sample. 
@@ -357,13 +357,13 @@ class Net(nn.Module):
 
         # the grid considers both src and dst grid normalized
         # resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
-        size_top1 = torch.Size([self.batch_size, 128, args.ipm_h, args.ipm_w])
+        size_top1 = torch.Size([self.batch_size, args.ipm_h, args.ipm_w])
         self.project_layer1 = ProjectiveGridGenerator(size_top1, self.M_inv, args.no_cuda)
-        size_top2 = torch.Size([self.batch_size, 128, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
+        size_top2 = torch.Size([self.batch_size, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
         self.project_layer2 = ProjectiveGridGenerator(size_top2, self.M_inv, args.no_cuda)
-        size_top3 = torch.Size([self.batch_size, 128, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
+        size_top3 = torch.Size([self.batch_size, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
         self.project_layer3 = ProjectiveGridGenerator(size_top3, self.M_inv, args.no_cuda)
-        size_top4 = torch.Size([self.batch_size, 128, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
+        size_top4 = torch.Size([self.batch_size, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
         self.project_layer4 = ProjectiveGridGenerator(size_top4, self.M_inv, args.no_cuda)
 
         self.dim_rt1 = nn.Sequential(*make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=args.batch_norm))

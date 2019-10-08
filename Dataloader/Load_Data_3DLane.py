@@ -611,8 +611,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0906'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0906/'
+    args.dataset_name = 'sim3d_0924'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -622,13 +622,9 @@ if __name__ == '__main__':
         tusimple_config(args)
     elif 'sim3d' in args.dataset_name:
         sim3d_config(args)
-        args.anchor_y_steps = np.array([3, 5, 10, 20, 30, 40, 50, 60, 80, 100])
-        args.num_y_steps = len(args.anchor_y_steps)
     else:
         print('Not using a supported dataset')
         sys.exit()
-    args.anchor_y_steps = np.array([3, 5, 10, 20, 40, 60, 80, 100])
-    args.num_y_steps = len(args.anchor_y_steps)
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -697,18 +693,18 @@ if __name__ == '__main__':
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             img = visualizer.draw_on_img(img, gt_anchor, M, 'laneline', color=[0, 0, 1])
-            if not args.no_centerline:
-                img = visualizer.draw_on_img(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
-
-            cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
-                        (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
-            cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
-                        (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            # if not args.no_centerline:
+            #     img = visualizer.draw_on_img(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
+            #
+            # cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
+            #             (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            # cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
+            #             (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
 
             # visualize on ipm
             im_ipm = visualizer.draw_on_ipm(im_ipm, gt_anchor, 'laneline', color=[0, 0, 1])
-            if not args.no_centerline:
-                im_ipm = visualizer.draw_on_ipm(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
+            # if not args.no_centerline:
+            #     im_ipm = visualizer.draw_on_ipm(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))

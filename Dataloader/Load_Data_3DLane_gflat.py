@@ -104,7 +104,7 @@ class LaneDataset(Dataset):
             self.anchor_dim = self.num_y_steps + 1
         elif args.mod is '3DLaneNet':
             self.anchor_dim = 2 * args.num_y_steps + 1
-        elif '3DLaneNet_new' in args.mod:
+        elif '3DLaneNet_gflat' in args.mod:
             self.anchor_dim = 3 * args.num_y_steps + 1
 
         self.y_ref = args.y_ref
@@ -809,7 +809,7 @@ if __name__ == '__main__':
         sys.exit()
 
     # define the network model
-    args.mod = '3DLaneNet_new_v1'
+    args.mod = '3DLaneNet_gflat'
     args.y_ref = 5.0
 
     # set 3D ground area for visualization
