@@ -171,10 +171,10 @@ class Visualizer:
 
         if args.no_3d:
             self.anchor_dim = args.num_y_steps + 1
-        elif args.mod is '3DLaneNet':
-            self.anchor_dim = 2 * args.num_y_steps + 1
         elif '3DLaneNet_gflat' in args.mod:
             self.anchor_dim = 3 * args.num_y_steps + 1
+        else:
+            self.anchor_dim = 2 * args.num_y_steps + 1
 
         x_min = args.top_view_region[0, 0]
         x_max = args.top_view_region[1, 0]

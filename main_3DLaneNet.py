@@ -19,7 +19,7 @@ from tensorboardX import SummaryWriter
 
 from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
 from Networks.Loss_crit import Laneline_loss_3D
-from Networks.LaneNet3D import Net
+from Networks import LaneNet3D, LaneNet3D_GeoOnly
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, Visualizer
@@ -66,11 +66,14 @@ def train_net():
     anchor_x_steps = valid_dataset.anchor_x_steps
 
     # Define network
-    model = Net(args)
+    if 'GeoOnly' in args.mod:
+        model = LaneNet3D_GeoOnly.Net(args)
+    else:
+        model = LaneNet3D.Net(args)
     define_init_weights(model, args.weight_init)
 
     # load in vgg pretrained weights on ImageNet
-    if args.pretrained:
+    if args.pretrained and 'GeoOnly' not in args.mod:
         model.load_pretrained_vgg(args.batch_norm)
         print('vgg weights pretrained on ImageNet loaded!')
 
@@ -177,7 +180,7 @@ def train_net():
         end = time.time()
 
         # Start training loop
-        for i, (input, gt, idx, gt_hcam, gt_pitch, aug_mat) in tqdm(enumerate(train_loader)):
+        for i, (input, seg_maps, gt, idx, gt_hcam, gt_pitch, aug_mat) in tqdm(enumerate(train_loader)):
 
             # Time dataloader
             data_time.update(time.time() - end)
@@ -186,6 +189,7 @@ def train_net():
             if not args.no_cuda:
                 input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                 input = input.float()
+                seg_maps = seg_maps.cuda(non_blocking=True)
                 gt_hcam = gt_hcam.cuda()
                 gt_pitch = gt_pitch.cuda()
 
@@ -199,7 +203,10 @@ def train_net():
             optimizer.zero_grad()
             # Inference model
             try:
-                output_net, pred_hcam, pred_pitch = model(input)
+                if 'GeoOnly' in args.mod:
+                    output_net, pred_hcam, pred_pitch = model(seg_maps)
+                else:
+                    output_net, pred_hcam, pred_pitch = model(input)
             except RuntimeError as e:
                 print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                 print(e)
@@ -315,10 +322,11 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
     with torch.no_grad():
         with open(lane_pred_file, 'w') as jsonFile:
             # Start validation loop
-            for i, (input, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
+            for i, (input, seg_maps, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                     input = input.float()
+                    seg_maps = seg_maps.cuda(non_blocking=True)
                     gt_hcam = gt_hcam.cuda()
                     gt_pitch = gt_pitch.cuda()
 
@@ -326,7 +334,10 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                     model.update_projection(args, gt_hcam, gt_pitch)
                 # Inference model
                 try:
-                    output_net, pred_hcam, pred_pitch = model(input)
+                    if 'GeoOnly' in args.mod:
+                        output_net, pred_hcam, pred_pitch = model(seg_maps)
+                    else:
+                        output_net, pred_hcam, pred_pitch = model(input)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                     print(e)
@@ -456,8 +467,8 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 
-    # define the network model
-    args.mod = '3DLaneNet'
+    # define the network model: 3DLaneNet or 3DLaneNet_GeoOnly
+    args.mod = '3DLaneNet_GeoOnly'
     global crit_string
     crit_string = 'loss_3D'
 

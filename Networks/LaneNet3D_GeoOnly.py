@@ -200,8 +200,8 @@ class Net(nn.Module):
 
         # Define network
         # the grid considers both src and dst grid normalized
-        size_top1 = torch.Size([self.batch_size, np.int(args.ipm_h), np.int(args.ipm_w)])
-        self.project_layer1 = ProjectiveGridGenerator(size_top1, self.M_inv, args.no_cuda)
+        size_top = torch.Size([self.batch_size, np.int(args.ipm_h), np.int(args.ipm_w)])
+        self.project_layer = ProjectiveGridGenerator(size_top, self.M_inv, args.no_cuda)
 
         # Conv layers to convert original resolution binary map to target resolution with high-dimension
         self.encoder = make_layers([8, 'M', 16, 'M', 32, 'M', 64], 1, batch_norm=args.batch_norm)
@@ -215,7 +215,7 @@ class Net(nn.Module):
         cam_pitch = self.cam_pitch
 
         # spatial transfer image features to IPM features
-        grid = self.project_layer1(self.M_inv)
+        grid = self.project_layer(self.M_inv)
         x_proj = F.grid_sample(input, grid)
 
         # conv layers to convert original resolution binary map to target resolution with high-dimension
@@ -228,6 +228,39 @@ class Net(nn.Module):
         #     return out, cam_height, cam_pitch, x1_proj
 
         return out, cam_height, cam_pitch
+
+    def update_projection(self, args, cam_height, cam_pitch):
+        """
+            Update transformation matrix based on ground-truth cam_height and cam_pitch
+            This function is "Mutually Exclusive" to the updates of M_inv from network prediction
+        :param args:
+        :param cam_height:
+        :param cam_pitch:
+        :return:
+        """
+        for i in range(self.batch_size):
+            M, M_inv = homography_im2ipm_norm(args.top_view_region, np.array([args.org_h, args.org_w]),
+                                              args.crop_y, np.array([args.resize_h, args.resize_w]),
+                                              cam_pitch[i].data.cpu().numpy(), cam_height[i].data.cpu().numpy(), args.K)
+            self.M_inv[i] = torch.from_numpy(M_inv).type(torch.FloatTensor)
+        self.cam_height = cam_height
+        self.cam_pitch = cam_pitch
+
+    def update_projection_for_data_aug(self, aug_mats):
+        """
+            update transformation matrix when data augmentation have been applied, and the image augmentation matrix are provided
+            Need to consider both the cases of 1. when using ground-truth cam_height, cam_pitch, update M_inv
+                                               2. when cam_height, cam_pitch are online estimated, update H_c for later use
+        """
+        if not self.no_cuda:
+            aug_mats = aug_mats.cuda()
+
+        for i in range(aug_mats.shape[0]):
+            # update H_c directly
+            self.H_c[i] = torch.matmul(aug_mats[i], self.H_c[i])
+            # augmentation need to be applied in unnormalized image coords for M_inv
+            aug_mats[i] = torch.matmul(torch.matmul(self.S_im_inv, aug_mats[i]), self.S_im)
+            self.M_inv[i] = torch.matmul(aug_mats[i], self.M_inv[i])
 
 
 # unit test

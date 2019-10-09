@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import numpy as np
+import copy
 import os.path as ops
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -113,11 +114,13 @@ class LaneDataset(Dataset):
         # parse ground-truth file
         if 'tusimple' in self.dataset_name:
             self._label_image_path,\
+                self._label_laneline_all_org, \
                 self._label_laneline_all, \
                 self._laneline_ass_ids, \
                 self._x_off_std = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
         elif 'sim3d' in self.dataset_name:  # assume loading apollo sim 3D lane
             self._label_image_path, \
+                self._label_laneline_all_org, \
                 self._label_laneline_all, \
                 self._label_centerline_all, \
                 self._label_cam_height_all, \
@@ -216,10 +219,37 @@ class LaneDataset(Dataset):
         gt_anchor = torch.from_numpy(gt_anchor)
         gt_cam_height = torch.tensor(gt_cam_height, dtype=torch.float32)
         gt_cam_pitch = torch.tensor(gt_cam_pitch, dtype=torch.float32)
+
+        # prepare binary segmentation label map
+        seg_label = np.zeros((self.h_net, self.w_net), dtype=np.int8)
+        gt_lanes = self._label_laneline_all_org[idx]
+        for i, lane in enumerate(gt_lanes):
+            # project lane3d to image
+            if self.no_3d:
+                x_2d = lane[:, 0]
+                y_2d = lane[:, 1]
+                # update transformation with image augmentation
+                if self.data_aug:
+                    x_2d, y_2d = homographic_transformation(aug_mat, x_2d, y_2d)
+            else:
+                H_g2im, P_g2im, H_crop, H_im2ipm = self.transform_mats(idx)
+                M = np.matmul(H_crop, P_g2im)
+                # update transformation with image augmentation
+                if self.data_aug:
+                    M = np.matmul(aug_mat, M)
+                x_2d, y_2d = projective_transformation(M, lane[:, 0],
+                                                       lane[:, 1], lane[:, 2])
+            for j in range(len(x_2d) - 1):
+                seg_label = cv2.line(seg_label,
+                                     (int(x_2d[j]), int(y_2d[j])), (int(x_2d[j+1]), int(y_2d[j+1])),
+                                     color=np.asscalar(np.array([1])))
+        seg_label = torch.from_numpy(seg_label.astype(np.float32))
+        seg_label.unsqueeze_(0)
+
         if self.data_aug:
             aug_mat = torch.from_numpy(aug_mat.astype(np.float32))
-            return image, gt_anchor, idx, gt_cam_height, gt_cam_pitch, aug_mat
-        return image, gt_anchor, idx, gt_cam_height, gt_cam_pitch
+            return image, seg_label, gt_anchor, idx, gt_cam_height, gt_cam_pitch, aug_mat
+        return image, seg_label, gt_anchor, idx, gt_cam_height, gt_cam_pitch
 
     def init_dataset_3D(self, dataset_base_dir, json_file_path):
         """
@@ -282,6 +312,7 @@ class LaneDataset(Dataset):
         label_image_path = np.array(label_image_path)
         gt_cam_height_all = np.array(gt_cam_height_all)
         gt_cam_pitch_all = np.array(gt_cam_pitch_all)
+        gt_laneline_pts_all_org = copy.deepcopy(gt_laneline_pts_all)
 
         # convert labeled laneline to anchor format
         gt_laneline_ass_ids = []
@@ -310,6 +341,7 @@ class LaneDataset(Dataset):
 
             # prune gt lanes by visibility labels
             gt_lanes = [prune_3d_lane_by_visibility(gt_lane, gt_visibility[k]) for k, gt_lane in enumerate(gt_lanes)]
+            gt_laneline_pts_all_org[idx] = gt_lanes
             # prune out-of-range points are necessary before transformation
             gt_lanes = [prune_3d_lane_by_range(gt_lane, 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
             gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
@@ -385,7 +417,8 @@ class LaneDataset(Dataset):
         lane_x_off_std = np.sqrt(np.average(lane_x_off_all**2, weights=visibility_all_flat, axis=0))
         lane_y_off_std = np.sqrt(np.average(lane_y_off_all**2, weights=visibility_all_flat, axis=0))
         lane_z_std = np.sqrt(np.average(lane_z_all**2, weights=visibility_all_flat, axis=0))
-        return label_image_path, gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all,\
+        return label_image_path, gt_laneline_pts_all_org,\
+               gt_laneline_pts_all, gt_centerline_pts_all, gt_cam_height_all, gt_cam_pitch_all,\
                gt_laneline_ass_ids, gt_centerline_ass_ids, lane_x_off_std, lane_y_off_std, lane_z_std,\
                gt_laneline_visibility_all, gt_centerline_visibility_all
 
@@ -431,6 +464,7 @@ class LaneDataset(Dataset):
                     gt_lane_pts.append(lane)
                 gt_laneline_pts_all.append(gt_lane_pts)
         label_image_path = np.array(label_image_path)
+        gt_laneline_pts_all_org = copy.deepcopy(gt_laneline_pts_all)
 
         # convert labeled laneline to anchor format
         H_im2g = self.H_im2g
@@ -453,7 +487,7 @@ class LaneDataset(Dataset):
         lane_x_off_all = np.array(lane_x_off_all)
         lane_x_off_std = np.std(lane_x_off_all, axis=0)
 
-        return label_image_path, gt_laneline_pts_all, gt_laneline_ass_ids, lane_x_off_std
+        return label_image_path, gt_laneline_pts_all_org, gt_laneline_pts_all, gt_laneline_ass_ids, lane_x_off_std
 
     def set_x_off_std(self, x_off_std):
         self._x_off_std = x_off_std
@@ -809,7 +843,7 @@ if __name__ == '__main__':
         sys.exit()
 
     # define the network model
-    args.mod = '3DLaneNet_gflat'
+    args.mod = '3DLaneNet_gflat_GeoOnly'
     args.y_ref = 5.0
 
     # set 3D ground area for visualization
@@ -828,7 +862,7 @@ if __name__ == '__main__':
     Visualizer.anchor_dim = dataset.anchor_dim
 
     # get a batch of data/label pairs from loader
-    for batch_ndx, (image_tensor, gt_tensor, idx, gt_cam_height, gt_cam_pitch, aug_mat) in enumerate(loader):
+    for batch_ndx, (image_tensor, seg_labels, gt_tensor, idx, gt_cam_height, gt_cam_pitch, aug_mat) in enumerate(loader):
         print('batch id: {:d}, image tensor shape:'.format(batch_ndx))
         print(image_tensor.shape)
         print('batch id: {:d}, gt tensor shape:'.format(batch_ndx))
@@ -836,6 +870,7 @@ if __name__ == '__main__':
 
         # convert to BGR and numpy for visualization in opencv
         images = image_tensor.permute(0, 2, 3, 1).data.cpu().numpy()
+        seg_labels = seg_labels.data.cpu().numpy()
         gt_anchors = gt_tensor.numpy()
         idx = idx.numpy()
         gt_cam_height = gt_cam_height.numpy()
@@ -843,6 +878,7 @@ if __name__ == '__main__':
         aug_mat = aug_mat.numpy()
         for i in range(args.batch_size):
             img = images[i]
+            seg_label = seg_labels[i][0]
             img = img * np.array(args.vgg_std).astype(np.float32)
             img = img + np.array(args.vgg_mean).astype(np.float32)
             if img.min() < 0. or img.max() > 1.0:
@@ -893,6 +929,7 @@ if __name__ == '__main__':
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))
+            cv2.imshow('seg label check', seg_label)
             cv2.waitKey()
             print('image: {:d} in batch: {:d}'.format(idx[i], batch_ndx))
 
