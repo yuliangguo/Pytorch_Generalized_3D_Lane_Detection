@@ -18,11 +18,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from tensorboardX import SummaryWriter
 
 from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_loss_3D
-from Networks.LaneNet3D import Net
+from Networks import LaneNet3D, LaneNet3D_GeoOnly
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, Visualizer
@@ -54,11 +52,14 @@ def main():
     anchor_x_steps = test_dataset.anchor_x_steps
 
     # Define network
-    model = Net(args, debug=True)
+    if 'GeoOnly' in args.mod:
+        model = LaneNet3D_GeoOnly.Net(args)
+    else:
+        model = LaneNet3D.Net(args)
     define_init_weights(model, args.weight_init)
 
     # load in vgg pretrained weights on ImageNet
-    if args.pretrained:
+    if args.pretrained and 'GeoOnly' not in args.mod:
         model.load_pretrained_vgg(args.batch_norm)
         print('vgg weights pretrained on ImageNet loaded!')
 
@@ -91,18 +92,22 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
     with torch.no_grad():
         with open(lane_pred_file, 'w') as jsonFile:
             # Start validation loop
-            for i, (input, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
+            for i, (input, seg_maps, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
                     input = input.float()
+                    seg_maps = seg_maps.cuda(non_blocking=True)
 
                 if not args.fix_cam and not args.pred_cam:
                     model.update_projection(args, gt_hcam, gt_pitch)
                 # Evaluate model
                 try:
-                    output_net, pred_hcam, pred_pitch,\
-                        x1_feat, x2_feat, x3_feat, x4_feat,\
-                        x1_proj, x2_proj, x3_proj, x4_proj, top_2, top_3, top_4 = model(input)
+                    if 'GeoOnly' in args.mod:
+                        output_net, pred_hcam, pred_pitch = model(seg_maps)
+                    else:
+                        output_net, pred_hcam, pred_pitch,\
+                            x1_feat, x2_feat, x3_feat, x4_feat,\
+                            x1_proj, x2_proj, x3_proj, x4_proj, top_2, top_3, top_4 = model(input)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
                     print(e)
@@ -112,22 +117,23 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                 output_net = output_net.data.cpu().numpy()
                 pred_pitch = pred_pitch.data.cpu().numpy().flatten()
                 pred_hcam = pred_hcam.data.cpu().numpy().flatten()
-                x1_feat = x1_feat.squeeze(0).data.cpu().numpy()
-                x2_feat = x2_feat.squeeze(0).data.cpu().numpy()
-                x3_feat = x3_feat.squeeze(0).data.cpu().numpy()
-                x4_feat = x4_feat.squeeze(0).data.cpu().numpy()
-                x1_proj = x1_proj.squeeze(0).data.cpu().numpy()
-                x2_proj = x2_proj.squeeze(0).data.cpu().numpy()
-                x3_proj = x3_proj.squeeze(0).data.cpu().numpy()
-                x4_proj = x4_proj.squeeze(0).data.cpu().numpy()
-                top_2 = top_2.squeeze(0).data.cpu().numpy()
-                top_3 = top_3.squeeze(0).data.cpu().numpy()
-                top_4 = top_4.squeeze(0).data.cpu().numpy()
                 im = input.permute(0, 2, 3, 1).data.cpu().numpy()[0]
                 im = im * np.array(args.vgg_std)
                 im = im + np.array(args.vgg_mean)
 
                 if vis_feat:
+                    x1_feat = x1_feat.squeeze(0).data.cpu().numpy()
+                    x2_feat = x2_feat.squeeze(0).data.cpu().numpy()
+                    x3_feat = x3_feat.squeeze(0).data.cpu().numpy()
+                    x4_feat = x4_feat.squeeze(0).data.cpu().numpy()
+                    x1_proj = x1_proj.squeeze(0).data.cpu().numpy()
+                    x2_proj = x2_proj.squeeze(0).data.cpu().numpy()
+                    x3_proj = x3_proj.squeeze(0).data.cpu().numpy()
+                    x4_proj = x4_proj.squeeze(0).data.cpu().numpy()
+                    top_2 = top_2.squeeze(0).data.cpu().numpy()
+                    top_3 = top_3.squeeze(0).data.cpu().numpy()
+                    top_4 = top_4.squeeze(0).data.cpu().numpy()
+
                     # compute attention map for visualization
                     x1_feat = np.sum(np.square(x1_feat), axis=0)
                     x2_feat = np.sum(np.square(x2_feat), axis=0)
@@ -291,13 +297,13 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet'
+    args.mod = '3DLaneNet_GeoOnly'
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_GeoOnly_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     global vis_folder
     global test_gt_file
     global lane_pred_file

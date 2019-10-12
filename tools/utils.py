@@ -50,7 +50,7 @@ def define_args():
     parser.add_argument('--prob_th', type=float, default=0.5, help='probability threshold for selecting output lanes')
     # General model settings
     parser.add_argument('--batch_size', type=int, default=8, help='batch size')
-    parser.add_argument('--nepochs', type=int, default=100, help='total numbers of epochs')
+    parser.add_argument('--nepochs', type=int, default=50, help='total numbers of epochs')
     parser.add_argument('--learning_rate', type=float, default=5*1e-4, help='learning rate')
     parser.add_argument('--no_cuda', action='store_true', help='if gpu available')
     parser.add_argument('--nworkers', type=int, default=0, help='num of threads')
