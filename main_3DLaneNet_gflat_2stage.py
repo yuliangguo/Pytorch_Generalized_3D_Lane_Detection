@@ -30,10 +30,11 @@ def load_my_state_dict(model, state_dict):  # custom function to load model when
     ckpt_name = []
     cnt = 0
     for name, param in state_dict.items():
-        if name not in list(own_state.keys()) or 'output_conv' in name:
+        # TODO: why the trained model do not have modules in name?
+        if name[7:] not in list(own_state.keys()) or 'output_conv' in name:
             ckpt_name.append(name)
             continue
-        own_state[name].copy_(param)
+        own_state[name[7:]].copy_(param)
         cnt += 1
     print('#reused param: {}'.format(cnt))
     return model
@@ -86,7 +87,7 @@ def train_net():
 
     # load in vgg pretrained weights
     checkpoint = torch.load('pretrained/erfnet_model_sim3d.tar')
-    args.start_epoch = checkpoint['epoch']
+    # args.start_epoch = checkpoint['epoch']
     model1 = load_my_state_dict(model1, checkpoint['state_dict'])
     model1.eval()  # do not back propagate to model1
 

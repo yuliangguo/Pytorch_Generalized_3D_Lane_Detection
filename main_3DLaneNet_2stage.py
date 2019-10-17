@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.optim
 import torch.nn as nn
+import cv2
 
 import os
 import os.path as ops
@@ -31,10 +32,11 @@ def load_my_state_dict(model, state_dict):  # custom function to load model when
     ckpt_name = []
     cnt = 0
     for name, param in state_dict.items():
-        if name not in list(own_state.keys()) or 'output_conv' in name:
+        # TODO: why the trained model do not have modules in name?
+        if name[7:] not in list(own_state.keys()) or 'output_conv' in name:
             ckpt_name.append(name)
             continue
-        own_state[name].copy_(param)
+        own_state[name[7:]].copy_(param)
         cnt += 1
     print('#reused param: {}'.format(cnt))
     return model
@@ -84,20 +86,16 @@ def train_net():
     model2 = LaneNet3D_GeoOnly.Net(args)
     define_init_weights(model2, args.weight_init)
 
-    # load in vgg pretrained weights
-    checkpoint = torch.load('pretrained/erfnet_model_sim3d.tar')
-    args.start_epoch = checkpoint['epoch']
-    model1 = load_my_state_dict(model1, checkpoint['state_dict'])
-    model1.eval()  # do not back propagate to model1
-
-    if args.pretrained and 'GeoOnly' not in args.mod:
-        model2.load_pretrained_vgg(args.batch_norm)
-        print('vgg weights pretrained on ImageNet loaded!')
-
     if not args.no_cuda:
         # Load model on gpu before passing params to optimizer
         model1 = model1.cuda()
         model2 = model2.cuda()
+
+    # load in vgg pretrained weights
+    checkpoint = torch.load('pretrained/erfnet_model_sim3d.tar')
+    # args.start_epoch = checkpoint['epoch']
+    model1 = load_my_state_dict(model1, checkpoint['state_dict'])
+    model1.eval()  # do not back propagate to model1
 
     # Define optimizer and scheduler
     optimizer = define_optim(args.optimizer, model2.parameters(),
@@ -222,6 +220,10 @@ def train_net():
             # Inference model
             try:
                 output1 = model1(input, no_lane_exist=True)
+                # pred = output1.data.cpu().numpy()[0, 1, :, :]
+                # pred = cv2.blur(pred, (9, 9))
+                # cv2.imshow('check probmap', pred)
+                # cv2.waitKey()
                 output1 = output1[:, 1, :, :].unsqueeze_(1)
                 output_net, pred_hcam, pred_pitch = model2(output1)
             except RuntimeError as e:
