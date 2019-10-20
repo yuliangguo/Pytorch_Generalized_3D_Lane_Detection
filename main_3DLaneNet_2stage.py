@@ -15,9 +15,9 @@ import sys
 import shutil
 import json
 import pdb
+import torch.nn.functional as F
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-
 from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
 from Networks.Loss_crit import Laneline_loss_3D
 from Networks import LaneNet3D, LaneNet3D_GeoOnly, erfnet
@@ -35,7 +35,7 @@ def load_my_state_dict(model, state_dict):  # custom function to load model when
         # TODO: why the trained model do not have modules in name?
         if name[7:] not in list(own_state.keys()) or 'output_conv' in name:
             ckpt_name.append(name)
-            continue
+            # continue
         own_state[name[7:]].copy_(param)
         cnt += 1
     print('#reused param: {}'.format(cnt))
@@ -204,10 +204,11 @@ def train_net():
             # Put inputs on gpu if possible
             if not args.no_cuda:
                 input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
-                input = input.float()
                 seg_maps = seg_maps.cuda(non_blocking=True)
                 gt_hcam = gt_hcam.cuda()
                 gt_pitch = gt_pitch.cuda()
+            input = input.contiguous()
+            input = torch.autograd.Variable(input)
 
             if not args.fix_cam and not args.pred_cam:
                 model2.update_projection(args, gt_hcam, gt_pitch)
@@ -220,8 +221,10 @@ def train_net():
             # Inference model
             try:
                 output1 = model1(input, no_lane_exist=True)
+                with torch.no_grad():
+                    output1 = F.softmax(output1, dim=1)
                 # pred = output1.data.cpu().numpy()[0, 1, :, :]
-                # pred = cv2.blur(pred, (9, 9))
+                # # pred = cv2.blur(pred, (9, 9))
                 # cv2.imshow('check probmap', pred)
                 # cv2.waitKey()
                 output1 = output1[:, 1, :, :].unsqueeze_(1)
@@ -344,16 +347,18 @@ def validate(loader, dataset, model1, model2, criterion, vs_saver, val_gt_file, 
             for i, (input, seg_maps, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
-                    input = input.float()
                     seg_maps = seg_maps.cuda(non_blocking=True)
                     gt_hcam = gt_hcam.cuda()
                     gt_pitch = gt_pitch.cuda()
+                input = input.contiguous()
+                input = torch.autograd.Variable(input)
 
                 if not args.fix_cam and not args.pred_cam:
                     model2.update_projection(args, gt_hcam, gt_pitch)
                 # Inference model
                 try:
                     output1 = model1(input, no_lane_exist=True)
+                    output1 = F.softmax(output1, dim=1)
                     output1 = output1[:, 1, :, :].unsqueeze_(1)
                     output_net, pred_hcam, pred_pitch = model2(output1)
                 except RuntimeError as e:
