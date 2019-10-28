@@ -92,59 +92,63 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                 # visualize and write results
                 for j in range(num_el):
                     im_id = idx[j]
-                    H_g2im, P_g2im, H_crop, H_im2ipm = dataset1.transform_mats(idx[j])
 
-                    """
-                        use two visual savers to satisfy both dimension setups for gt and output_net
-                    """
-                    img1 = input[j]
-                    img1 = img1 * np.array(args1.vgg_std)
-                    img1 = img1 + np.array(args1.vgg_mean)
-                    img1 = np.clip(img1, 0, 1)
-                    im_ipm1 = cv2.warpPerspective(img1, H_im2ipm, (args1.ipm_w, args1.ipm_h))
-                    im_ipm1 = np.clip(im_ipm1, 0, 1)
+                    if vis_feat:
+                        """
+                            use two visual savers to satisfy both dimension setups for gt and output_net
+                        """
+                        H_g2im, P_g2im, H_crop, H_im2ipm = dataset1.transform_mats(idx[j])
+                        img1 = input[j]
+                        img1 = img1 * np.array(args1.vgg_std)
+                        img1 = img1 + np.array(args1.vgg_mean)
+                        img1 = np.clip(img1, 0, 1)
+                        im_ipm1 = cv2.warpPerspective(img1, H_im2ipm, (args1.ipm_w, args1.ipm_h))
+                        im_ipm1 = np.clip(im_ipm1, 0, 1)
 
-                    # visualize on image
-                    M1 = np.matmul(H_crop, H_g2im)
-                    M2 = np.matmul(H_crop, P_g2im)
-                    img1 = vs_saver1.draw_on_img_new(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
-                    img1 = vs_saver2.draw_on_img_new(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
+                        # visualize on image
+                        M1 = np.matmul(H_crop, H_g2im)
+                        M2 = np.matmul(H_crop, P_g2im)
+                        if args1.no_3d:
+                            img1 = vs_saver1.draw_on_img_new(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
+                        else:
+                            img1 = vs_saver1.draw_on_img_new(img1, gt[j], M2, 'laneline', color=[0, 0, 1])
+                        img1 = vs_saver2.draw_on_img_new(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
 
-                    # visualize on ipm
-                    im_ipm1 = vs_saver1.draw_on_ipm_new(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
-                    im_ipm1 = vs_saver2.draw_on_ipm_new(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
+                        # visualize on ipm
+                        im_ipm1 = vs_saver1.draw_on_ipm_new(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
+                        im_ipm1 = vs_saver2.draw_on_ipm_new(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
 
-                    fig = plt.figure()
-                    ax1 = fig.add_subplot(231)
-                    ax2 = fig.add_subplot(232)
-                    ax3 = fig.add_subplot(233, projection='3d')
-                    ax4 = fig.add_subplot(234)
-                    ax5 = fig.add_subplot(235)
-                    ax6 = fig.add_subplot(236)
-                    ax1.imshow(img1)
-                    ax2.imshow(im_ipm1)
-                    vs_saver1.draw_3d_curves_new(ax3, gt[j], gt_hcam[j], 'laneline', [0, 0, 1])
-                    vs_saver2.draw_3d_curves_new(ax3, output_net[j], pred_hcam[j], 'laneline', [1, 0, 0])
-                    ax3.set_xlabel('x axis')
-                    ax3.set_ylabel('y axis')
-                    ax3.set_zlabel('z axis')
-                    bottom, top = ax3.get_zlim()
-                    ax3.set_zlim(min(bottom, -1), max(top, 1))
-                    ax3.set_xlim(-20, 20)
-                    ax3.set_ylim(0, 100)
-                    # visualize features
-                    pred = output1[j, 0, :, :]
-                    ax4.imshow(pred)
-                    x_proj_i = x_proj[j, 0, :, :]
-                    ax5.imshow(x_proj_i)
-                    x_feat_i = x_feat[j, :, :, :]
-                    x_feat_i = np.sum(np.square(x_feat_i), axis=0)
-                    x_feat_i = x_feat_i / np.max(x_feat_i)
-                    ax6.imshow(x_feat_i)
+                        fig = plt.figure()
+                        ax1 = fig.add_subplot(231)
+                        ax2 = fig.add_subplot(232)
+                        ax3 = fig.add_subplot(233, projection='3d')
+                        ax4 = fig.add_subplot(234)
+                        ax5 = fig.add_subplot(235)
+                        ax6 = fig.add_subplot(236)
+                        ax1.imshow(img1)
+                        ax2.imshow(im_ipm1)
+                        vs_saver1.draw_3d_curves_new(ax3, gt[j], gt_hcam[j], 'laneline', [0, 0, 1])
+                        vs_saver2.draw_3d_curves_new(ax3, output_net[j], pred_hcam[j], 'laneline', [1, 0, 0])
+                        ax3.set_xlabel('x axis')
+                        ax3.set_ylabel('y axis')
+                        ax3.set_zlabel('z axis')
+                        bottom, top = ax3.get_zlim()
+                        ax3.set_zlim(min(bottom, -1), max(top, 1))
+                        ax3.set_xlim(-20, 20)
+                        ax3.set_ylim(0, 100)
+                        # visualize features
+                        pred = output1[j, 0, :, :]
+                        ax4.imshow(pred)
+                        x_proj_i = x_proj[j, 0, :, :]
+                        ax5.imshow(x_proj_i)
+                        x_feat_i = x_feat[j, :, :, :]
+                        x_feat_i = np.sum(np.square(x_feat_i), axis=0)
+                        x_feat_i = x_feat_i / np.max(x_feat_i)
+                        ax6.imshow(x_feat_i)
 
-                    fig.savefig(vs_saver2.save_path + '/example/' + vs_saver2.vis_folder + '/infer_{}'.format(idx[j]))
-                    plt.clf()
-                    plt.close(fig)
+                        fig.savefig(vs_saver2.save_path + '/example/' + vs_saver2.vis_folder + '/infer_{}'.format(idx[j]))
+                        plt.clf()
+                        plt.close(fig)
 
                     """
                         save results in test dataset format
@@ -162,7 +166,9 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         jsonFile.write('\n')
                     elif 'sim3d' in args1.dataset_name:
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset1.anchor_dim,
-                                                                               dataset1.anchor_x_steps, args1.anchor_y_steps, args1.prob_th)
+                                                                               dataset1.anchor_x_steps,
+                                                                               args1.anchor_y_steps,
+                                                                               pred_hcam[j], args1.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
@@ -200,6 +206,9 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
+    global vis_feat
+    vis_feat = True
+
     global args1, args2
     parser = define_args()
     args1 = parser.parse_args()
@@ -208,35 +217,43 @@ if __name__ == '__main__':
     # dataset_name 'tusimple' or 'sim3d'
     args1.dataset_name = 'tusimple'
     args1.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args1.data_dir = ops.join('data', args1.dataset_name)
+    # args1.dataset_name = 'sim3d_0924'
+    # args1.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
     args2.dataset_name = 'sim3d_0924'
     args2.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+
+    args1.data_dir = ops.join('data', args1.dataset_name)
     args2.data_dir = ops.join('data', args2.dataset_name)
 
-    # load configuration for certain dataset
+    # define trained Geo model
+    geo_model_dir = 'Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
+    # use two sets of configurations for different datasets
+    sim3d_config(args2)
+    args2.save_path = os.path.join(args2.save_path, geo_model_dir)
+
     global evaluator
     # define evaluator
-    evaluator = eval_lane_tusimple.LaneEval
-    args1.prob_th = 0.5
-
-    # use two sets of configurations
-    tusimple_config(args1)
-    args1.crop_y = 0
-    sim3d_config(args2)
+    if 'tusimple' in args1.dataset_name:
+        tusimple_config(args1)
+        args1.crop_y = 0
+        evaluator = eval_lane_tusimple.LaneEval
+        # define pretrained feat model
+        pretrained_feat_model = 'pretrained/erfnet_model_tusimple.tar'
+        vis_folder = 'test_vis_tusimple'
+        test_gt_file = ops.join(args1.data_dir, 'test.json')
+        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple.json')
+    elif 'sim3d' in args1.dataset_name:
+        sim3d_config(args1)
+        evaluator = eval_3D_lane.LaneEval(args1)
+        # define pretrained feat model
+        pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
+        vis_folder = 'test2_vis_sim3d'
+        test_gt_file = ops.join(args1.data_dir, 'test2.json')
+        lane_pred_file = ops.join(args2.save_path, 'test2_pred_file_sim3d.json')
 
     # define the network model
     args1.mod = '3DLaneNet_gflat_2stage'
     args2.mod = '3DLaneNet_gflat_2stage'
-
-    # define pretrained feat model
-    global pretrained_feat_model
-    pretrained_feat_model = 'pretrained/erfnet_model_tusimple.tar'
-    # define trained Geo model
-    args2.save_path = os.path.join(args2.save_path,
-                                  'Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
-    vis_folder = 'test_vis_tusimple'
-    test_gt_file = ops.join(args1.data_dir, 'test.json')
-    lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple.json')
 
     """   run the test   """
     # Check GPU availability
