@@ -284,8 +284,8 @@ class Net(nn.Module):
         # convert top-view features to anchor output
         out = self.lane_out(x_feat)
 
-        # if self.debug:
-        #     return out, cam_height, cam_pitch, x1_proj
+        if self.debug:
+            return out, cam_height, cam_pitch, x_proj, x_feat
 
         return out, cam_height, cam_pitch
 

@@ -66,11 +66,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                 try:
                     output1 = model1(input, no_lane_exist=True)
                     output1 = F.softmax(output1, dim=1)
-                    # pred = output1.data.cpu().numpy()[0, 1, :, :]
-                    # cv2.imshow('check probmap', pred)
-                    # cv2.waitKey()
                     output1 = output1[:, 1, :, :].unsqueeze_(1)
-                    output_net, pred_hcam, pred_pitch = model2(output1)
+                    output_net, pred_hcam, pred_pitch, x_proj, x_feat = model2(output1)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
                     print(e)
@@ -78,6 +75,9 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
 
                 gt = gt.data.cpu().numpy()
                 output_net = output_net.data.cpu().numpy()
+                output1 = output1.data.cpu().numpy()
+                x_proj = x_proj.data.cpu().numpy()
+                x_feat = x_feat.data.cpu().numpy()
                 # pred_pitch = pred_pitch.data.cpu().numpy().flatten()
                 pred_hcam = pred_hcam.data.cpu().numpy().flatten()
                 gt_hcam = gt_hcam.data.cpu().numpy().flatten()
@@ -101,29 +101,18 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     img1 = img1 * np.array(args1.vgg_std)
                     img1 = img1 + np.array(args1.vgg_mean)
                     img1 = np.clip(img1, 0, 1)
-                    img2 = img1.copy()
                     im_ipm1 = cv2.warpPerspective(img1, H_im2ipm, (args1.ipm_w, args1.ipm_h))
                     im_ipm1 = np.clip(im_ipm1, 0, 1)
-                    im_ipm2 = im_ipm1.copy()
 
                     # visualize on image
                     M1 = np.matmul(H_crop, H_g2im)
                     M2 = np.matmul(H_crop, P_g2im)
                     img1 = vs_saver1.draw_on_img_new(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
-                    if not args1.no_centerline:
-                        img2 = vs_saver1.draw_on_img_new(img2, gt[j], M1, 'centerline', color=[0, 0, 1])
-                    # TODO: the matrix in vs_saver2 might not be right
                     img1 = vs_saver2.draw_on_img_new(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
-                    if not args2.no_centerline:
-                        img2 = vs_saver2.draw_on_img_new(img2, output_net[j], M2, 'centerline', color=[1, 0, 0])
 
                     # visualize on ipm
                     im_ipm1 = vs_saver1.draw_on_ipm_new(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
-                    if not args1.no_centerline:
-                        im_ipm2 = vs_saver1.draw_on_ipm_new(im_ipm2, gt[j], 'centerline', color=[0, 0, 1])
                     im_ipm1 = vs_saver2.draw_on_ipm_new(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
-                    if not args2.no_centerline:
-                        im_ipm2 = vs_saver2.draw_on_ipm_new(im_ipm2, output_net[j], 'centerline', color=[1, 0, 0])
 
                     fig = plt.figure()
                     ax1 = fig.add_subplot(231)
@@ -131,7 +120,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     ax3 = fig.add_subplot(233, projection='3d')
                     ax4 = fig.add_subplot(234)
                     ax5 = fig.add_subplot(235)
-                    ax6 = fig.add_subplot(236, projection='3d')
+                    ax6 = fig.add_subplot(236)
                     ax1.imshow(img1)
                     ax2.imshow(im_ipm1)
                     vs_saver1.draw_3d_curves_new(ax3, gt[j], gt_hcam[j], 'laneline', [0, 0, 1])
@@ -143,17 +132,16 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     ax3.set_zlim(min(bottom, -1), max(top, 1))
                     ax3.set_xlim(-20, 20)
                     ax3.set_ylim(0, 100)
-                    ax4.imshow(img2)
-                    ax5.imshow(im_ipm2)
-                    # vs_saver1.draw_3d_curves(ax6, gt[j], 'centerline', [0, 0, 1])
-                    vs_saver2.draw_3d_curves_new(ax6, output_net[j], pred_hcam[j], 'centerline', [1, 0, 0])
-                    ax6.set_xlabel('x axis')
-                    ax6.set_ylabel('y axis')
-                    ax6.set_zlabel('z axis')
-                    bottom, top = ax6.get_zlim()
-                    ax6.set_zlim(min(bottom, -1), max(top, 1))
-                    ax6.set_xlim(-20, 20)
-                    ax6.set_ylim(0, 100)
+                    # visualize features
+                    pred = output1[j, 0, :, :]
+                    ax4.imshow(pred)
+                    x_proj_i = x_proj[j, 0, :, :]
+                    ax5.imshow(x_proj_i)
+                    x_feat_i = x_feat[j, :, :, :]
+                    x_feat_i = np.sum(np.square(x_feat_i), axis=0)
+                    x_feat_i = x_feat_i / np.max(x_feat_i)
+                    ax6.imshow(x_feat_i)
+
                     fig.savefig(vs_saver2.save_path + '/example/' + vs_saver2.vis_folder + '/infer_{}'.format(idx[j]))
                     plt.clf()
                     plt.close(fig)
@@ -269,7 +257,7 @@ if __name__ == '__main__':
 
     # Define network
     model1 = erfnet.ERFNet(2)
-    model2 = LaneNet3D_gflat_GeoOnly.Net(args2)
+    model2 = LaneNet3D_gflat_GeoOnly.Net(args2, debug=True)
     define_init_weights(model2, args2.weight_init)
 
     if not args1.no_cuda:
