@@ -117,7 +117,8 @@ class LaneDataset(Dataset):
                 self._label_laneline_all_org, \
                 self._label_laneline_all, \
                 self._laneline_ass_ids, \
-                self._x_off_std = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
+                self._x_off_std,\
+                self._gt_laneline_visibility_all = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
         elif 'sim3d' in self.dataset_name:  # assume loading apollo sim 3D lane
             self._label_image_path, \
                 self._label_laneline_all_org, \
@@ -434,6 +435,8 @@ class LaneDataset(Dataset):
         # load image path, and lane pts
         label_image_path = []
         gt_laneline_pts_all = []
+        gt_laneline_visibility_all = []
+
         assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
 
         with open(json_file_path, 'r') as file:
@@ -474,20 +477,24 @@ class LaneDataset(Dataset):
             gt_lanes = gt_laneline_pts_all[idx]
             gt_anchors = []
             ass_ids = []
+            visibility_vectors = []
             for i in range(len(gt_lanes)):
                 # convert gt label to anchor label
-                ass_id, x_off_values, z_values = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
+                ass_id, x_off_values, z_values, visibility_vec = self.convert_label_to_anchor(gt_lanes[i], H_im2g)
                 if ass_id >= 0:
                     gt_anchors.append(np.vstack([x_off_values, z_values]).T)
                     ass_ids.append(ass_id)
                     lane_x_off_all.append(x_off_values)
+                    visibility_vectors.append(visibility_vec)
             gt_laneline_ass_ids.append(ass_ids)
             gt_laneline_pts_all[idx] = gt_anchors
+            gt_laneline_visibility_all.append(visibility_vectors)
 
         lane_x_off_all = np.array(lane_x_off_all)
         lane_x_off_std = np.std(lane_x_off_all, axis=0)
 
-        return label_image_path, gt_laneline_pts_all_org, gt_laneline_pts_all, gt_laneline_ass_ids, lane_x_off_std
+        return label_image_path, gt_laneline_pts_all_org, gt_laneline_pts_all, gt_laneline_ass_ids,\
+               lane_x_off_std, gt_laneline_visibility_all
 
     def set_x_off_std(self, x_off_std):
         self._x_off_std = x_off_std

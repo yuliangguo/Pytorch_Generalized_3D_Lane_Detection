@@ -19,9 +19,8 @@ import matplotlib.pyplot as plt
 import pdb
 import torch.nn.functional as F
 from tqdm import tqdm
-from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks.Loss_crit import Laneline_loss_3D
-from Networks import LaneNet3D, LaneNet3D_GeoOnly, erfnet
+from Dataloader.Load_Data_3DLane_gflat import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Networks import LaneNet3D_gflat, LaneNet3D_gflat_GeoOnly, erfnet
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
                         define_scheduler, define_optim, AverageMeter, Visualizer
@@ -80,7 +79,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                 gt = gt.data.cpu().numpy()
                 output_net = output_net.data.cpu().numpy()
                 # pred_pitch = pred_pitch.data.cpu().numpy().flatten()
-                # pred_hcam = pred_hcam.data.cpu().numpy().flatten()
+                pred_hcam = pred_hcam.data.cpu().numpy().flatten()
+                gt_hcam = gt_hcam.data.cpu().numpy().flatten()
 
                 # unormalize lane outputs
                 num_el = input.size(0)
@@ -109,20 +109,21 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     # visualize on image
                     M1 = np.matmul(H_crop, H_g2im)
                     M2 = np.matmul(H_crop, P_g2im)
-                    img1 = vs_saver1.draw_on_img(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
+                    img1 = vs_saver1.draw_on_img_new(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
                     if not args1.no_centerline:
-                        img2 = vs_saver1.draw_on_img(img2, gt[j], M1, 'centerline', color=[0, 0, 1])
-                    img1 = vs_saver2.draw_on_img(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
+                        img2 = vs_saver1.draw_on_img_new(img2, gt[j], M1, 'centerline', color=[0, 0, 1])
+                    # TODO: the matrix in vs_saver2 might not be right
+                    img1 = vs_saver2.draw_on_img_new(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
                     if not args2.no_centerline:
-                        img2 = vs_saver2.draw_on_img(img2, output_net[j], M2, 'centerline', color=[1, 0, 0])
+                        img2 = vs_saver2.draw_on_img_new(img2, output_net[j], M2, 'centerline', color=[1, 0, 0])
 
                     # visualize on ipm
-                    im_ipm1 = vs_saver1.draw_on_ipm(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
+                    im_ipm1 = vs_saver1.draw_on_ipm_new(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
                     if not args1.no_centerline:
-                        im_ipm2 = vs_saver1.draw_on_ipm(im_ipm2, gt[j], 'centerline', color=[0, 0, 1])
-                    im_ipm1 = vs_saver2.draw_on_ipm(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
+                        im_ipm2 = vs_saver1.draw_on_ipm_new(im_ipm2, gt[j], 'centerline', color=[0, 0, 1])
+                    im_ipm1 = vs_saver2.draw_on_ipm_new(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
                     if not args2.no_centerline:
-                        im_ipm2 = vs_saver2.draw_on_ipm(im_ipm2, output_net[j], 'centerline', color=[1, 0, 0])
+                        im_ipm2 = vs_saver2.draw_on_ipm_new(im_ipm2, output_net[j], 'centerline', color=[1, 0, 0])
 
                     fig = plt.figure()
                     ax1 = fig.add_subplot(231)
@@ -133,8 +134,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     ax6 = fig.add_subplot(236, projection='3d')
                     ax1.imshow(img1)
                     ax2.imshow(im_ipm1)
-                    vs_saver1.draw_3d_curves(ax3, gt[j], 'laneline', [0, 0, 1])
-                    vs_saver2.draw_3d_curves(ax3, output_net[j], 'laneline', [1, 0, 0])
+                    vs_saver1.draw_3d_curves_new(ax3, gt[j], gt_hcam[j], 'laneline', [0, 0, 1])
+                    vs_saver2.draw_3d_curves_new(ax3, output_net[j], pred_hcam[j], 'laneline', [1, 0, 0])
                     ax3.set_xlabel('x axis')
                     ax3.set_ylabel('y axis')
                     ax3.set_zlabel('z axis')
@@ -145,7 +146,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     ax4.imshow(img2)
                     ax5.imshow(im_ipm2)
                     # vs_saver1.draw_3d_curves(ax6, gt[j], 'centerline', [0, 0, 1])
-                    vs_saver2.draw_3d_curves(ax6, output_net[j], 'centerline', [1, 0, 0])
+                    vs_saver2.draw_3d_curves_new(ax6, output_net[j], pred_hcam[j], 'centerline', [1, 0, 0])
                     ax6.set_xlabel('x axis')
                     ax6.set_ylabel('y axis')
                     ax6.set_zlabel('z axis')
@@ -209,7 +210,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     global args1, args2
     parser = define_args()
@@ -236,15 +237,15 @@ if __name__ == '__main__':
     sim3d_config(args2)
 
     # define the network model
-    args1.mod = '3DLaneNet_2stage'
-    args2.mod = '3DLaneNet_2stage'
+    args1.mod = '3DLaneNet_gflat_2stage'
+    args2.mod = '3DLaneNet_gflat_2stage'
 
     # define pretrained feat model
     global pretrained_feat_model
     pretrained_feat_model = 'pretrained/erfnet_model_tusimple.tar'
     # define trained Geo model
     args2.save_path = os.path.join(args2.save_path,
-                                  'Model_3DLaneNet_2stage_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+                                  'Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     vis_folder = 'test_vis_tusimple'
     test_gt_file = ops.join(args1.data_dir, 'test.json')
     lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple.json')
@@ -268,7 +269,7 @@ if __name__ == '__main__':
 
     # Define network
     model1 = erfnet.ERFNet(2)
-    model2 = LaneNet3D_GeoOnly.Net(args2)
+    model2 = LaneNet3D_gflat_GeoOnly.Net(args2)
     define_init_weights(model2, args2.weight_init)
 
     if not args1.no_cuda:
