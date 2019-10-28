@@ -1,7 +1,7 @@
 name: base
 channels:
-  - conda-forge
   - pytorch
+  - conda-forge
   - defaults
 dependencies:
   - _ipyw_jlab_nb_ext_conf=0.1.0=py37_0
@@ -190,7 +190,6 @@ dependencies:
   - ply=3.11=py37_0
   - prometheus_client=0.6.0=py37_0
   - prompt_toolkit=2.0.9=py37_0
-  - protobuf=3.8.0=py37he6710b0_0
   - psutil=5.6.1=py37h7b6447c_0
   - ptyprocess=0.6.0=py37_0
   - py=1.8.0=py37_0
@@ -290,5 +289,7 @@ dependencies:
   - zstd=1.3.7=h0b5b093_0
   - pip:
     - opencv-python==4.1.0.25
+    - protobuf==3.8.0
+    - py3-ortools==5.1.4041
 prefix: /home/yuliangguo/anaconda3
 

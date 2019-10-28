@@ -109,8 +109,8 @@ class LaneDataset(Dataset):
         # parse ground-truth file
         if 'tusimple' in self.dataset_name:
             self._label_image_path,\
-                self._label_laneline_all, \
                 self._label_laneline_all_org, \
+                self._label_laneline_all, \
                 self._laneline_ass_ids, \
                 self._x_off_std = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
         elif 'sim3d' in self.dataset_name:  # assume loading apollo sim 3D lane

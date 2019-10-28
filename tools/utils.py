@@ -112,8 +112,10 @@ def tusimple_config(args):
         args.top_view_region = np.array([[-10, 85], [10, 85], [-10, 5], [10, 5]])
         args.anchor_y_steps = np.array([5, 20, 40, 60, 80, 100])
     """
-    args.top_view_region = np.array([[-10, 82], [10, 82], [-10, 2], [10, 2]])
-    args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
+    # args.top_view_region = np.array([[-10, 82], [10, 82], [-10, 2], [10, 2]])
+    # args.anchor_y_steps = np.array([2, 3, 5, 10, 15, 20, 30, 40, 60, 80])
+    args.top_view_region = np.array([[-10, 103], [10, 103], [-10, 3], [10, 3]])
+    args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
     args.num_y_steps = len(args.anchor_y_steps)
 
     # initialize with pre-trained vgg weights: paper suggested true
@@ -416,21 +418,30 @@ class Visualizer:
             if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
                 x_offsets = lane_anchor[j, :self.num_y_steps]
                 x_g = x_offsets + self.anchor_x_steps[j]
-                z_g = lane_anchor[j, self.num_y_steps:2*self.num_y_steps]
+                if self.no_3d:
+                    z_g = np.zeros_like(x_g)
+                else:
+                    z_g = lane_anchor[j, self.num_y_steps:2*self.num_y_steps]
                 ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
 
             # draw centerline
             if draw_type is 'centerline' and lane_anchor[j, 2*self.anchor_dim - 1] > self.prob_th:
                 x_offsets = lane_anchor[j, self.anchor_dim:self.anchor_dim + self.num_y_steps]
                 x_g = x_offsets + self.anchor_x_steps[j]
-                z_g = lane_anchor[j, self.anchor_dim + self.num_y_steps:self.anchor_dim + 2*self.num_y_steps]
+                if self.no_3d:
+                    z_g = np.zeros_like(x_g)
+                else:
+                    z_g = lane_anchor[j, self.anchor_dim + self.num_y_steps:self.anchor_dim + 2*self.num_y_steps]
                 ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
 
             # draw the additional centerline for the merging case
             if draw_type is 'centerline' and lane_anchor[j, 3*self.anchor_dim - 1] > self.prob_th:
                 x_offsets = lane_anchor[j, 2*self.anchor_dim:2*self.anchor_dim + self.num_y_steps]
                 x_g = x_offsets + self.anchor_x_steps[j]
-                z_g = lane_anchor[j, 2*self.anchor_dim + self.num_y_steps:2*self.anchor_dim + 2*self.num_y_steps]
+                if self.no_3d:
+                    z_g = np.zeros_like(x_g)
+                else:
+                    z_g = lane_anchor[j, 2*self.anchor_dim + self.num_y_steps:2*self.anchor_dim + 2*self.num_y_steps]
                 ax.plot(x_g, self.anchor_y_steps, z_g, color=color)
 
     def draw_3d_curves_new(self, ax, lane_anchor, h_cam, draw_type='laneline', color=[0, 0, 1]):
