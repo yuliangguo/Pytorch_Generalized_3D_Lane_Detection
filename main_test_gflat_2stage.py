@@ -92,12 +92,12 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                 # visualize and write results
                 for j in range(num_el):
                     im_id = idx[j]
+                    H_g2im, P_g2im, H_crop, H_im2ipm = dataset1.transform_mats(idx[j])
 
                     if vis_feat:
                         """
                             use two visual savers to satisfy both dimension setups for gt and output_net
                         """
-                        H_g2im, P_g2im, H_crop, H_im2ipm = dataset1.transform_mats(idx[j])
                         img1 = input[j]
                         img1 = img1 * np.array(args1.vgg_std)
                         img1 = img1 + np.array(args1.vgg_mean)
@@ -158,7 +158,9 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     # convert to json output format
                     if 'tusimple' in args1.dataset_name:
                         h_samples = json_line["h_samples"]
-                        lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
+                        lane_anchor_short = np.concatenate((lane_anchors[:, 0:args1.num_y_steps],
+                                                            lane_anchors[:, 3*args1.num_y_steps].reshape(-1, 1)), axis=1)
+                        lanes_pred = compute_tusimple_lanes(lane_anchor_short, h_samples, H_g2im,
                                                             dataset1.anchor_x_steps, args1.anchor_y_steps, 0, args1.org_w, args1.prob_th)
                         json_line["lanes"] = lanes_pred
                         json_line["run_time"] = 0
@@ -207,7 +209,7 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     global vis_feat
-    vis_feat = True
+    vis_feat = False
 
     global args1, args2
     parser = define_args()
