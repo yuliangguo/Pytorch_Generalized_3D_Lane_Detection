@@ -180,7 +180,7 @@ class LanePredictionHead(nn.Module):
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
-    def __init__(self, args, debug=False):
+    def __init__(self, args, input_dim=1, debug=False):
         super().__init__()
 
         self.no_cuda = args.no_cuda
@@ -264,7 +264,7 @@ class Net(nn.Module):
             self.project_layer = ProjectiveGridGenerator(size_top, self.M_inv, args.no_cuda)
 
             # Conv layers to convert original resolution binary map to target resolution with high-dimension
-            self.encoder = make_layers([8, 'M', 16, 'M', 32, 'M', 64], 1, batch_norm=args.batch_norm)
+            self.encoder = make_layers([8, 'M', 16, 'M', 32, 'M', 64], input_dim, batch_norm=args.batch_norm)
 
             self.lane_out = LanePredictionHead(self.num_lane_type, self.num_y_steps, args.batch_norm)
 

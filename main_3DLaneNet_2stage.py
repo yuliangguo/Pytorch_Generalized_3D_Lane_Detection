@@ -82,8 +82,8 @@ def train_net():
     anchor_x_steps = valid_dataset.anchor_x_steps
 
     # Define network
-    model1 = erfnet.ERFNet(2)
-    model2 = LaneNet3D_GeoOnly.Net(args)
+    model1 = erfnet.ERFNet(args.num_class)
+    model2 = LaneNet3D_GeoOnly.Net(args, input_dim=args.num_class-1)
     define_init_weights(model2, args.weight_init)
 
     if not args.no_cuda:
@@ -92,7 +92,7 @@ def train_net():
         model2 = model2.cuda()
 
     # load in vgg pretrained weights
-    checkpoint = torch.load('pretrained/erfnet_model_sim3d.tar')
+    checkpoint = torch.load(args.pretrained_feat_model)
     # args.start_epoch = checkpoint['epoch']
     model1 = load_my_state_dict(model1, checkpoint['state_dict'])
     model1.eval()  # do not back propagate to model1
@@ -223,11 +223,12 @@ def train_net():
                 output1 = model1(input, no_lane_exist=True)
                 with torch.no_grad():
                     output1 = F.softmax(output1, dim=1)
-                # pred = output1.data.cpu().numpy()[0, 1, :, :]
-                # # pred = cv2.blur(pred, (9, 9))
+                    output1 = output1 / torch.max(torch.max(output1, dim=2, keepdim=True)[0], dim=3, keepdim=True)[0]
+                # pred = output1.data.cpu().numpy()[0, 1:, :, :]
+                # pred = np.max(pred, axis=0)
                 # cv2.imshow('check probmap', pred)
                 # cv2.waitKey()
-                output1 = output1[:, 1, :, :].unsqueeze_(1)
+                output1 = output1[:, 1:, :, :]
                 output_net, pred_hcam, pred_pitch = model2(output1)
             except RuntimeError as e:
                 print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
@@ -359,7 +360,8 @@ def validate(loader, dataset, model1, model2, criterion, vs_saver, val_gt_file, 
                 try:
                     output1 = model1(input, no_lane_exist=True)
                     output1 = F.softmax(output1, dim=1)
-                    output1 = output1[:, 1, :, :].unsqueeze_(1)
+                    output1 = output1 / torch.max(torch.max(output1, dim=2, keepdim=True)[0], dim=3, keepdim=True)[0]
+                    output1 = output1[:, 1:, :, :]
                     output_net, pred_hcam, pred_pitch = model2(output1)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
@@ -484,7 +486,9 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_2stage'
+    args.num_class = 7  # 1 background + n lane labels
+    args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class.tar'
+    args.mod = '3DLaneNet_2stage_7class'
     global crit_string
     crit_string = 'loss_3D'
 
