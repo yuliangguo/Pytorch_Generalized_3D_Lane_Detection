@@ -66,7 +66,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                 try:
                     output1 = model1(input, no_lane_exist=True)
                     output1 = F.softmax(output1, dim=1)
-                    output1 = output1[:, 1, :, :].unsqueeze_(1)
+                    output1 = output1 / torch.max(torch.max(output1, dim=2, keepdim=True)[0], dim=3, keepdim=True)[0]
+                    output1 = output1[:, 1:, :, :]
                     output_net, pred_hcam, pred_pitch, x_proj, x_feat = model2(output1)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
@@ -137,9 +138,9 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         ax3.set_xlim(-20, 20)
                         ax3.set_ylim(0, 100)
                         # visualize features
-                        pred = output1[j, 0, :, :]
+                        pred = np.max(output1[j, :, :, :], axis=0)
                         ax4.imshow(pred)
-                        x_proj_i = x_proj[j, 0, :, :]
+                        x_proj_i = np.max(x_proj[j, :, :, :], axis=0)
                         ax5.imshow(x_proj_i)
                         x_feat_i = x_feat[j, :, :, :]
                         x_feat_i = np.sum(np.square(x_feat_i), axis=0)
@@ -209,7 +210,7 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     global vis_feat
-    vis_feat = False
+    vis_feat = True
 
     global args1, args2
     parser = define_args()
@@ -217,10 +218,10 @@ if __name__ == '__main__':
     args2 = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args1.dataset_name = 'tusimple'
-    args1.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    # args1.dataset_name = 'sim3d_0924'
-    # args1.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    # args1.dataset_name = 'tusimple'
+    # args1.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
+    args1.dataset_name = 'sim3d_0924'
+    args1.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
     args2.dataset_name = 'sim3d_0924'
     args2.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
 
@@ -228,7 +229,8 @@ if __name__ == '__main__':
     args2.data_dir = ops.join('data', args2.dataset_name)
 
     # define trained Geo model
-    geo_model_dir = 'Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
+    num_class = 7
+    geo_model_dir = 'Model_3DLaneNet_gflat_2stage_7class_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
     # use two sets of configurations for different datasets
     sim3d_config(args2)
     args2.save_path = os.path.join(args2.save_path, geo_model_dir)
@@ -240,22 +242,22 @@ if __name__ == '__main__':
         args1.crop_y = 0
         evaluator = eval_lane_tusimple.LaneEval
         # define pretrained feat model
-        pretrained_feat_model = 'pretrained/erfnet_model_tusimple.tar'
-        vis_folder = 'test_vis_tusimple'
+        pretrained_feat_model = 'pretrained/erfnet_model_tusimple_7class.tar'
+        vis_folder = 'test_vis_tusimple_7class'
         test_gt_file = ops.join(args1.data_dir, 'test.json')
-        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple.json')
+        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple_7class.json')
     elif 'sim3d' in args1.dataset_name:
         sim3d_config(args1)
         evaluator = eval_3D_lane.LaneEval(args1)
         # define pretrained feat model
-        pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
-        vis_folder = 'test2_vis_sim3d'
+        pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class.tar'
+        vis_folder = 'test2_vis_sim3d_7class'
         test_gt_file = ops.join(args1.data_dir, 'test2.json')
-        lane_pred_file = ops.join(args2.save_path, 'test2_pred_file_sim3d.json')
+        lane_pred_file = ops.join(args2.save_path, 'test2_pred_file_sim3d_7class.json')
 
     # define the network model
-    args1.mod = '3DLaneNet_gflat_2stage'
-    args2.mod = '3DLaneNet_gflat_2stage'
+    args1.mod = '3DLaneNet_gflat_2stage_7class'
+    args2.mod = '3DLaneNet_gflat_2stage_7class'
 
     """   run the test   """
     # Check GPU availability
@@ -275,8 +277,8 @@ if __name__ == '__main__':
     test_set_labels = [json.loads(line) for line in open(test_gt_file).readlines()]
 
     # Define network
-    model1 = erfnet.ERFNet(2)
-    model2 = LaneNet3D_gflat_GeoOnly.Net(args2, debug=True)
+    model1 = erfnet.ERFNet(num_class)
+    model2 = LaneNet3D_gflat_GeoOnly.Net(args2, input_dim=num_class-1, debug=True)
     define_init_weights(model2, args2.weight_init)
 
     if not args1.no_cuda:
