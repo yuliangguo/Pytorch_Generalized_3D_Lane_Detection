@@ -55,7 +55,7 @@ def main():
     if 'GeoOnly' in args.mod:
         model = LaneNet3D_GeoOnly.Net(args)
     else:
-        model = LaneNet3D.Net(args)
+        model = LaneNet3D.Net(args, debug=True)
     define_init_weights(model, args.weight_init)
 
     # load in vgg pretrained weights on ImageNet
@@ -297,19 +297,19 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_GeoOnly'
+    args.mod = '3DLaneNet'
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_GeoOnly_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     global vis_folder
     global test_gt_file
     global lane_pred_file
-    vis_folder = 'test2_vis'
-    test_gt_file = ops.join(args.data_dir, 'test2.json')
-    lane_pred_file = ops.join(args.save_path, 'test2_pred_file.json')
+    vis_folder = 'test1101_vis'
+    test_gt_file = ops.join(args.data_dir, 'test1101.json')
+    lane_pred_file = ops.join(args.save_path, 'test1101_pred_file.json')
 
     # run the training
     main()

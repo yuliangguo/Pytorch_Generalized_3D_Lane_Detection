@@ -207,7 +207,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
     global vis_feat
     vis_feat = True
@@ -251,13 +251,14 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args1)
         # define pretrained feat model
         pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class.tar'
-        vis_folder = 'test2_vis_sim3d_7class'
-        test_gt_file = ops.join(args1.data_dir, 'test2.json')
-        lane_pred_file = ops.join(args2.save_path, 'test2_pred_file_sim3d_7class.json')
+        vis_folder = 'test1101_vis_sim3d_7class'
+        test_gt_file = ops.join(args1.data_dir, 'test1101.json')
+        lane_pred_file = ops.join(args2.save_path, 'test1101_pred_file_sim3d_7class.json')
 
     # define the network model
     args1.mod = '3DLaneNet_gflat_2stage_7class'
     args2.mod = '3DLaneNet_gflat_2stage_7class'
+    args2.y_ref = 5
 
     """   run the test   """
     # Check GPU availability

@@ -445,7 +445,7 @@ def validate(loader, dataset, model1, model2, criterion, vs_saver, val_gt_file, 
                       "centerline z error (close)  {:.8} m\n"
                       "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
                                                                    eval_stats[2], eval_stats[3],
-                                                                   eval_stats[3], eval_stats[5],
+                                                                   eval_stats[4], eval_stats[5],
                                                                    eval_stats[6], eval_stats[7],
                                                                    eval_stats[8], eval_stats[9],
                                                                    eval_stats[10], eval_stats[11],
@@ -500,7 +500,7 @@ if __name__ == '__main__':
     crit_string = 'loss_gflat'
 
     # for the case only running evaluation
-    args.evaluate = False
+    args.evaluate = True
 
     # settings for save and visualize
     args.print_freq = 50

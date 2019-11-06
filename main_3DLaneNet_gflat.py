@@ -422,7 +422,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                       "centerline z error (close)  {:.8} m\n"
                       "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
                                                                    eval_stats[2], eval_stats[3],
-                                                                   eval_stats[3], eval_stats[5],
+                                                                   eval_stats[4], eval_stats[5],
                                                                    eval_stats[6], eval_stats[7],
                                                                    eval_stats[8], eval_stats[9],
                                                                    eval_stats[10], eval_stats[11],
