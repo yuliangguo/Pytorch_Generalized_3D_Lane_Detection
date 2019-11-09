@@ -9,9 +9,9 @@ import glob
 if __name__ == '__main__':
 
     val_name_pattens = ['/18/', '/19/', '/20/', '/21/', '/22/', '/23/']
+    batch_size = 8
     dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_Final'
     json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
-    batch_size = 8
     output_folder = '../data/sim3d_final/'
     if not ops.exists(output_folder):
         os.makedirs(output_folder)
@@ -36,6 +36,9 @@ if __name__ == '__main__':
             else:
                 lines_train.append(line)
 
+    lines_train = lines_train[:len(lines_train)//batch_size*batch_size]
+    lines_val = lines_val[:len(lines_val)//batch_size*batch_size]
+
     with open(output_folder + '/train.json', 'w') as f:
         f.writelines("%s" % l for l in lines_train)
     f.close()
@@ -44,12 +47,3 @@ if __name__ == '__main__':
         f.writelines("%s" % l for l in lines_val)
     f.close()
 
-    # lines_test = lines[N1+N2:]
-    # with open(output_folder + '/test.json', 'w') as f:
-    #     f.writelines("%s" % l for l in lines_test)
-    # f.close()
-
-    # extract a subset of hard samples
-    with open(output_folder + '/val.json') as f:
-        lines_val = f.readlines()
-    f.close()
