@@ -48,7 +48,7 @@ img_width = 1920
 K = np.array([[2015.0,      0, 960.0],
              [      0, 2015.0, 540.0],
              [      0,      0,     1]])
-vis = False
+vis = True
 merge = True
 parse_visibility = True
 vis_dist_th = 3
@@ -371,7 +371,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_1101/"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_1107/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "laneline_label.json"
     vis_folder = base_folder + "laneline_vis/"
