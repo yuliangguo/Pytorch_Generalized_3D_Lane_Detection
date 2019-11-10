@@ -5,11 +5,11 @@ import os.path as ops
 import math
 import ujson as json
 import matplotlib
-from utils import define_args, homography_im2ipm_norm,\
-    homographic_transformation, projective_transformation,\
-    homograpthy_g2im, projection_g2im, homography_crop_resize,\
-    tusimple_config, sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
-from MinCostFlow import SolveMinCostFlow
+from tools.utils import define_args, \
+     projective_transformation,\
+     projection_g2im, homography_crop_resize,\
+     sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
+from tools.MinCostFlow import SolveMinCostFlow
 from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -19,6 +19,9 @@ color = [[0, 0, 255],  # red
          [0, 255, 0],  # green
          [255, 0, 255],  # purple
          [255, 255, 0]]  # cyan
+
+min_y = 5
+max_y = 80
 
 
 class LaneEval(object):
@@ -32,7 +35,8 @@ class LaneEval(object):
 
         self.x_min = args.top_view_region[0, 0]
         self.x_max = args.top_view_region[1, 0]
-        self.y_samples = np.linspace(args.anchor_y_steps[0], args.anchor_y_steps[-1], num=100, endpoint=False)
+        # self.y_samples = np.linspace(args.anchor_y_steps[0], args.anchor_y_steps[-1], num=100, endpoint=False)
+        self.y_samples = np.linspace(min_y, max_y, num=100, endpoint=False)
         self.dist_th = 1.5
         self.ratio_th = 0.75
         self.close_range = 30
@@ -414,7 +418,7 @@ class LaneEval(object):
 
 
 if __name__ == '__main__':
-    vis = True
+    vis = False
     parser = define_args()
     args = parser.parse_args()
 
@@ -425,7 +429,7 @@ if __name__ == '__main__':
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_final/Model_3DLaneNet_GeoOnly_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    pred_file = '../data/sim3d_final/Model_3DLaneNet_gflat_2stage_7class_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
     gt_file = '../data/sim3d_final/val.json'
 
     # try:s
