@@ -51,7 +51,7 @@ K = np.array([[2015.0,      0, 960.0],
 vis = True
 merge = True
 parse_visibility = True
-vis_dist_th = 3
+vis_dist_th = 2
 
 
 def get_lists(test_file):
@@ -237,18 +237,29 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
         # project to image (camera coordinates to image coordinates)
         lane2D = np.matmul(lane3D, K.T)
-        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1)).astype(np.int)
+        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1))
 
         # determine visibility
         visibility_vec = np.ones(lane2D.shape[0])
         for j in range(lane2D.shape[0]):
+            # decide from image border range
             if lane2D[j, 0] < 1 or lane2D[j, 0] >= img_width-1:
                 visibility_vec[j] = 0
                 continue
             if lane2D[j, 1] < 1 or lane2D[j, 1] >= img_height-1:
                 visibility_vec[j] = 0
                 continue
+            # decide from orientation: the portion close to horizontal will be considered as invisible
+            if j > 0 and (
+                    abs(lane2D[j - 1, 0] - lane2D[j, 0]) / (abs(lane2D[j - 1, 1] - lane2D[j, 1]) + 0.000001) > 20 or
+                    lane2D[j - 1, 1] - lane2D[j, 1] <= 0):
+                visibility_vec[j] = 0
 
+        lane2D = lane2D.astype(np.int)
+        for j in range(lane2D.shape[0]):
+            if visibility_vec[j] == 0:
+                continue
+            # decide from depth map
             class_color = [seg_img[lane2D[j, 1], lane2D[j, 0], 2],
                            seg_img[lane2D[j, 1], lane2D[j, 0], 1],
                            seg_img[lane2D[j, 1], lane2D[j, 0], 0]]
@@ -264,6 +275,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                     class_color in bg_colors:
                 visibility_vec[j] = 0
                 continue
+
         # visibility_vec = medfilt(visibility_vec, 5)
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
@@ -280,12 +292,12 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                 img = cv2.line(img,
                                (lane2D[j-1, 0], lane2D[j-1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[255, 0, 0])
+                               color=[255, 0, 0], thickness=2)
             else:
                 img = cv2.line(img,
                                (lane2D[j - 1, 0], lane2D[j - 1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[0, 0, 0])
+                               color=[0, 0, 0], thickness=2)
         # draw end points
         cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
         cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
@@ -299,17 +311,29 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
         lanelines_g.append(laneline_g[:, :3].tolist())
         # project to image (camera coordinates to image coordinates)
         lane2D = np.matmul(np.array(lane3D), K.T)
-        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1)).astype(np.int)
+        lane2D = np.divide(lane2D, np.expand_dims(lane2D[:, 2], -1))
 
         # determine visibility
         visibility_vec = np.ones(lane2D.shape[0])
         for j in range(lane2D.shape[0]):
+            # decide from image border range
             if lane2D[j, 0] < 1 or lane2D[j, 0] >= img_width-1:
                 visibility_vec[j] = 0
                 continue
             if lane2D[j, 1] < 1 or lane2D[j, 1] >= img_height-1:
                 visibility_vec[j] = 0
                 continue
+            # decide from orientation: the portion close to horizontal will be considered as invisible
+            if j > 0 and (
+                    abs(lane2D[j - 1, 0] - lane2D[j, 0]) / (abs(lane2D[j - 1, 1] - lane2D[j, 1]) + 0.000001) > 20 or
+                    lane2D[j - 1, 1] - lane2D[j, 1] <= 0):
+                visibility_vec[j] = 0
+
+        lane2D = lane2D.astype(np.int)
+        for j in range(lane2D.shape[0]):
+            if visibility_vec[j] == 0:
+                continue
+
             class_color = [seg_img[lane2D[j, 1], lane2D[j, 0], 2],
                            seg_img[lane2D[j, 1], lane2D[j, 0], 1],
                            seg_img[lane2D[j, 1], lane2D[j, 0], 0]]
@@ -325,6 +349,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                     class_color in bg_colors:
                 visibility_vec[j] = 0
                 continue
+
         # visibility_vec = medfilt(visibility_vec, 5)
         # find the first and last visible index, assume all points in between visible
         visible_indices = np.where(visibility_vec > 0)[0]
@@ -341,12 +366,12 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                 img = cv2.line(img,
                                (lane2D[j-1, 0], lane2D[j-1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[0, 255, 0])
+                               color=[0, 255, 0], thickness=2)
             else:
                 img = cv2.line(img,
                                (lane2D[j - 1, 0], lane2D[j - 1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[0, 0, 0])
+                               color=[0, 0, 0], thickness=2)
         # draw end points
         cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
         cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)

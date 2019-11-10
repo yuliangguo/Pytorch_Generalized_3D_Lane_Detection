@@ -5,11 +5,11 @@ import os.path as ops
 import math
 import ujson as json
 import matplotlib
-from tools.utils import define_args, homography_im2ipm_norm,\
+from utils import define_args, homography_im2ipm_norm,\
     homographic_transformation, projective_transformation,\
     homograpthy_g2im, projection_g2im, homography_crop_resize,\
     tusimple_config, sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
-from tools.MinCostFlow import SolveMinCostFlow
+from MinCostFlow import SolveMinCostFlow
 from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -414,19 +414,19 @@ class LaneEval(object):
 
 
 if __name__ == '__main__':
-    vis = False
+    vis = True
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_name = 'sim3d_final'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_Final/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_GeoOnly_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test2_pred_file.json'
-    gt_file = '../data/sim3d_0924/test2.json'
+    pred_file = '../data/sim3d_final/Model_3DLaneNet_GeoOnly_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d_final/val.json'
 
     # try:s
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)

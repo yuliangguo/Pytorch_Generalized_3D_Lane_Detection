@@ -467,15 +467,15 @@ def save_checkpoint(state, to_copy, epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_name = 'sim3d_final'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_Final/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
@@ -493,7 +493,7 @@ if __name__ == '__main__':
     crit_string = 'loss_3D'
 
     # for the case only running evaluation
-    args.evaluate = True
+    args.evaluate = False
 
     # settings for save and visualize
     args.print_freq = 50
