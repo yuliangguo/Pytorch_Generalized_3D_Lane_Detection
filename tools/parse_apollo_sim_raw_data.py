@@ -251,7 +251,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                 continue
             # decide from orientation: the portion close to horizontal will be considered as invisible
             if j > 0 and (
-                    abs(lane2D[j - 1, 0] - lane2D[j, 0]) / (abs(lane2D[j - 1, 1] - lane2D[j, 1]) + 0.000001) > 20 or
+                    abs(lane2D[j - 1, 0] - lane2D[j, 0]) / (abs(lane2D[j - 1, 1] - lane2D[j, 1]) + 0.000001) > 15 or
                     lane2D[j - 1, 1] - lane2D[j, 1] <= 0):
                 visibility_vec[j] = 0
 
@@ -292,12 +292,12 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                 img = cv2.line(img,
                                (lane2D[j-1, 0], lane2D[j-1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[255, 0, 0], thickness=2)
+                               color=[255, 0, 0], thickness=3)
             else:
                 img = cv2.line(img,
                                (lane2D[j - 1, 0], lane2D[j - 1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[0, 0, 0], thickness=2)
+                               color=[0, 0, 0], thickness=3)
         # draw end points
         cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
         cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
@@ -325,7 +325,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                 continue
             # decide from orientation: the portion close to horizontal will be considered as invisible
             if j > 0 and (
-                    abs(lane2D[j - 1, 0] - lane2D[j, 0]) / (abs(lane2D[j - 1, 1] - lane2D[j, 1]) + 0.000001) > 20 or
+                    abs(lane2D[j - 1, 0] - lane2D[j, 0]) / (abs(lane2D[j - 1, 1] - lane2D[j, 1]) + 0.000001) > 15 or
                     lane2D[j - 1, 1] - lane2D[j, 1] <= 0):
                 visibility_vec[j] = 0
 
@@ -366,12 +366,12 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
                 img = cv2.line(img,
                                (lane2D[j-1, 0], lane2D[j-1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[0, 255, 0], thickness=2)
+                               color=[0, 255, 0], thickness=3)
             else:
                 img = cv2.line(img,
                                (lane2D[j - 1, 0], lane2D[j - 1, 1]),
                                (lane2D[j, 0], lane2D[j, 1]),
-                               color=[0, 0, 0], thickness=2)
+                               color=[0, 0, 0], thickness=3)
         # draw end points
         cv2.circle(img, (int(lane2D[0, 0]), int(lane2D[0, 1])), 3, [0, 0, 255], 2)
         cv2.circle(img, (int(lane2D[-1, 0]), int(lane2D[-1, 1])), 3, [0, 0, 255], 2)
@@ -396,9 +396,9 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_1107/"
+    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_1110/"
     input_file = base_folder + "img_list.txt"
-    output_gt_file = base_folder + "laneline_label.json"
+    output_gt_file = base_folder + "temp.json"
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:
         os.mkdir(vis_folder)
