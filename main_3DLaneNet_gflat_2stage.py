@@ -480,8 +480,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_final'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_Final/'
+    args.dataset_name = 'sim3d_0924'
+    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
@@ -493,7 +493,7 @@ if __name__ == '__main__':
 
     # define the network model
     args.num_class = 7  # 1 background + n lane labels
-    args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class.tar'
+    args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class_0924.tar'
     args.mod = '3DLaneNet_gflat_2stage_7class'
     args.y_ref = 5
     global crit_string
