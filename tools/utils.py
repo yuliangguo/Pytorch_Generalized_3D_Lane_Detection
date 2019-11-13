@@ -982,6 +982,23 @@ def transform_lane_gflat2g(h_cam, X_gflat, Y_gflat, Z_g):
     return X_g, Y_g
 
 
+def transform_lane_g2gflat(h_cam, X_g, Y_g, Z_g):
+    """
+        Given X coordinates in flat ground space, Y coordinates in flat ground space, and Z coordinates in real 3D ground space
+        with projection matrix from 3D ground to flat ground, compute real 3D coordinates X, Y in 3D ground space.
+
+    :param P_g2gflat: a 3 X 4 matrix transforms lane form 3d ground x,y,z to flat ground x, y
+    :param X_gflat: X coordinates in flat ground space
+    :param Y_gflat: Y coordinates in flat ground space
+    :param Z_g: Z coordinates in real 3D ground space
+    :return:
+    """
+
+    X_gflat = X_g * h_cam / (h_cam - Z_g)
+    Y_gflat = Y_g * h_cam / (h_cam - Z_g)
+
+    return X_gflat, Y_gflat
+
 # def transform_lane_gflat2g(P_g2gflat, X_gflat, Y_gflat, Z_g):
 #     """
 #         Given X coordinates in flat ground space, Y coordinates in flat ground space, and Z coordinates in real 3D ground space
