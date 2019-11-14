@@ -14,6 +14,8 @@ from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 plt.rcParams['figure.figsize'] = (35, 30)
+plt.rcParams.update({'font.size': 25})
+plt.rcParams.update({'font.weight': 'semibold'})
 
 color = [[0, 0, 255],  # red
          [0, 255, 0],  # green
@@ -35,8 +37,8 @@ class LaneEval(object):
 
         self.x_min = args.top_view_region[0, 0]
         self.x_max = args.top_view_region[1, 0]
-        self.y_samples = np.linspace(args.anchor_y_steps[0], args.anchor_y_steps[-1], num=100, endpoint=False)
-        # self.y_samples = np.linspace(min_y, max_y, num=100, endpoint=False)
+        # self.y_samples = np.linspace(args.anchor_y_steps[0], args.anchor_y_steps[-1], num=100, endpoint=False)
+        self.y_samples = np.linspace(min_y, max_y, num=100, endpoint=False)
         self.dist_th = 1.5
         self.ratio_th = 0.75
         self.close_range = 30
@@ -215,7 +217,7 @@ class LaneEval(object):
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 3)
                 ax2.plot(x_values[np.where(gt_visibility_mat[i, :])],
                          self.y_samples[np.where(gt_visibility_mat[i, :])],
-                         z_values[np.where(gt_visibility_mat[i, :])], color=color)
+                         z_values[np.where(gt_visibility_mat[i, :])], color=color, linewidth=5)
 
             for i in range(cnt_pred):
                 x_values = pred_lanes[i][:, 0]
@@ -234,7 +236,7 @@ class LaneEval(object):
                         img = cv2.line(img, (x_2d[k - 1], y_2d[k - 1]), (x_2d[k], y_2d[k]), color[-1::-1], 2)
                 ax2.plot(x_values[np.where(pred_visibility_mat[i, :])],
                          self.y_samples[np.where(pred_visibility_mat[i, :])],
-                         z_values[np.where(pred_visibility_mat[i, :])], color=color)
+                         z_values[np.where(pred_visibility_mat[i, :])], color=color, linewidth=5)
 
             cv2.putText(img, 'Recall: {:.3f}'.format(r_lane / (cnt_gt + 1e-6)),
                         (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
@@ -345,22 +347,35 @@ class LaneEval(object):
                 centerline_z_error_far.extend(z_error_far)
 
             if vis:
-                ax2.set_xlabel('x axis')
-                ax2.set_ylabel('y axis')
-                ax2.set_zlabel('z axis')
+                ax1.set_xticks([])
+                ax1.set_yticks([])
+                # ax2.set_xlabel('x axis')
+                # ax2.set_ylabel('y axis')
+                # ax2.set_zlabel('z axis')
                 bottom, top = ax2.get_zlim()
-                ax2.set_zlim(min(bottom, -1), max(top, 1))
-                ax2.set_xlim(-20, 20)
-                ax2.set_ylim(0, 100)
+                left, right = ax2.get_xlim()
+                ax2.set_zlim(min(bottom, -0.1), max(top, 0.1))
+                ax2.set_xlim(left, right)
+                ax2.set_ylim(min_y, max_y)
+                ax2.locator_params(nbins=5, axis='x')
+                ax2.locator_params(nbins=5, axis='z')
+                ax2.tick_params(pad=18)
 
-                ax4.set_xlabel('x axis')
-                ax4.set_ylabel('y axis')
-                ax4.set_zlabel('z axis')
+                ax3.set_xticks([])
+                ax3.set_yticks([])
+                # ax4.set_xlabel('x axis')
+                # ax4.set_ylabel('y axis')
+                # ax4.set_zlabel('z axis')
                 bottom, top = ax4.get_zlim()
-                ax4.set_zlim(min(bottom, -1), max(top, 1))
-                ax4.set_xlim(-20, 20)
-                ax4.set_ylim(0, 100)
-
+                left, right = ax4.get_xlim()
+                ax4.set_zlim(min(bottom, -0.1), max(top, 0.1))
+                ax4.set_xlim(left, right)
+                ax4.set_ylim(min_y, max_y)
+                ax4.locator_params(nbins=5, axis='x')
+                ax4.locator_params(nbins=5, axis='z')
+                ax4.tick_params(pad=18)
+                
+                fig.subplots_adjust(wspace=0, hspace=0.01)
                 fig.savefig(ops.join(save_path, raw_file.replace("/", "_")))
                 plt.close(fig)
                 print('processed sample: {}  {}'.format(i, raw_file))
@@ -418,19 +433,19 @@ class LaneEval(object):
 
 
 if __name__ == '__main__':
-    vis = False
+    vis = True
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_final'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_Final/'
+    args.dataset_name = 'sim3d_0924'
+    args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_2stage_7class_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test2_pred_file_sim3d_7class.json'
-    gt_file = '../data/sim3d_0924/test2.json'
+    pred_file = '../data/sim3d_0924/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d_0924/val.json'
 
     # try:s
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)
