@@ -9,7 +9,7 @@ import glob
 if __name__ == '__main__':
 
     # val_name_pattens = ['/18/', '/19/', '/20/', '/21/', '/22/', '/23/']
-    val_name_pattens = ['/10/', '/11/']
+    val_name_pattens = ['/02/', '/08/']
     batch_size = 8
     dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924'
     json_file_list = glob.glob('{:s}/laneline*.json'.format(dataset_dir))
