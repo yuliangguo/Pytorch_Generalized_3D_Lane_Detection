@@ -131,7 +131,7 @@ class lane_visualizer(object):
             # draw on ipm
             for k in range(1, x_ipm_values.shape[0]):
                 # only draw the visible portion
-                if gt_visibility_mat[i, k - 1] and gt_visibility_mat[i, k]:
+                if gt_visibility_mat[i, k - 1] and gt_visibility_mat[i, k] and z_values[k] < gt_cam_height:
                     im_ipm = cv2.line(im_ipm, (x_ipm_values[k - 1], y_ipm_values[k - 1]),
                                       (x_ipm_values[k], y_ipm_values[k]), color[-1::-1], 3)
 
@@ -166,7 +166,7 @@ class lane_visualizer(object):
 
             # draw on ipm
             for k in range(1, x_ipm_values.shape[0]):
-                # only draw the visible portion
+                # only draw the visible portion: predicted lane was guaranteed z < h_cam
                 if pred_visibility_mat[i, k - 1] and pred_visibility_mat[i, k]:
                     im_ipm = cv2.line(im_ipm, (x_ipm_values[k - 1], y_ipm_values[k - 1]), (x_ipm_values[k], y_ipm_values[k]), color[-1::-1], 2)
 
@@ -184,7 +184,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
@@ -192,7 +192,7 @@ if __name__ == '__main__':
     vs = lane_visualizer(args)
 
     global pred_file
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    pred_file = '../data/sim3d_0924/Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
     gt_file = '../data/sim3d_0924/val.json'
 
     save_path = pred_file[:pred_file.rfind('/')]
