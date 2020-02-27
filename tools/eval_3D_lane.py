@@ -110,6 +110,7 @@ class LaneEval(object):
                                                                       np.logical_and(self.y_samples >= min_y,
                                                                                      self.y_samples <= max_y)))
             pred_visibility_mat[i, :] = np.logical_and(pred_visibility_mat[i, :], visibility_vec)
+            # pred_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min, x_values <= self.x_max)
 
         # TODO: vary confidence to compute all stats in vectors, aiming to generate PR curve
         # TODO: it is necessary to visualize here? as the visualization has been done in testing
@@ -437,15 +438,15 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0924'
+    args.dataset_name = 'sim3d_0924_random_split'
     args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d_0924/val.json'
+    pred_file = '../data/sim3d_0924_random_split/Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
+    gt_file = '../data/sim3d_0924_random_split/val.json'
 
     # try:s
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)

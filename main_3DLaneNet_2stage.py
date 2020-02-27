@@ -474,8 +474,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_name = 'sim3d_0924_exclude_daytime'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset

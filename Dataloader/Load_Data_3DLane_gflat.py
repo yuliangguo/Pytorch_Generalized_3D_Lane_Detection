@@ -19,9 +19,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 from torch.utils.data.dataloader import default_collate
-from tools.utils import homographic_transformation, projective_transformation, homograpthy_g2im, projection_g2im,\
-    homography_crop_resize, nms_1d, tusimple_config, sim3d_config, Visualizer, transform_lane_gflat2g,\
-    resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
+from tools.utils import *
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')
 
@@ -765,6 +763,10 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     pred_anchor[:, 3*anchor_dim - 1] = nms_1d(pred_anchor[:, 3*anchor_dim - 1])
 
     # output only the visible portion of lane
+    """
+        An important process is output lanes in the considered y-range. Interpolate the visibility attributes to 
+        automatically determine whether to extend the lanes.
+    """
     for j in range(pred_anchor.shape[0]):
         # draw laneline
         if pred_anchor[j, anchor_dim - 1] > prob_th:
@@ -773,12 +775,13 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             z_g = pred_anchor[j, num_y_steps:2*num_y_steps]
             visibility = pred_anchor[j, 2*num_y_steps:3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
-            line = line[visibility > prob_th, :]
+            # line = line[visibility > prob_th, :]
+            # convert to 3D ground space
+            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+            line[:, 0] = x_g
+            line[:, 1] = y_g
+            line = resample_laneline_in_y_with_vis(line, anchor_y_steps, visibility)
             if line.shape[0] >= 2:
-                # convert to 3D ground space
-                x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
-                line[:, 0] = x_g
-                line[:, 1] = y_g
                 lanelines_out.append(line.data.tolist())
 
         # draw centerline
@@ -788,12 +791,13 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             z_g = pred_anchor[j, anchor_dim + num_y_steps:anchor_dim + 2*num_y_steps]
             visibility = pred_anchor[j, anchor_dim + 2*num_y_steps:anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
-            line = line[visibility > prob_th, :]
+            # line = line[visibility > prob_th, :]
+            # convert to 3D ground space
+            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+            line[:, 0] = x_g
+            line[:, 1] = y_g
+            line = resample_laneline_in_y_with_vis(line, anchor_y_steps, visibility)
             if line.shape[0] >= 2:
-                # convert to 3D ground space
-                x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
-                line[:, 0] = x_g
-                line[:, 1] = y_g
                 centerlines_out.append(line.data.tolist())
 
         # draw the additional centerline for the merging case
@@ -803,12 +807,13 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
             z_g = pred_anchor[j, 2*anchor_dim + num_y_steps:2*anchor_dim + 2*num_y_steps]
             visibility = pred_anchor[j, 2*anchor_dim + 2*num_y_steps:2*anchor_dim + 3*num_y_steps]
             line = np.vstack([x_g, anchor_y_steps, z_g]).T
-            line = line[visibility > prob_th, :]
+            # line = line[visibility > prob_th, :]
+            # convert to 3D ground space
+            x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+            line[:, 0] = x_g
+            line[:, 1] = y_g
+            line = resample_laneline_in_y_with_vis(line, anchor_y_steps, visibility)
             if line.shape[0] >= 2:
-                # convert to 3D ground space
-                x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
-                line[:, 0] = x_g
-                line[:, 1] = y_g
                 centerlines_out.append(line.data.tolist())
 
     return lanelines_out, centerlines_out

@@ -176,7 +176,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
-        eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file)
+        eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file, vis=False)
 
         if 'tusimple' in args1.dataset_name:
             print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
@@ -207,7 +207,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global vis_feat
     vis_feat = False
@@ -220,10 +220,10 @@ if __name__ == '__main__':
     # dataset_name 'tusimple' or 'sim3d'
     # args1.dataset_name = 'tusimple'
     # args1.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args1.dataset_name = 'sim3d_0924'
-    args1.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
-    args2.dataset_name = 'sim3d_0924'
-    args2.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args1.dataset_name = 'sim3d_0924_random_split'
+    args1.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args2.dataset_name = 'sim3d_0924_random_split'
+    args2.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     args1.data_dir = ops.join('data', args1.dataset_name)
     args2.data_dir = ops.join('data', args2.dataset_name)

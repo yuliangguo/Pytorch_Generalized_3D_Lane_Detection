@@ -396,7 +396,7 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 
 if __name__ == '__main__':
-    base_folder = "/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_1110/"
+    base_folder = "/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_1110/"
     input_file = base_folder + "img_list.txt"
     output_gt_file = base_folder + "temp.json"
     vis_folder = base_folder + "laneline_vis/"
