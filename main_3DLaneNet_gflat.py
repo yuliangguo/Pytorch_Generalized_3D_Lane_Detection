@@ -282,11 +282,11 @@ def train_net():
                 writer.add_scalars('Evaluation', {'Accuracy': eval_stats[0]}, epoch)
             elif 'sim3d' in args.dataset_name:
                 writer.add_scalars('Evaluation', {'laneline F-measure': eval_stats[0]}, epoch)
-                writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
-                writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
+                # writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
+                # writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
                 writer.add_scalars('Evaluation', {'centerline F-measure': eval_stats[7]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline Recall': eval_stats[8]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline Precision': eval_stats[9]}, epoch)
+                # writer.add_scalars('Evaluation', {'centerline Recall': eval_stats[8]}, epoch)
+                # writer.add_scalars('Evaluation', {'centerline Precision': eval_stats[9]}, epoch)
         total_score = losses.avg
 
         # Adjust learning_rate if loss plateaued
@@ -476,7 +476,7 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model: 3DLaneNet_gflat or 3DLaneNet_gflat_GeoOnly
-    args.mod = '3DLaneNet_gflat'
+    args.mod = '3DLaneNet_GeoOnly_gflat'
     args.y_ref = 5
     global crit_string
     crit_string = 'loss_gflat'

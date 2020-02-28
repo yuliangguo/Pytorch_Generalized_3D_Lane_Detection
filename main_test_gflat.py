@@ -216,7 +216,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
                 # Plot curves in two views
                 vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
-                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=True)
+                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=False)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924_random_split'
+    args.dataset_name = 'sim3d_0924_exclude_daytime'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
@@ -302,20 +302,20 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_gflat_GeoOnly'
+    args.mod = '3DLaneNet_gflat'
     args.y_ref = 5
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     global vis_folder
     global test_gt_file
     global lane_pred_file
-    vis_folder = 'val_vis_new'
-    test_gt_file = ops.join(args.data_dir, 'val.json')
-    lane_pred_file = ops.join(args.save_path, 'val_pred_file_new.json')
+    vis_folder = 'test_vis'
+    test_gt_file = ops.join(args.data_dir, 'test.json')
+    lane_pred_file = ops.join(args.save_path, 'test_pred_file_new.json')
 
     # run the training
     main()

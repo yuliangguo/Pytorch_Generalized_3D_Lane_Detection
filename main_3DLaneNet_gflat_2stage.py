@@ -304,11 +304,11 @@ def train_net():
                 writer.add_scalars('Evaluation', {'Accuracy': eval_stats[0]}, epoch)
             elif 'sim3d' in args.dataset_name:
                 writer.add_scalars('Evaluation', {'laneline F-measure': eval_stats[0]}, epoch)
-                writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
-                writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
+                # writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
+                # writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
                 writer.add_scalars('Evaluation', {'centerline F-measure': eval_stats[7]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline Recall': eval_stats[8]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline Precision': eval_stats[9]}, epoch)
+                # writer.add_scalars('Evaluation', {'centerline Recall': eval_stats[8]}, epoch)
+                # writer.add_scalars('Evaluation', {'centerline Precision': eval_stats[9]}, epoch)
         total_score = losses.avg
 
         # Adjust learning_rate if loss plateaued
@@ -492,9 +492,9 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.num_class = 7  # 1 background + n lane labels
-    args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class_0924.tar'
-    args.mod = '3DLaneNet_gflat_2stage_7class'
+    args.num_class = 2  # 1 background + n lane labels
+    args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
+    args.mod = '3DLaneNet_gflat_2stage'
     args.y_ref = 5
     global crit_string
     crit_string = 'loss_gflat'

@@ -229,8 +229,8 @@ if __name__ == '__main__':
     args2.data_dir = ops.join('data', args2.dataset_name)
 
     # define trained Geo model
-    num_class = 7
-    geo_model_dir = 'Model_3DLaneNet_gflat_2stage_7class_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
+    num_class = 2
+    geo_model_dir = 'Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
     # use two sets of configurations for different datasets
     sim3d_config(args2)
     args2.save_path = os.path.join(args2.save_path, geo_model_dir)
@@ -242,22 +242,22 @@ if __name__ == '__main__':
         args1.crop_y = 0
         evaluator = eval_lane_tusimple.LaneEval
         # define pretrained feat model
-        pretrained_feat_model = 'pretrained/erfnet_model_tusimple_7class.tar'
-        vis_folder = 'test_vis_tusimple_7class'
+        pretrained_feat_model = 'pretrained/erfnet_model_tusimple.tar'
+        vis_folder = 'test_vis_tusimple'
         test_gt_file = ops.join(args1.data_dir, 'test.json')
-        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple_7class.json')
+        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple.json')
     elif 'sim3d' in args1.dataset_name:
         sim3d_config(args1)
         evaluator = eval_3D_lane.LaneEval(args1)
         # define pretrained feat model
-        pretrained_feat_model = 'pretrained/erfnet_model_sim3d_7class_0924.tar'
-        vis_folder = 'test2_vis_sim3d_7class'
-        test_gt_file = ops.join(args1.data_dir, 'test2.json')
-        lane_pred_file = ops.join(args2.save_path, 'test2_pred_file_sim3d_7class.json')
+        pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
+        vis_folder = 'val_vis_sim3d'
+        test_gt_file = ops.join(args1.data_dir, 'val.json')
+        lane_pred_file = ops.join(args2.save_path, 'val_pred_file_sim3d.json')
 
     # define the network model
-    args1.mod = '3DLaneNet_gflat_2stage_7class'
-    args2.mod = '3DLaneNet_gflat_2stage_7class'
+    args1.mod = '3DLaneNet_gflat_2stage'
+    args2.mod = '3DLaneNet_gflat_2stage'
     args2.y_ref = 5
 
     """   run the test   """
