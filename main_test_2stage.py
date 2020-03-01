@@ -217,9 +217,9 @@ if __name__ == '__main__':
     # dataset_name 'tusimple' or 'sim3d'
     # args1.dataset_name = 'tusimple'
     # args1.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args1.dataset_name = 'sim3d_0924_random_split'
+    args1.dataset_name = 'sim3d_0924_exclude_daytime'
     args1.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
-    args2.dataset_name = 'sim3d_0924_random_split'
+    args2.dataset_name = 'sim3d_0924_exclude_daytime'
     args2.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     args1.data_dir = ops.join('data', args1.dataset_name)
@@ -248,9 +248,9 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args1)
         # define pretrained feat model
         pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
-        vis_folder = 'val_vis_sim3d'
-        test_gt_file = ops.join(args1.data_dir, 'val.json')
-        lane_pred_file = ops.join(args2.save_path, 'val_pred_file_sim3d.json')
+        vis_folder = 'test_vis_sim3d'
+        test_gt_file = ops.join(args1.data_dir, 'test.json')
+        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_sim3d.json')
 
     # define the network model
     args1.mod = '3DLaneNet_2stage'

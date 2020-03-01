@@ -476,7 +476,7 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model: 3DLaneNet_gflat or 3DLaneNet_gflat_GeoOnly
-    args.mod = '3DLaneNet_GeoOnly_gflat'
+    args.mod = '3DLaneNet_gflat_GeoOnly'
     args.y_ref = 5
     global crit_string
     crit_string = 'loss_gflat'

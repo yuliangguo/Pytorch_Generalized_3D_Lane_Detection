@@ -468,7 +468,7 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model: 3DLaneNet or 3DLaneNet_GeoOnly
-    args.mod = '3DLaneNet'
+    args.mod = '3DLaneNet_GeoOnly'
     global crit_string
     crit_string = 'loss_3D'
 

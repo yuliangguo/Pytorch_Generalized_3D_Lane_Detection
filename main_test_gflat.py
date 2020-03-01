@@ -302,14 +302,14 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_gflat'
+    args.mod = '3DLaneNet_gflat_GeoOnly'
     args.y_ref = 5
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     global vis_folder
     global test_gt_file
     global lane_pred_file

@@ -212,7 +212,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
                 # Plot curves in two views
                 vs_saver.save_result(dataset, 'valid', epoch, i, idx,
-                                     input, gt, output_net, pred_pitch, pred_hcam, evaluate=True)
+                                     input, gt, output_net, pred_pitch, pred_hcam, evaluate=False)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -267,7 +267,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     global args
     parser = define_args()
@@ -277,9 +277,9 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
-    args.test_dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_name = 'sim3d_0924_exclude_daytime'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -307,9 +307,9 @@ if __name__ == '__main__':
     global vis_folder
     global test_gt_file
     global lane_pred_file
-    vis_folder = 'test1101_vis'
-    test_gt_file = ops.join(args.data_dir, 'test1101.json')
-    lane_pred_file = ops.join(args.save_path, 'test1101_pred_file.json')
+    vis_folder = 'test_vis'
+    test_gt_file = ops.join(args.data_dir, 'test.json')
+    lane_pred_file = ops.join(args.save_path, 'test_pred_file.json')
 
     # run the training
     main()
