@@ -2,8 +2,10 @@ import numpy as np
 import cv2
 import os
 import os.path as ops
+import copy
 import math
 import ujson as json
+from scipy.interpolate import interp1d
 import matplotlib
 from tools.utils import define_args, \
      projective_transformation,\
@@ -432,43 +434,361 @@ class LaneEval(object):
 
         return output_stats
 
+    def bench_PR(self, pred_lanes, gt_lanes, gt_visibility):
+        """
+            Matching predicted lanes and ground-truth lanes in their IPM projection, ignoring z attributes.
+            x error, y_error, and z error are all considered, although the matching does not rely on z
+            The input of prediction and ground-truth lanes are in ground coordinate, x-right, y-forward, z-up
+            The fundamental assumption is: 1. there are no two points from different lanes with identical x, y
+                                              but different z's
+                                           2. there are no two points from a single lane having identical x, y
+                                              but different z's
+            If the interest area is within the current drivable road, the above assumptions are almost always valid.
+
+        :param pred_lanes: N X 2 or N X 3 lists depending on 2D or 3D
+        :param gt_lanes: N X 2 or N X 3 lists depending on 2D or 3D
+        :return:
+        """
+
+        # if raw_file == 'images/05/0000347.jpg':
+        #     print('here')
+
+        close_range_idx = np.int((self.close_range - 1) / 0.8)
+        r_lane, p_lane = 0., 0.
+
+        # only keep the visible portion
+        gt_lanes = [prune_3d_lane_by_visibility(np.array(gt_lane), np.array(gt_visibility[k])) for k, gt_lane in enumerate(gt_lanes)]
+        gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
+        # only consider those gt lanes overlapping with sampling range
+        gt_lanes = [lane for lane in gt_lanes if lane[0, 1] < self.y_samples[-1] and lane[-1, 1] > self.y_samples[0]]
+        gt_lanes = [prune_3d_lane_by_range(np.array(gt_lane), 3*self.x_min, 3*self.x_max) for gt_lane in gt_lanes]
+        gt_lanes = [lane for lane in gt_lanes if lane.shape[0] > 1]
+        cnt_gt = len(gt_lanes)
+        cnt_pred = len(pred_lanes)
+
+        gt_visibility_mat = np.zeros((cnt_gt, 100))
+        pred_visibility_mat = np.zeros((cnt_pred, 100))
+        # resample gt and pred at y_samples
+        for i in range(cnt_gt):
+            min_y = np.min(np.array(gt_lanes[i])[:, 1])
+            max_y = np.max(np.array(gt_lanes[i])[:, 1])
+            x_values, z_values, visibility_vec = resample_laneline_in_y(np.array(gt_lanes[i]), self.y_samples, out_vis=True)
+            gt_lanes[i] = np.vstack([x_values, z_values]).T
+            gt_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
+                                                     np.logical_and(x_values <= self.x_max,
+                                                                    np.logical_and(self.y_samples >= min_y,
+                                                                                   self.y_samples <= max_y)))
+            gt_visibility_mat[i, :] = np.logical_and(gt_visibility_mat[i, :], visibility_vec)
+
+        for i in range(cnt_pred):
+            # # ATTENTION: ensure y mono increase before interpolation: but it can reduce size
+            # pred_lanes[i] = make_lane_y_mono_inc(np.array(pred_lanes[i]))
+            # pred_lane = prune_3d_lane_by_range(np.array(pred_lanes[i]), self.x_min, self.x_max)
+            min_y = np.min(np.array(pred_lanes[i])[:, 1])
+            max_y = np.max(np.array(pred_lanes[i])[:, 1])
+            x_values, z_values, visibility_vec = resample_laneline_in_y(np.array(pred_lanes[i]), self.y_samples, out_vis=True)
+            pred_lanes[i] = np.vstack([x_values, z_values]).T
+            pred_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min,
+                                                       np.logical_and(x_values <= self.x_max,
+                                                                      np.logical_and(self.y_samples >= min_y,
+                                                                                     self.y_samples <= max_y)))
+            pred_visibility_mat[i, :] = np.logical_and(pred_visibility_mat[i, :], visibility_vec)
+            # pred_visibility_mat[i, :] = np.logical_and(x_values >= self.x_min, x_values <= self.x_max)
+
+        adj_mat = np.zeros((cnt_gt, cnt_pred), dtype=np.int)
+        cost_mat = np.zeros((cnt_gt, cnt_pred), dtype=np.int)
+        cost_mat.fill(1000)
+        num_match_mat = np.zeros((cnt_gt, cnt_pred), dtype=np.float)
+        # compute curve to curve distance
+        for i in range(cnt_gt):
+            for j in range(cnt_pred):
+                x_dist = np.abs(gt_lanes[i][:, 0] - pred_lanes[j][:, 0])
+                z_dist = np.abs(gt_lanes[i][:, 1] - pred_lanes[j][:, 1])
+                euclidean_dist = np.sqrt(x_dist**2 + z_dist**2)
+
+                # apply visibility to penalize different partial matching accordingly
+                euclidean_dist[np.logical_or(gt_visibility_mat[i, :] < 0.5, pred_visibility_mat[j, :] < 0.5)] = self.dist_th
+
+                # if np.average(euclidean_dist) < 2*self.dist_th: # don't prune here to encourage finding perfect match
+                num_match_mat[i, j] = np.sum(euclidean_dist < self.dist_th)
+                adj_mat[i, j] = 1
+                # ATTENTION: use the sum as int type to meet the requirements of min cost flow optimization (int type)
+                # TODO: why using num_match_mat as cost does not work?
+                cost_mat[i, j] = np.sum(euclidean_dist).astype(np.int)
+                # cost_mat[i, j] = num_match_mat[i, j]
+
+        # solve bipartite matching vis min cost flow solver
+        match_results = SolveMinCostFlow(adj_mat, cost_mat)
+        match_results = np.array(match_results)
+
+        # only a match with avg cost < self.dist_th is consider valid one
+        match_gt_ids = []
+        match_pred_ids = []
+        if match_results.shape[0] > 0:
+            for i in range(len(match_results)):
+                if match_results[i, 2] < self.dist_th * self.y_samples.shape[0]:
+                    gt_i = match_results[i, 0]
+                    pred_i = match_results[i, 1]
+                    # consider match when the matched points is above a ratio
+                    if num_match_mat[gt_i, pred_i] / np.sum(gt_visibility_mat[gt_i, :]) >= self.ratio_th:
+                        r_lane += 1
+                        match_gt_ids.append(gt_i)
+                    if num_match_mat[gt_i, pred_i] / np.sum(pred_visibility_mat[pred_i, :]) >= self.ratio_th:
+                        p_lane += 1
+                        match_pred_ids.append(pred_i)
+
+        return r_lane, p_lane, cnt_gt, cnt_pred
+
+    def bench_one_submit_varying_probs(self, pred_file, gt_file, eval_out_file, eval_fig_file):
+        varying_th = np.linspace(0.05, 0.95, 19)
+        # try:
+        pred_lines = open(pred_file).readlines()
+        json_pred = [json.loads(line) for line in pred_lines]
+        # except BaseException as e:
+        #     raise Exception('Fail to load json file of the prediction.')
+        json_gt = [json.loads(line) for line in open(gt_file).readlines()]
+        if len(json_gt) != len(json_pred):
+            raise Exception('We do not get the predictions of all the test tasks')
+        gts = {l['raw_file']: l for l in json_gt}
+
+        laneline_r_all = []
+        laneline_p_all = []
+        laneline_gt_cnt_all = []
+        laneline_pred_cnt_all = []
+        centerline_r_all = []
+        centerline_p_all = []
+        centerline_gt_cnt_all = []
+        centerline_pred_cnt_all = []
+        for i, pred in enumerate(json_pred):
+            print('Evaluating sample {} / {}'.format(i, len(json_pred)))
+            if 'raw_file' not in pred or 'laneLines' not in pred:
+                raise Exception('raw_file or lanelines not in some predictions.')
+            raw_file = pred['raw_file']
+
+            pred_lanelines = pred['laneLines']
+            pred_laneLines_prob = pred['laneLines_prob']
+            if raw_file not in gts:
+                raise Exception('Some raw_file from your predictions do not exist in the test tasks.')
+            gt = gts[raw_file]
+            gt_cam_height = gt['cam_height']
+            gt_cam_pitch = gt['cam_pitch']
+
+            # evaluate lanelines
+            gt_lanelines = gt['laneLines']
+            gt_visibility = gt['laneLines_visibility']
+            r_lane_vec = []
+            p_lane_vec = []
+            cnt_gt_vec = []
+            cnt_pred_vec = []
+
+            for prob_th in varying_th:
+                pred_lanelines = [pred_lanelines[ii] for ii in range(len(pred_laneLines_prob)) if
+                                  pred_laneLines_prob[ii] > prob_th]
+                pred_laneLines_prob = [prob for prob in pred_laneLines_prob if prob > prob_th]
+                pred_lanelines_copy = copy.deepcopy(pred_lanelines)
+                # N to N matching of lanelines
+                r_lane, p_lane, cnt_gt, cnt_pred = self.bench_PR(pred_lanelines_copy,
+                                                                 gt_lanelines,
+                                                                 gt_visibility)
+                r_lane_vec.append(r_lane)
+                p_lane_vec.append(p_lane)
+                cnt_gt_vec.append(cnt_gt)
+                cnt_pred_vec.append(cnt_pred)
+
+            laneline_r_all.append(r_lane_vec)
+            laneline_p_all.append(p_lane_vec)
+            laneline_gt_cnt_all.append(cnt_gt_vec)
+            laneline_pred_cnt_all.append(cnt_pred_vec)
+
+            # evaluate centerlines
+            if not self.no_centerline:
+                pred_centerlines = pred['centerLines']
+                pred_centerLines_prob = pred['centerLines_prob']
+                gt_centerlines = gt['centerLines']
+                gt_visibility = gt['centerLines_visibility']
+                r_lane_vec = []
+                p_lane_vec = []
+                cnt_gt_vec = []
+                cnt_pred_vec = []
+
+                for prob_th in varying_th:
+                    pred_centerlines = [pred_centerlines[ii] for ii in range(len(pred_centerLines_prob)) if
+                                        pred_centerLines_prob[ii] > prob_th]
+                    pred_centerLines_prob = [prob for prob in pred_centerLines_prob if prob > prob_th]
+                    pred_centerlines_copy = copy.deepcopy(pred_centerlines)
+                    # N to N matching of lanelines
+                    r_lane, p_lane, cnt_gt, cnt_pred = self.bench_PR(pred_centerlines_copy,
+                                                                     gt_centerlines,
+                                                                     gt_visibility)
+                    r_lane_vec.append(r_lane)
+                    p_lane_vec.append(p_lane)
+                    cnt_gt_vec.append(cnt_gt)
+                    cnt_pred_vec.append(cnt_pred)
+                centerline_r_all.append(r_lane_vec)
+                centerline_p_all.append(p_lane_vec)
+                centerline_gt_cnt_all.append(cnt_gt_vec)
+                centerline_pred_cnt_all.append(cnt_pred_vec)
+
+        output_stats = []
+        # compute precision, recall
+        laneline_r_all = np.array(laneline_r_all)
+        laneline_p_all = np.array(laneline_p_all)
+        laneline_gt_cnt_all = np.array(laneline_gt_cnt_all)
+        laneline_pred_cnt_all = np.array(laneline_pred_cnt_all)
+
+        R_lane = np.sum(laneline_r_all, axis=0) / (np.sum(laneline_gt_cnt_all, axis=0) + 1e-6)
+        P_lane = np.sum(laneline_p_all, axis=0) / (np.sum(laneline_pred_cnt_all, axis=0) + 1e-6)
+        F_lane = 2 * R_lane * P_lane / (R_lane + P_lane + 1e-6)
+
+        output_stats.append(F_lane)
+        output_stats.append(R_lane)
+        output_stats.append(P_lane)
+
+        if not self.no_centerline:
+            centerline_r_all = np.array(centerline_r_all)
+            centerline_p_all = np.array(centerline_p_all)
+            centerline_gt_cnt_all = np.array(centerline_gt_cnt_all)
+            centerline_pred_cnt_all = np.array(centerline_pred_cnt_all)
+
+            R_lane = np.sum(centerline_r_all, axis=0) / (np.sum(centerline_gt_cnt_all, axis=0) + 1e-6)
+            P_lane = np.sum(centerline_p_all, axis=0) / (np.sum(centerline_pred_cnt_all, axis=0) + 1e-6)
+            F_lane = 2 * R_lane * P_lane / (R_lane + P_lane + 1e-6)
+
+            output_stats.append(F_lane)
+            output_stats.append(R_lane)
+            output_stats.append(P_lane)
+
+        # calculate metrics
+        laneline_F = output_stats[0]
+        laneline_F_max = np.max(laneline_F)
+        laneline_max_i = np.argmax(laneline_F)
+        laneline_R = output_stats[1]
+        laneline_P = output_stats[2]
+        centerline_F = output_stats[3]
+        centerline_F_max = np.max(centerline_F)
+        centerline_max_i = np.argmax(centerline_F)
+        centerline_R = output_stats[4]
+        centerline_P = output_stats[5]
+
+        laneline_R = np.array([1.] + laneline_R.tolist() + [0.])
+        laneline_P = np.array([0.] + laneline_P.tolist() + [1.])
+        centerline_R = np.array([1.] + centerline_R.tolist() + [0.])
+        centerline_P = np.array([0.] + centerline_P.tolist() + [1.])
+        f_laneline = interp1d(laneline_R, laneline_P)
+        f_centerline = interp1d(centerline_R, centerline_P)
+        r_range_1 = np.linspace(0.05, 0.95, 19)
+        r_range_2 = np.linspace(0.7, 0.95, 10)
+        laneline_AP1 = np.mean(f_laneline(r_range_1))
+        laneline_AP2 = np.mean(f_laneline(r_range_2))
+        centerline_AP1 = np.mean(f_centerline(r_range_1))
+        centerline_AP2 = np.mean(f_centerline(r_range_2))
+
+        # plot PR curve
+        fig = plt.figure()
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        ax1.plot(laneline_R, laneline_P, '-s')
+        ax2.plot(centerline_R, centerline_P, '-s')
+        ax1.set_xlim(0, 1)
+        ax1.set_ylim(0, 1)
+        ax1.set_title('Lane Line')
+        ax1.set_xlabel('Recall')
+        ax1.set_ylabel('Precision')
+        ax1.set_aspect('equal')
+        ax1.legend('Max F-measure {:.3}'.format(laneline_F_max))
+
+        ax2.set_xlim(0, 1)
+        ax2.set_ylim(0, 1)
+        ax2.set_title('Center Line')
+        ax2.set_xlabel('Recall')
+        ax2.set_ylabel('Precision')
+        ax2.set_aspect('equal')
+        ax1.legend('Max F-measure {:.3}'.format(centerline_F_max))
+
+        # fig.subplots_adjust(wspace=0.1, hspace=0.01)
+        fig.savefig(eval_fig_file)
+        plt.close(fig)
+
+        print("===> Evaluation on validation set: \n"
+              "laneline max F-measure {:.3} at Recall {:.3}, Precision {:.3} \n"
+              "laneline AP in recall range (0, 1): {:.3}\n"
+              "laneline AP in recall range (0.7, 1): {:.3} \n"
+              "centerline max F-measure {:.3} at Recall {:.3}, Precision {:.3} \n"
+              "centerline AP in recall range (0, 1): {:.3} \n"
+              "centerline AP in recall range (0.7, 1): {:.3} \n".format(laneline_F_max,
+                                                                        laneline_R[laneline_max_i + 1],
+                                                                        laneline_P[laneline_max_i + 1],
+                                                                        laneline_AP1,
+                                                                        laneline_AP2,
+                                                                        centerline_F_max,
+                                                                        centerline_R[centerline_max_i + 1],
+                                                                        centerline_P[centerline_max_i + 1],
+                                                                        centerline_AP1,
+                                                                        centerline_AP2))
+
+        json_out = {}
+        json_out['laneline_R'] = laneline_R[1:-1].astype(np.float32).tolist()
+        json_out['laneline_P'] = laneline_P[1:-1].astype(np.float32).tolist()
+        json_out['laneline_F_max'] = laneline_F_max
+        json_out['laneline_max_i'] = laneline_max_i.tolist()
+        json_out['laneline_AP1'] = laneline_AP1
+        json_out['laneline_AP2'] = laneline_AP2
+
+        json_out['centerline_R'] = centerline_R[1:-1].astype(np.float32).tolist()
+        json_out['centerline_P'] = centerline_P[1:-1].astype(np.float32).tolist()
+        json_out['centerline_F_max'] = centerline_F_max
+        json_out['centerline_max_i'] = centerline_max_i.tolist()
+        json_out['centerline_AP1'] = centerline_AP1
+        json_out['centerline_AP2'] = centerline_AP2
+        with open(eval_out_file, 'w') as jsonFile:
+            jsonFile.write(json.dumps(json_out))
+            jsonFile.write('\n')
+            jsonFile.close()
+        return json_out
+
 
 if __name__ == '__main__':
     vis = False
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0924_random_split'
+    args.dataset_name = 'sim3d_0924_exclude_daytime'
     args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    pred_file = '../data/sim3d_0924_random_split/Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d_0924_random_split/val.json'
+    gt_file = '../data/sim3d_0924_exclude_daytime/test.json'
+    pred_folder = '../data/sim3d_0924_exclude_daytime/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
+    pred_file = pred_folder + 'test_pred_file.json'
+    eval_out_file = pred_folder + 'test_eval.json'
+    eval_fig_file = pred_folder + 'test_pr.jpg'
 
-    # try:s
-    eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)
+    # evaluation at varying thresholds
+    json_out = evaluator.bench_one_submit_varying_probs(pred_file, gt_file, eval_out_file, eval_fig_file)
 
-    print("===> Evaluation on validation set: \n"
-          "laneline F-measure {:.8} \n"
-          "laneline Recall  {:.8} \n"
-          "laneline Precision  {:.8} \n"
-          "laneline x error (close)  {:.8} m\n"
-          "laneline x error (far)  {:.8} m\n"
-          "laneline z error (close)  {:.8} m\n"
-          "laneline z error (far)  {:.8} m\n\n"
-          "centerline F-measure {:.8} \n"
-          "centerline Recall  {:.8} \n"
-          "centerline Precision  {:.8} \n"
-          "centerline x error (close)  {:.8} m\n"
-          "centerline x error (far)  {:.8} m\n"
-          "centerline z error (close)  {:.8} m\n"
-          "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
-                                                       eval_stats[2], eval_stats[3],
-                                                       eval_stats[4], eval_stats[5],
-                                                       eval_stats[6], eval_stats[7],
-                                                       eval_stats[8], eval_stats[9],
-                                                       eval_stats[10], eval_stats[11],
-                                                       eval_stats[12], eval_stats[13]))
+    # TODO: evaluate at the point with max F-measure
+    # eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)
+    #
+    # print("===> Evaluation on validation set: \n"
+    #       "laneline F-measure {:.8} \n"
+    #       "laneline Recall  {:.8} \n"
+    #       "laneline Precision  {:.8} \n"
+    #       "laneline x error (close)  {:.8} m\n"
+    #       "laneline x error (far)  {:.8} m\n"
+    #       "laneline z error (close)  {:.8} m\n"
+    #       "laneline z error (far)  {:.8} m\n\n"
+    #       "centerline F-measure {:.8} \n"
+    #       "centerline Recall  {:.8} \n"
+    #       "centerline Precision  {:.8} \n"
+    #       "centerline x error (close)  {:.8} m\n"
+    #       "centerline x error (far)  {:.8} m\n"
+    #       "centerline z error (close)  {:.8} m\n"
+    #       "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
+    #                                                    eval_stats[2], eval_stats[3],
+    #                                                    eval_stats[4], eval_stats[5],
+    #                                                    eval_stats[6], eval_stats[7],
+    #                                                    eval_stats[8], eval_stats[9],
+    #                                                    eval_stats[10], eval_stats[11],
+    #                                                    eval_stats[12], eval_stats[13]))

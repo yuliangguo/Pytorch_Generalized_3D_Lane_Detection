@@ -18,8 +18,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
-from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Dataloader.Load_Data_3DLane import *
 from Networks import LaneNet3D, LaneNet3D_GeoOnly
 from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
                         mkdir_if_missing, Logger, define_init_weights,\
@@ -230,38 +229,35 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif 'sim3d' in args.dataset_name:
-                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
+                        lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
+                            compute_sim3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
+                                                         anchor_x_steps, args.anchor_y_steps)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
+                        json_line["laneLines_prob"] = lanelines_prob
+                        json_line["centerLines_prob"] = centerlines_prob
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
-        eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file)
+        eval_stats = evaluator.bench_one_submit_varying_probs(lane_pred_file, test_gt_file, eval_out_file, eval_fig_file)
 
         if 'tusimple' in args.dataset_name:
             print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
-        elif 'sim3d' in args.dataset_name:
-            print("===> Evaluation on validation set: \n"
-                  "laneline F-measure {:.8} \n"
-                  "laneline Recall  {:.8} \n"
-                  "laneline Precision  {:.8} \n"
-                  "laneline x error (close)  {:.8} m\n"
-                  "laneline x error (far)  {:.8} m\n"
-                  "laneline z error (close)  {:.8} m\n"
-                  "laneline z error (far)  {:.8} m\n\n"
-                  "centerline F-measure {:.8} \n"
-                  "centerline Recall  {:.8} \n"
-                  "centerline Precision  {:.8} \n"
-                  "centerline x error (close)  {:.8} m\n"
-                  "centerline x error (far)  {:.8} m\n"
-                  "centerline z error (close)  {:.8} m\n"
-                  "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
-                                                               eval_stats[2], eval_stats[3],
-                                                               eval_stats[4], eval_stats[5],
-                                                               eval_stats[6], eval_stats[7],
-                                                               eval_stats[8], eval_stats[9],
-                                                               eval_stats[10], eval_stats[11],
-                                                               eval_stats[12], eval_stats[13]))
+        # elif 'sim3d' in args.dataset_name:
+        #     laneline_F = eval_stats[0]
+        #     laneline_R = eval_stats[1]
+        #     laneline_P = eval_stats[2]
+        #     centerline_F = eval_stats[3]
+        #     centerline_R = eval_stats[4]
+        #     centerline_P = eval_stats[5]
+        #
+        #     print("===> Evaluation on validation set: \n"
+        #           "laneline F-measure {:.8} \n"
+        #           "laneline Recall  {:.8} \n"
+        #           "laneline Precision  {:.8} \n"
+        #           "centerline F-measure {:.8} \n"
+        #           "centerline Recall  {:.8} \n"
+        #           "centerline Precision  {:.8} \n".format(laneline_F, laneline_R, laneline_P,
+        #                                                   centerline_F, centerline_R, centerline_P))
 
         return eval_stats
 
@@ -277,7 +273,7 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924_exclude_daytime'
+    args.dataset_name = 'sim3d_0924_random_split'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
@@ -307,9 +303,13 @@ if __name__ == '__main__':
     global vis_folder
     global test_gt_file
     global lane_pred_file
-    vis_folder = 'test_vis'
-    test_gt_file = ops.join(args.data_dir, 'test.json')
-    lane_pred_file = ops.join(args.save_path, 'test_pred_file.json')
+    global eval_out_file
+    global eval_fig_file
+    vis_folder = 'val_vis'
+    test_gt_file = ops.join(args.data_dir, 'val.json')
+    lane_pred_file = ops.join(args.save_path, 'val_pred_file.json')
+    eval_out_file = ops.join(args.data_dir, 'val_eval.json')
+    eval_fig_file = ops.join(args.data_dir, 'val_pr.jpg')
 
     # run the training
     main()

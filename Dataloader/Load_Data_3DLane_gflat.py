@@ -819,6 +819,76 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     return lanelines_out, centerlines_out
 
 
+def compute_sim3d_lanes_all_prob(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, h_cam):
+    lanelines_out = []
+    lanelines_prob = []
+    centerlines_out = []
+    centerlines_prob = []
+    num_y_steps = anchor_y_steps.shape[0]
+
+    # apply nms to output lanes probabilities
+    # consider w/o centerline cases
+    pred_anchor[:, anchor_dim - 1] = nms_1d(pred_anchor[:, anchor_dim - 1])
+    pred_anchor[:, 2*anchor_dim - 1] = nms_1d(pred_anchor[:, 2*anchor_dim - 1])
+    pred_anchor[:, 3*anchor_dim - 1] = nms_1d(pred_anchor[:, 3*anchor_dim - 1])
+
+    # output only the visible portion of lane
+    """
+        An important process is output lanes in the considered y-range. Interpolate the visibility attributes to 
+        automatically determine whether to extend the lanes.
+    """
+    for j in range(pred_anchor.shape[0]):
+        # draw laneline
+        x_offsets = pred_anchor[j, :num_y_steps]
+        x_g = x_offsets + anchor_x_steps[j]
+        z_g = pred_anchor[j, num_y_steps:2*num_y_steps]
+        visibility = pred_anchor[j, 2*num_y_steps:3*num_y_steps]
+        line = np.vstack([x_g, anchor_y_steps, z_g]).T
+        # line = line[visibility > prob_th, :]
+        # convert to 3D ground space
+        x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+        line[:, 0] = x_g
+        line[:, 1] = y_g
+        line = resample_laneline_in_y_with_vis(line, anchor_y_steps, visibility)
+        if line.shape[0] >= 2:
+            lanelines_out.append(line.data.tolist())
+            lanelines_prob.append(pred_anchor[j, anchor_dim - 1].tolist())
+
+        # draw centerline
+        x_offsets = pred_anchor[j, anchor_dim:anchor_dim + num_y_steps]
+        x_g = x_offsets + anchor_x_steps[j]
+        z_g = pred_anchor[j, anchor_dim + num_y_steps:anchor_dim + 2*num_y_steps]
+        visibility = pred_anchor[j, anchor_dim + 2*num_y_steps:anchor_dim + 3*num_y_steps]
+        line = np.vstack([x_g, anchor_y_steps, z_g]).T
+        # line = line[visibility > prob_th, :]
+        # convert to 3D ground space
+        x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+        line[:, 0] = x_g
+        line[:, 1] = y_g
+        line = resample_laneline_in_y_with_vis(line, anchor_y_steps, visibility)
+        if line.shape[0] >= 2:
+            centerlines_out.append(line.data.tolist())
+            centerlines_prob.append(pred_anchor[j, 2 * anchor_dim - 1].tolist())
+
+        # draw the additional centerline for the merging case
+        x_offsets = pred_anchor[j, 2*anchor_dim:2*anchor_dim + num_y_steps]
+        x_g = x_offsets + anchor_x_steps[j]
+        z_g = pred_anchor[j, 2*anchor_dim + num_y_steps:2*anchor_dim + 2*num_y_steps]
+        visibility = pred_anchor[j, 2*anchor_dim + 2*num_y_steps:2*anchor_dim + 3*num_y_steps]
+        line = np.vstack([x_g, anchor_y_steps, z_g]).T
+        # line = line[visibility > prob_th, :]
+        # convert to 3D ground space
+        x_g, y_g = transform_lane_gflat2g(h_cam, line[:, 0], line[:, 1], line[:, 2])
+        line[:, 0] = x_g
+        line[:, 1] = y_g
+        line = resample_laneline_in_y_with_vis(line, anchor_y_steps, visibility)
+        if line.shape[0] >= 2:
+            centerlines_out.append(line.data.tolist())
+            centerlines_prob.append(pred_anchor[j, 3*anchor_dim - 1].tolist())
+
+    return lanelines_out, centerlines_out, lanelines_prob, centerlines_prob
+
+
 def unormalize_lane_anchor(anchor, dataset):
     num_y_steps = dataset.num_y_steps
     anchor_dim = dataset.anchor_dim

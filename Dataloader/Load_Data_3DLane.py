@@ -615,6 +615,50 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     return lanelines_out, centerlines_out
 
 
+def compute_sim3d_lanes_all_prob(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps):
+    lanelines_out = []
+    lanelines_prob = []
+    centerlines_out = []
+    centerlines_prob = []
+    num_y_steps = anchor_y_steps.shape[0]
+
+    # apply nms to output lanes probabilities
+    # consider w/o centerline cases
+    pred_anchor[:, anchor_dim - 1] = nms_1d(pred_anchor[:, anchor_dim - 1])
+    pred_anchor[:, 2 * anchor_dim - 1] = nms_1d(pred_anchor[:, 2 * anchor_dim - 1])
+    pred_anchor[:, 3 * anchor_dim - 1] = nms_1d(pred_anchor[:, 3 * anchor_dim - 1])
+
+    for j in range(pred_anchor.shape[0]):
+        # draw laneline
+        # if pred_anchor[j, anchor_dim - 1] > prob_th:
+        lanelines_prob.append(pred_anchor[j, anchor_dim - 1].tolist())
+        x_offsets = pred_anchor[j, :num_y_steps]
+        x_g = x_offsets + anchor_x_steps[j]
+        z_g = pred_anchor[j, num_y_steps:anchor_dim - 1]
+        line = np.vstack([x_g, anchor_y_steps, z_g]).T
+        lanelines_out.append(line.data.tolist())
+
+        # draw centerline
+        # if pred_anchor[j, 2 * anchor_dim - 1] > prob_th:
+        centerlines_prob.append(pred_anchor[j, 2 * anchor_dim - 1].tolist())
+        x_offsets = pred_anchor[j, anchor_dim:anchor_dim + num_y_steps]
+        x_g = x_offsets + anchor_x_steps[j]
+        z_g = pred_anchor[j, anchor_dim + num_y_steps:2 * anchor_dim - 1]
+        line = np.vstack([x_g, anchor_y_steps, z_g]).T
+        centerlines_out.append(line.data.tolist())
+
+        # draw the additional centerline for the merging case
+        # if pred_anchor[j, 3 * anchor_dim - 1] > prob_th:
+        centerlines_prob.append(pred_anchor[j, 3 * anchor_dim - 1].tolist())
+        x_offsets = pred_anchor[j, 2 * anchor_dim:2 * anchor_dim + num_y_steps]
+        x_g = x_offsets + anchor_x_steps[j]
+        z_g = pred_anchor[j, 2 * anchor_dim + num_y_steps:3 * anchor_dim - 1]
+        line = np.vstack([x_g, anchor_y_steps, z_g]).T
+        centerlines_out.append(line.data.tolist())
+
+    return lanelines_out, centerlines_out, lanelines_prob, centerlines_prob
+
+
 def unormalize_lane_anchor(anchor, dataset):
     num_y_steps = dataset.num_y_steps
     anchor_dim = dataset.anchor_dim
