@@ -249,7 +249,8 @@ class LaneEval(object):
 
         return r_lane, p_lane, cnt_gt, cnt_pred, x_error_close, x_error_far, z_error_close, z_error_far
 
-    def bench_one_submit(self, pred_file, gt_file, vis=False):
+    # compare predicted set and ground-truth set using a fixed lane probability threshold
+    def bench_one_submit(self, pred_file, gt_file, prob_th=0.5, vis=False):
         if vis:
             save_path = pred_file[:pred_file.rfind('/')]
             save_path += '/example/eval_vis'
@@ -286,6 +287,10 @@ class LaneEval(object):
             # if raw_file != 'images/05/0000347.jpg':
             #     continue
             pred_lanelines = pred['laneLines']
+            pred_laneLines_prob = pred['laneLines_prob']
+            pred_lanelines = [pred_lanelines[ii] for ii in range(len(pred_laneLines_prob)) if
+                              pred_laneLines_prob[ii] > prob_th]
+
             if raw_file not in gts:
                 raise Exception('Some raw_file from your predictions do not exist in the test tasks.')
             gt = gts[raw_file]
@@ -328,6 +333,10 @@ class LaneEval(object):
             # evaluate centerlines
             if not self.no_centerline:
                 pred_centerlines = pred['centerLines']
+                pred_centerlines_prob = pred['centerLines_prob']
+                pred_centerlines = [pred_centerlines[ii] for ii in range(len(pred_centerlines_prob)) if
+                                    pred_centerlines_prob[ii] > prob_th]
+
                 gt_centerlines = gt['centerLines']
                 gt_visibility = gt['centerLines_visibility']
 
@@ -429,8 +438,6 @@ class LaneEval(object):
             output_stats.append(x_error_far_avg)
             output_stats.append(z_error_close_avg)
             output_stats.append(z_error_far_avg)
-
-        # TODO: generate PR curve, output max_F or AP (not appropriate) as key indicator
 
         return output_stats
 
@@ -539,6 +546,7 @@ class LaneEval(object):
 
         return r_lane, p_lane, cnt_gt, cnt_pred
 
+    # evaluate two dataset at varying lane probability threshold to calculate AP
     def bench_one_submit_varying_probs(self, pred_file, gt_file, eval_out_file, eval_fig_file):
         varying_th = np.linspace(0.05, 0.95, 19)
         # try:
@@ -752,43 +760,55 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0924_exclude_daytime'
+    args.dataset_name = 'sim3d_0924_random_split'
     args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    gt_file = '../data/sim3d_0924_exclude_daytime/test.json'
-    pred_folder = '../data/sim3d_0924_exclude_daytime/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
-    pred_file = pred_folder + 'test_pred_file.json'
-    eval_out_file = pred_folder + 'test_eval.json'
-    eval_fig_file = pred_folder + 'test_pr.jpg'
+    file_name = 'val'
+    gt_file = '../data/' + args.dataset_name + '/' + file_name + '.json'
+    pred_folder = '../data/' + args.dataset_name + '/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
+    pred_file = pred_folder + file_name + '_pred_file.json'
+    eval_out_file = pred_folder + file_name + '_eval.json'
+    eval_fig_file = pred_folder + file_name + '_pr.jpg'
 
     # evaluation at varying thresholds
     json_out = evaluator.bench_one_submit_varying_probs(pred_file, gt_file, eval_out_file, eval_fig_file)
 
     # TODO: evaluate at the point with max F-measure
-    # eval_stats = evaluator.bench_one_submit(pred_file, gt_file, vis=vis)
-    #
-    # print("===> Evaluation on validation set: \n"
-    #       "laneline F-measure {:.8} \n"
-    #       "laneline Recall  {:.8} \n"
-    #       "laneline Precision  {:.8} \n"
-    #       "laneline x error (close)  {:.8} m\n"
-    #       "laneline x error (far)  {:.8} m\n"
-    #       "laneline z error (close)  {:.8} m\n"
-    #       "laneline z error (far)  {:.8} m\n\n"
-    #       "centerline F-measure {:.8} \n"
-    #       "centerline Recall  {:.8} \n"
-    #       "centerline Precision  {:.8} \n"
-    #       "centerline x error (close)  {:.8} m\n"
-    #       "centerline x error (far)  {:.8} m\n"
-    #       "centerline z error (close)  {:.8} m\n"
-    #       "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
-    #                                                    eval_stats[2], eval_stats[3],
-    #                                                    eval_stats[4], eval_stats[5],
-    #                                                    eval_stats[6], eval_stats[7],
-    #                                                    eval_stats[8], eval_stats[9],
-    #                                                    eval_stats[10], eval_stats[11],
-    #                                                    eval_stats[12], eval_stats[13]))
+    eval_stats = evaluator.bench_one_submit(pred_file, gt_file, prob_th=0.5, vis=vis)
+
+    print("===> Evaluation on validation set: \n"
+          "laneline F-measure {:.8} \n"
+          "laneline Recall  {:.8} \n"
+          "laneline Precision  {:.8} \n"
+          "laneline x error (close)  {:.8} m\n"
+          "laneline x error (far)  {:.8} m\n"
+          "laneline z error (close)  {:.8} m\n"
+          "laneline z error (far)  {:.8} m\n\n"
+          "centerline F-measure {:.8} \n"
+          "centerline Recall  {:.8} \n"
+          "centerline Precision  {:.8} \n"
+          "centerline x error (close)  {:.8} m\n"
+          "centerline x error (far)  {:.8} m\n"
+          "centerline z error (close)  {:.8} m\n"
+          "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
+                                                       eval_stats[2], eval_stats[3],
+                                                       eval_stats[4], eval_stats[5],
+                                                       eval_stats[6], eval_stats[7],
+                                                       eval_stats[8], eval_stats[9],
+                                                       eval_stats[10], eval_stats[11],
+                                                       eval_stats[12], eval_stats[13]))
+
+    # calculate x err, z err full range
+    x_error_laneline = eval_stats[3]*0.36 + eval_stats[4]*0.64
+    z_error_laneline = eval_stats[5] * 0.36 + eval_stats[6] * 0.64
+    x_error_centerline = eval_stats[10] * 0.36 + eval_stats[11] * 0.64
+    z_error_centerline = eval_stats[12] * 0.36 + eval_stats[13] * 0.64
+    print("laneline x error {:.8} m\n"
+          "laneline z error {:.8} m\n"
+          "centerline x error {:.8} m\n"
+          "centerline z error {:.8} m\n".format(x_error_laneline, z_error_laneline,
+                                                x_error_centerline, z_error_centerline))

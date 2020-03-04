@@ -359,7 +359,7 @@ class Visualizer:
                                       (x_ipm[k], y_ipm[k]), color, 1)
         return im_ipm
 
-    def draw_on_ipm_new(self, im_ipm, lane_anchor, draw_type='laneline', color=[0, 0, 1]):
+    def draw_on_ipm_new(self, im_ipm, lane_anchor, draw_type='laneline', color=[0, 0, 1], width=1):
         for j in range(lane_anchor.shape[0]):
             # draw laneline
             if draw_type is 'laneline' and lane_anchor[j, self.anchor_dim - 1] > self.prob_th:
@@ -377,10 +377,10 @@ class Visualizer:
                 for k in range(1, x_g.shape[0]):
                     if visibility[k] > self.prob_th:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]), color, 1)
+                                          (x_ipm[k], y_ipm[k]), color, width)
                     else:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]), [0, 0, 0], 1)
+                                          (x_ipm[k], y_ipm[k]), [0, 0, 0], width)
 
             # draw centerline
             if draw_type is 'centerline' and lane_anchor[j, 2*self.anchor_dim - 1] > self.prob_th:
@@ -398,10 +398,10 @@ class Visualizer:
                 for k in range(1, x_g.shape[0]):
                     if visibility[k] > self.prob_th:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]), color, 1)
+                                          (x_ipm[k], y_ipm[k]), color, width)
                     else:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]), [0, 0, 0], 1)
+                                          (x_ipm[k], y_ipm[k]), [0, 0, 0], width)
 
             # draw the additional centerline for the merging case
             if draw_type is 'centerline' and lane_anchor[j, 3*self.anchor_dim - 1] > self.prob_th:
@@ -419,10 +419,10 @@ class Visualizer:
                 for k in range(1, x_g.shape[0]):
                     if visibility[k] > self.prob_th:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]), color, 1)
+                                          (x_ipm[k], y_ipm[k]), color, width)
                     else:
                         im_ipm = cv2.line(im_ipm, (x_ipm[k - 1], y_ipm[k - 1]),
-                                          (x_ipm[k], y_ipm[k]), [0, 0, 0], 1)
+                                          (x_ipm[k], y_ipm[k]), [0, 0, 0], width)
         return im_ipm
 
     def draw_3d_curves(self, ax, lane_anchor, draw_type='laneline', color=[0, 0, 1]):
