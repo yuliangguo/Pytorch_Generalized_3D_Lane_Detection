@@ -183,8 +183,8 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/media/yuliangguo/NewVolume2TB/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_name = 'sim3d_0924_exclude_daytime'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
@@ -192,11 +192,11 @@ if __name__ == '__main__':
     vs = lane_visualizer(args)
 
     global pred_file
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d_0924/val.json'
+    pred_file = '../data/sim3d_0924_exclude_daytime/Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test_pred_file.json'
+    gt_file = '../data/sim3d_0924_exclude_daytime/test.json'
 
     save_path = pred_file[:pred_file.rfind('/')]
-    save_path += '/example/val_vis_compare'
+    save_path += '/example/test_vis_compare'
     if not os.path.exists(save_path):
         try:
             os.makedirs(save_path)
@@ -218,8 +218,13 @@ if __name__ == '__main__':
         # if raw_file != 'images/05/0000347.jpg':
         #     continue
         pred_lanelines = pred['laneLines']
+        pred_lanelines_prob = pred['laneLines_prob']
+        pred_lanelines = [pred_lanelines[ii] for ii in range(len(pred_lanelines_prob)) if
+                          pred_lanelines_prob[ii] > args.prob_th]
         pred_centerlines = pred['centerLines']
-
+        pred_centerlines_prob = pred['centerLines_prob']
+        pred_centerlines = [pred_centerlines[ii] for ii in range(len(pred_centerlines_prob)) if
+                            pred_centerlines_prob[ii] > args.prob_th]
         if raw_file not in gts:
             continue
         gt = gts[raw_file]

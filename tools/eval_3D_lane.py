@@ -697,6 +697,7 @@ class LaneEval(object):
         ax2 = fig.add_subplot(122)
         ax1.plot(laneline_R, laneline_P, '-s')
         ax2.plot(centerline_R, centerline_P, '-s')
+
         ax1.set_xlim(0, 1)
         ax1.set_ylim(0, 1)
         ax1.set_title('Lane Line')
@@ -711,7 +712,7 @@ class LaneEval(object):
         ax2.set_xlabel('Recall')
         ax2.set_ylabel('Precision')
         ax2.set_aspect('equal')
-        ax1.legend('Max F-measure {:.3}'.format(centerline_F_max))
+        ax2.legend('Max F-measure {:.3}'.format(centerline_F_max))
 
         # fig.subplots_adjust(wspace=0.1, hspace=0.01)
         fig.savefig(eval_fig_file)

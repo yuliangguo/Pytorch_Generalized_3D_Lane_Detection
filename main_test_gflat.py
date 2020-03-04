@@ -284,7 +284,7 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924_exclude_daytime'
+    args.dataset_name = 'sim3d_0924_random_split'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
@@ -304,14 +304,14 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_gflat_GeoOnly'
+    args.mod = '3DLaneNet_gflat'
     args.y_ref = 5
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     global vis_folder
     global test_gt_file
     global lane_pred_file
@@ -319,7 +319,7 @@ if __name__ == '__main__':
     global eval_fig_file
     vis_folder = 'test_vis'
     test_gt_file = ops.join(args.data_dir, 'test.json')
-    lane_pred_file = ops.join(args.save_path, 'test_pred_file_new.json')
+    lane_pred_file = ops.join(args.save_path, 'test_pred_file.json')
     eval_out_file = ops.join(args.data_dir, 'test_eval.json')
     eval_fig_file = ops.join(args.data_dir, 'test_pr.jpg')
 

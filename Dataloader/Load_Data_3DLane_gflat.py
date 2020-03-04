@@ -909,8 +909,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_name = 'sim3d_0924_random_split'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
     # args.dataset_name = 'tusimple'
     # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
@@ -927,6 +927,8 @@ if __name__ == '__main__':
     # define the network model
     args.mod = '3DLaneNet_gflat_GeoOnly'
     args.y_ref = 5.0
+    # args.ipm_w = args.ipm_w*2
+    # args.ipm_h = args.ipm_h*2
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -934,7 +936,7 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'val.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.dataset_dir, 'val.json'), args, data_aug=True)
     dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps
@@ -993,18 +995,18 @@ if __name__ == '__main__':
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             img = visualizer.draw_on_img_new(img, gt_anchor, M, 'laneline', color=[0, 0, 1])
-            if not args.no_centerline:
-                img = visualizer.draw_on_img_new(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
+            # if not args.no_centerline:
+            #     img = visualizer.draw_on_img_new(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
 
-            cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
-                        (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
-            cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
-                        (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            # cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
+            #             (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            # cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
+            #             (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
 
             # visualize on ipm
             im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'laneline', color=[0, 0, 1])
-            if not args.no_centerline:
-                im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
+            # if not args.no_centerline:
+            #     im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
             # if idx[i] == 936:
             # if '05/0000327' in dataset._label_image_path[idx[i]]:
