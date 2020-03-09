@@ -768,9 +768,9 @@ if __name__ == '__main__':
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    file_name = 'val'
+    file_name = 'test2'
     gt_file = '../data/' + args.dataset_name + '/' + file_name + '.json'
-    pred_folder = '../data/' + args.dataset_name + '/Model_3DLaneNet_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
+    pred_folder = '../data/' + args.dataset_name + '/Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
     pred_file = pred_folder + file_name + '_pred_file.json'
     eval_out_file = pred_folder + file_name + '_eval.json'
     eval_fig_file = pred_folder + file_name + '_pr.jpg'

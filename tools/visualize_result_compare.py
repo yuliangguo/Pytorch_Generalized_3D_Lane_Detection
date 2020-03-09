@@ -192,7 +192,7 @@ if __name__ == '__main__':
     vs = lane_visualizer(args)
 
     global pred_file
-    pred_file = '../data/sim3d_0924_exclude_daytime/Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test_pred_file.json'
+    pred_file = '../data/sim3d_0924_exclude_daytime/Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/test_pred_file.json'
     gt_file = '../data/sim3d_0924_exclude_daytime/test.json'
 
     save_path = pred_file[:pred_file.rfind('/')]

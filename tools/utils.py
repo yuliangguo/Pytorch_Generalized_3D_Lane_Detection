@@ -17,6 +17,7 @@ import os.path as ops
 from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 from scipy.optimize import fsolve
 plt.rcParams['figure.figsize'] = (35, 30)
 
@@ -793,52 +794,17 @@ def resample_laneline_in_y(input_lane, y_steps, out_vis=False):
     # at least two points are included
     assert(input_lane.shape[0] >= 2)
 
-    x_values = np.zeros_like(y_steps, dtype=np.float32)
-    z_values = np.zeros_like(y_steps, dtype=np.float32)
-    # locate the visible limits, and allow some guessing range
     y_min = np.min(input_lane[:, 1])-5
     y_max = np.max(input_lane[:, 1])+5
 
     if input_lane.shape[1] < 3:
         input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)
 
-    j = 0
-    for i, y_grid in enumerate(y_steps):
-        # search the next input point further than current y grid
-        while j < input_lane.shape[0] and input_lane[j, 1] < y_grid:
-            j += 1
+    f_x = interp1d(input_lane[:, 1], input_lane[:, 0], fill_value="extrapolate")
+    f_z = interp1d(input_lane[:, 1], input_lane[:, 2], fill_value="extrapolate")
 
-        # locate the two input points for interpolating x, z values at current y grid
-        if j < input_lane.shape[0]:
-            y1 = input_lane[j, 1]
-            x1 = input_lane[j, 0]
-            z1 = input_lane[j, 2]
-
-            if (j-1) >= 0:
-                y2 = input_lane[j - 1, 1]
-                x2 = input_lane[j - 1, 0]
-                z2 = input_lane[j - 1, 2]
-            elif (j+1) < input_lane.shape[0]:  # for a y grid closer than the closest ground-truth
-                y2 = input_lane[j + 1, 1]
-                x2 = input_lane[j + 1, 0]
-                z2 = input_lane[j + 1, 2]
-            else:  # only a single ground-truth point existing
-                continue
-        else:  # for the y_grid farther than the farthest ground-truth y range,
-            y1 = input_lane[-1, 1]
-            x1 = input_lane[-1, 0]
-            z1 = input_lane[-1, 2]
-            y2 = input_lane[-2, 1]
-            x2 = input_lane[-2, 0]
-            z2 = input_lane[-2, 2]
-
-        # interpolate x value and z value at anchor grid
-        if np.abs(y2-y1) < 1e-6:
-            x_values[i] = x1
-            z_values[i] = z1
-        else:
-            x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
-            z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
+    x_values = f_x(y_steps)
+    z_values = f_z(y_steps)
 
     if out_vis:
         output_visibility = np.logical_and(y_steps >= y_min, y_steps <= y_max)
@@ -859,58 +825,16 @@ def resample_laneline_in_y_with_vis(input_lane, y_steps, vis_vec):
     # at least two points are included
     assert(input_lane.shape[0] >= 2)
 
-    x_values = np.zeros_like(y_steps, dtype=np.float32)
-    z_values = np.zeros_like(y_steps, dtype=np.float32)
-    vis_values = np.zeros_like(y_steps, dtype=np.float32)
-    # locate the visible limits, and allow some guessing range
-
     if input_lane.shape[1] < 3:
         input_lane = np.concatenate([input_lane, np.zeros([input_lane.shape[0], 1], dtype=np.float32)], axis=1)
 
-    j = 0
-    for i, y_grid in enumerate(y_steps):
-        # search the next input point further than current y grid
-        while j < input_lane.shape[0] and input_lane[j, 1] < y_grid:
-            j += 1
+    f_x = interp1d(input_lane[:, 1], input_lane[:, 0], fill_value="extrapolate")
+    f_z = interp1d(input_lane[:, 1], input_lane[:, 2], fill_value="extrapolate")
+    f_vis = interp1d(input_lane[:, 1], vis_vec, fill_value="extrapolate")
 
-        # locate the two input points for interpolating x, z values at current y grid
-        if j < input_lane.shape[0]:
-            y1 = input_lane[j, 1]
-            x1 = input_lane[j, 0]
-            z1 = input_lane[j, 2]
-            vis1 = vis_vec[j]
-
-            if (j-1) >= 0:
-                y2 = input_lane[j - 1, 1]
-                x2 = input_lane[j - 1, 0]
-                z2 = input_lane[j - 1, 2]
-                vis2 = vis_vec[j - 1]
-            elif (j+1) < input_lane.shape[0]:  # for a y grid closer than the closest ground-truth
-                y2 = input_lane[j + 1, 1]
-                x2 = input_lane[j + 1, 0]
-                z2 = input_lane[j + 1, 2]
-                vis2 = vis_vec[j + 1]
-            else:  # only a single ground-truth point existing
-                continue
-        else:  # for the y_grid farther than the farthest ground-truth y range,
-            y1 = input_lane[-1, 1]
-            x1 = input_lane[-1, 0]
-            z1 = input_lane[-1, 2]
-            vis1 = vis_vec[-1]
-            y2 = input_lane[-2, 1]
-            x2 = input_lane[-2, 0]
-            z2 = input_lane[-2, 2]
-            vis2 = vis_vec[-2]
-
-        # interpolate x value and z value at anchor grid
-        if np.abs(y2-y1) < 1e-6:
-            x_values[i] = x1
-            z_values[i] = z1
-            vis_values[i] = vis1
-        else:
-            x_values[i] = (x1 * (y2 - y_grid) + x2 * (y_grid - y1)) / (y2 - y1)
-            z_values[i] = (z1 * (y2 - y_grid) + z2 * (y_grid - y1)) / (y2 - y1)
-            vis_values[i] = (vis1 * (y2 - y_grid) + vis2 * (y_grid - y1)) / (y2 - y1)
+    x_values = f_x(y_steps)
+    z_values = f_z(y_steps)
+    vis_values = f_vis(y_steps)
 
     x_values = x_values[vis_values > 0.5]
     y_values = y_steps[vis_values > 0.5]
