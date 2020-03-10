@@ -255,13 +255,14 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args1)
         # define pretrained feat model
         pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
-        vis_folder = 'val_vis'
-        test_gt_file = ops.join(args1.data_dir, 'val.json')
-        lane_pred_file = ops.join(args2.save_path, 'val_pred_file.json')
+        test_name = 'test2'
+        vis_folder = test_name + '_vis'
+        test_gt_file = ops.join(args1.data_dir, test_name + '.json')
+        lane_pred_file = ops.join(args2.save_path, test_name + '_pred_file.json')
         global eval_out_file
         global eval_fig_file
-        eval_out_file = ops.join(args2.data_dir, 'val_eval.json')
-        eval_fig_file = ops.join(args2.data_dir, 'val_pr.jpg')
+        eval_out_file = ops.join(args2.data_dir, test_name + '_eval.json')
+        eval_fig_file = ops.join(args2.data_dir, test_name + '_pr.jpg')
 
     # define the network model
     args1.mod = '3DLaneNet_2stage'

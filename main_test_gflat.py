@@ -76,14 +76,14 @@ def main():
     vs_saver = Visualizer(args, vis_folder)
 
     # load trained model for testing
-    best_file_name = glob.glob(os.path.join(args.save_path, 'model_best*'))[0]
-    if os.path.isfile(best_file_name):
+    best_test_name = glob.glob(os.path.join(args.save_path, 'model_best*'))[0]
+    if os.path.isfile(best_test_name):
         sys.stdout = Logger(os.path.join(args.save_path, 'Evaluate.txt'))
-        print("=> loading checkpoint '{}'".format(best_file_name))
-        checkpoint = torch.load(best_file_name)
+        print("=> loading checkpoint '{}'".format(best_test_name))
+        checkpoint = torch.load(best_test_name)
         model.load_state_dict(checkpoint['state_dict'])
     else:
-        print("=> no checkpoint found at '{}'".format(best_file_name))
+        print("=> no checkpoint found at '{}'".format(best_test_name))
     mkdir_if_missing(os.path.join(args.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, model, vs_saver, test_gt_file)
 
@@ -304,24 +304,25 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_gflat'
+    args.mod = '3DLaneNet_gflat_GeoOnly'
     args.y_ref = 5
 
     # use batch 1 for testing
     args.batch_size = 8
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
     global vis_folder
     global test_gt_file
     global lane_pred_file
     global eval_out_file
     global eval_fig_file
-    vis_folder = 'test_vis'
-    test_gt_file = ops.join(args.data_dir, 'test.json')
-    lane_pred_file = ops.join(args.save_path, 'test_pred_file.json')
-    eval_out_file = ops.join(args.data_dir, 'test_eval.json')
-    eval_fig_file = ops.join(args.data_dir, 'test_pr.jpg')
+    test_name = 'val'
+    vis_folder = test_name + '_vis'
+    test_gt_file = ops.join(args.data_dir, test_name + '.json')
+    lane_pred_file = ops.join(args.save_path, test_name + '_pred_file.json')
+    eval_out_file = ops.join(args.data_dir, test_name + '_eval.json')
+    eval_fig_file = ops.join(args.data_dir, test_name + '_pr.jpg')
 
     # run the training
     main()

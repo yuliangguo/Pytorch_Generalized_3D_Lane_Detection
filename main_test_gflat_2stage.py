@@ -257,13 +257,14 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args1)
         # define pretrained feat model
         pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
-        vis_folder = 'test2_vis'
-        test_gt_file = ops.join(args1.data_dir, 'test2.json')
-        lane_pred_file = ops.join(args2.save_path, 'test2_pred_file.json')
+        test_name = 'test2'
+        vis_folder = test_name + '_vis'
+        test_gt_file = ops.join(args1.data_dir, test_name + '.json')
+        lane_pred_file = ops.join(args2.save_path, test_name + '_pred_file.json')
         global eval_out_file
         global eval_fig_file
-        eval_out_file = ops.join(args2.data_dir, 'test2_eval.json')
-        eval_fig_file = ops.join(args2.data_dir, 'test2_pr.jpg')
+        eval_out_file = ops.join(args2.data_dir, test_name + '_eval.json')
+        eval_fig_file = ops.join(args2.data_dir, test_name + '_pr.jpg')
 
     # define the network model
     args1.mod = '3DLaneNet_gflat_2stage'
@@ -307,13 +308,13 @@ if __name__ == '__main__':
     vs_saver2 = Visualizer(args2, vis_folder)
 
     # load trained model for testing
-    best_file_name = glob.glob(os.path.join(args2.save_path, 'model_best*'))[0]
-    if os.path.isfile(best_file_name):
+    best_test_name = glob.glob(os.path.join(args2.save_path, 'model_best*'))[0]
+    if os.path.isfile(best_test_name):
         sys.stdout = Logger(os.path.join(args1.save_path, 'Evaluate.txt'))
-        print("=> loading checkpoint '{}'".format(best_file_name))
-        checkpoint = torch.load(best_file_name)
+        print("=> loading checkpoint '{}'".format(best_test_name))
+        checkpoint = torch.load(best_test_name)
         model2.load_state_dict(checkpoint['state_dict'])
     else:
-        print("=> no checkpoint found at '{}'".format(best_file_name))
+        print("=> no checkpoint found at '{}'".format(best_test_name))
     mkdir_if_missing(os.path.join(args2.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, train_dataset, model1, model2, vs_saver1, vs_saver2, test_gt_file)

@@ -762,15 +762,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.dataset_name = 'sim3d_0924_random_split'
-    args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
 
     # load configuration for certain dataset
     sim3d_config(args)
     evaluator = LaneEval(args)
 
-    file_name = 'test2'
+    file_name = 'val'
     gt_file = '../data/' + args.dataset_name + '/' + file_name + '.json'
-    pred_folder = '../data/' + args.dataset_name + '/Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
+    pred_folder = '../data/' + args.dataset_name + '/Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/'
     pred_file = pred_folder + file_name + '_pred_file.json'
     eval_out_file = pred_folder + file_name + '_eval.json'
     eval_fig_file = pred_folder + file_name + '_pr.jpg'
@@ -782,34 +782,37 @@ if __name__ == '__main__':
     eval_stats = evaluator.bench_one_submit(pred_file, gt_file, prob_th=0.5, vis=vis)
 
     print("===> Evaluation on validation set: \n"
-          "laneline F-measure {:.8} \n"
-          "laneline Recall  {:.8} \n"
-          "laneline Precision  {:.8} \n"
-          "laneline x error (close)  {:.8} m\n"
-          "laneline x error (far)  {:.8} m\n"
-          "laneline z error (close)  {:.8} m\n"
-          "laneline z error (far)  {:.8} m\n\n"
-          "centerline F-measure {:.8} \n"
-          "centerline Recall  {:.8} \n"
-          "centerline Precision  {:.8} \n"
-          "centerline x error (close)  {:.8} m\n"
-          "centerline x error (far)  {:.8} m\n"
-          "centerline z error (close)  {:.8} m\n"
-          "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
+          "laneline F-measure {:.3} \n"
+          "laneline Recall  {:.3} \n"
+          "laneline Precision  {:.3} \n"
+          "laneline x error (close)  {:.3} m\n"
+          "laneline x error (far)  {:.3} m\n"
+          "laneline z error (close)  {:.3} m\n"
+          "laneline z error (far)  {:.3} m\n\n"
+          "centerline F-measure {:.3} \n"
+          "centerline Recall  {:.3} \n"
+          "centerline Precision  {:.3} \n"
+          "centerline x error (close)  {:.3} m\n"
+          "centerline x error (far)  {:.3} m\n"
+          "centerline z error (close)  {:.3} m\n"
+          "centerline z error (far)  {:.3} m\n".format(eval_stats[0], eval_stats[1],
                                                        eval_stats[2], eval_stats[3],
                                                        eval_stats[4], eval_stats[5],
                                                        eval_stats[6], eval_stats[7],
                                                        eval_stats[8], eval_stats[9],
                                                        eval_stats[10], eval_stats[11],
                                                        eval_stats[12], eval_stats[13]))
+    print("Metrics: F-measure, x error (close), x error (far), z error (close), z error (far)")
+    print("Laneline: {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats[0], eval_stats[3], eval_stats[4], eval_stats[5], eval_stats[6]))
+    print("Centerline: {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats[7], eval_stats[10], eval_stats[11], eval_stats[12], eval_stats[13]))
 
     # calculate x err, z err full range
     x_error_laneline = eval_stats[3]*0.36 + eval_stats[4]*0.64
     z_error_laneline = eval_stats[5] * 0.36 + eval_stats[6] * 0.64
     x_error_centerline = eval_stats[10] * 0.36 + eval_stats[11] * 0.64
     z_error_centerline = eval_stats[12] * 0.36 + eval_stats[13] * 0.64
-    print("laneline x error {:.8} m\n"
-          "laneline z error {:.8} m\n"
-          "centerline x error {:.8} m\n"
-          "centerline z error {:.8} m\n".format(x_error_laneline, z_error_laneline,
+    print("laneline x error {:.3} m\n"
+          "laneline z error {:.3} m\n"
+          "centerline x error {:.3} m\n"
+          "centerline z error {:.3} m\n".format(x_error_laneline, z_error_laneline,
                                                 x_error_centerline, z_error_centerline))

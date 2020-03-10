@@ -305,11 +305,11 @@ if __name__ == '__main__':
     global lane_pred_file
     global eval_out_file
     global eval_fig_file
-    vis_folder = 'val_vis'
-    test_gt_file = ops.join(args.data_dir, 'val.json')
-    lane_pred_file = ops.join(args.save_path, 'val_pred_file.json')
-    eval_out_file = ops.join(args.data_dir, 'val_eval.json')
-    eval_fig_file = ops.join(args.data_dir, 'val_pr.jpg')
-
+    test_name = 'val'
+    vis_folder = test_name + '_vis'
+    test_gt_file = ops.join(args.data_dir, test_name + '.json')
+    lane_pred_file = ops.join(args.save_path, test_name + '_pred_file.json')
+    eval_out_file = ops.join(args.data_dir, test_name + '_eval.json')
+    eval_fig_file = ops.join(args.data_dir, test_name + '_pr.jpg')
     # run the training
     main()
