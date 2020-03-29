@@ -5,40 +5,15 @@ import numpy as np
 import torch
 import torch.optim
 import torch.nn as nn
-
-import os
-import os.path as ops
 import glob
 import time
-import sys
 import shutil
-import json
-import cv2
-import pdb
-import torch.nn.functional as F
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from Dataloader.Load_Data_3DLane_gflat import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks import Loss_crit, LaneNet3D_gflat, LaneNet3D_gflat_GeoOnly, erfnet
-from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
-                        mkdir_if_missing, Logger, define_init_weights,\
-                        define_scheduler, define_optim, AverageMeter, Visualizer
+from Dataloader.Load_Data_3DLane_ext import *
+from Networks import Loss_crit, LaneNet3D_ext, GeoNet3D_ext
+from tools.utils import *
 from tools import eval_lane_tusimple, eval_3D_lane
-
-
-def load_my_state_dict(model, state_dict):  # custom function to load model when not all dict elements
-    own_state = model.state_dict()
-    ckpt_name = []
-    cnt = 0
-    for name, param in state_dict.items():
-        # TODO: why the trained model do not have modules in name?
-        if name[7:] not in list(own_state.keys()) or 'output_conv' in name:
-            ckpt_name.append(name)
-            # continue
-        own_state[name[7:]].copy_(param)
-        cnt += 1
-    print('#reused param: {}'.format(cnt))
-    return model
 
 
 def train_net():
@@ -82,23 +57,23 @@ def train_net():
     anchor_x_steps = valid_dataset.anchor_x_steps
 
     # Define network
-    model1 = erfnet.ERFNet(args.num_class)
-    model2 = LaneNet3D_gflat_GeoOnly.Net(args, input_dim=args.num_class-1)
-    define_init_weights(model2, args.weight_init)
+    if 'GeoOnly' in args.mod:
+        model = GeoNet3D_ext.Net(args)
+    else:
+        model = LaneNet3D_ext.Net(args)
+    define_init_weights(model, args.weight_init)
+
+    # load in vgg pretrained weights on ImageNet
+    if args.pretrained and 'GeoOnly' not in args.mod:
+        model.load_pretrained_vgg(args.batch_norm)
+        print('vgg weights pretrained on ImageNet loaded!')
 
     if not args.no_cuda:
         # Load model on gpu before passing params to optimizer
-        model1 = model1.cuda()
-        model2 = model2.cuda()
-
-    # load in vgg pretrained weights
-    checkpoint = torch.load(args.pretrained_feat_model)
-    # args.start_epoch = checkpoint['epoch']
-    model1 = load_my_state_dict(model1, checkpoint['state_dict'])
-    model1.eval()  # do not back propagate to model1
+        model = model.cuda()
 
     # Define optimizer and scheduler
-    optimizer = define_optim(args.optimizer, model2.parameters(),
+    optimizer = define_optim(args.optimizer, model.parameters(),
                              args.learning_rate, args.weight_decay)
     scheduler = define_scheduler(optimizer, args)
 
@@ -146,7 +121,7 @@ def train_net():
             args.start_epoch = checkpoint['epoch']
             lowest_loss = checkpoint['loss']
             best_epoch = checkpoint['best epoch']
-            model2.load_state_dict(checkpoint['state_dict'])
+            model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
@@ -163,11 +138,11 @@ def train_net():
             sys.stdout = Logger(os.path.join(args.save_path, 'Evaluate.txt'))
             print("=> loading checkpoint '{}'".format(best_file_name))
             checkpoint = torch.load(best_file_name)
-            model2.load_state_dict(checkpoint['state_dict'])
+            model.load_state_dict(checkpoint['state_dict'])
         else:
             print("=> no checkpoint found at '{}'".format(best_file_name))
         mkdir_if_missing(os.path.join(args.save_path, 'example/val_vis'))
-        losses_valid, eval_stats = validate(valid_loader, valid_dataset, model1, model2, criterion, vs_saver, val_gt_file)
+        losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file)
         return
 
     # Start training from clean slate
@@ -179,7 +154,7 @@ def train_net():
     print(40*"="+"\nArgs:{}\n".format(args)+40*"=")
     print("Init model: '{}'".format(args.mod))
     print("Number of parameters in model {} is {:.3f}M".format(
-        args.mod, sum(tensor.numel() for tensor in model2.parameters())/1e6))
+        args.mod, sum(tensor.numel() for tensor in model.parameters())/1e6))
 
     # Start training and validation for nepochs
     for epoch in range(args.start_epoch, args.nepochs):
@@ -196,7 +171,7 @@ def train_net():
         losses = AverageMeter()
 
         # Specify operation modules
-        model2.train()
+        model.train()
 
         # compute timing
         end = time.time()
@@ -210,31 +185,25 @@ def train_net():
             # Put inputs on gpu if possible
             if not args.no_cuda:
                 input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
+                input = input.float()
                 seg_maps = seg_maps.cuda(non_blocking=True)
                 gt_hcam = gt_hcam.cuda()
                 gt_pitch = gt_pitch.cuda()
-            input = input.contiguous().float()
 
             if not args.fix_cam and not args.pred_cam:
-                model2.update_projection(args, gt_hcam, gt_pitch)
+                model.update_projection(args, gt_hcam, gt_pitch)
 
             # update transformation for data augmentation (only for training)
-            model2.update_projection_for_data_aug(aug_mat)
+            model.update_projection_for_data_aug(aug_mat)
 
             # Run model
             optimizer.zero_grad()
             # Inference model
             try:
-                output1 = model1(input, no_lane_exist=True)
-                with torch.no_grad():
-                    output1 = F.softmax(output1, dim=1)
-                    output1 = output1 / torch.max(torch.max(output1, dim=2, keepdim=True)[0], dim=3, keepdim=True)[0]
-                # pred = output1.data.cpu().numpy()[0, 1:, :, :]
-                # pred = np.max(pred, axis=0)
-                # cv2.imshow('check probmap', pred)
-                # cv2.waitKey()
-                output1 = output1[:, 1:, :, :]
-                output_net, pred_hcam, pred_pitch = model2(output1)
+                if 'GeoOnly' in args.mod:
+                    output_net, pred_hcam, pred_pitch = model(seg_maps)
+                else:
+                    output_net, pred_hcam, pred_pitch = model(input)
             except RuntimeError as e:
                 print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                 print(e)
@@ -246,7 +215,7 @@ def train_net():
 
             # Clip gradients (usefull for instabilities or mistakes in ground truth)
             if args.clip_grad_norm != 0:
-                nn.utils.clip_grad_norm(model2.parameters(), args.clip_grad_norm)
+                nn.utils.clip_grad_norm(model.parameters(), args.clip_grad_norm)
 
             # Setup backward pass
             loss.backward()
@@ -281,7 +250,7 @@ def train_net():
                 vs_saver.save_result_new(train_dataset, 'train', epoch, i, idx,
                                          input, gt, output_net, pred_pitch, pred_hcam, aug_mat)
 
-        losses_valid, eval_stats = validate(valid_loader, valid_dataset, model1, model2, criterion, vs_saver, val_gt_file, epoch)
+        losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file, epoch)
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
@@ -330,21 +299,21 @@ def train_net():
             'epoch': epoch + 1,
             'best epoch': best_epoch,
             'arch': args.mod,
-            'state_dict': model2.state_dict(),
+            'state_dict': model.state_dict(),
             'loss': lowest_loss,
             'optimizer': optimizer.state_dict()}, to_save, epoch)
     if not args.no_tb:
         writer.close()
 
 
-def validate(loader, dataset, model1, model2, criterion, vs_saver, val_gt_file, epoch=0):
+def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
     # Define container to keep track of metric and loss
     losses = AverageMeter()
     lane_pred_file = ops.join(args.save_path, 'val_pred_file.json')
 
     # Evaluate model
-    model2.eval()
+    model.eval()
 
     # Only forward pass, hence no gradients needed
     with torch.no_grad():
@@ -353,20 +322,19 @@ def validate(loader, dataset, model1, model2, criterion, vs_saver, val_gt_file, 
             for i, (input, seg_maps, gt, idx, gt_hcam, gt_pitch) in tqdm(enumerate(loader)):
                 if not args.no_cuda:
                     input, gt = input.cuda(non_blocking=True), gt.cuda(non_blocking=True)
+                    input = input.float()
                     seg_maps = seg_maps.cuda(non_blocking=True)
                     gt_hcam = gt_hcam.cuda()
                     gt_pitch = gt_pitch.cuda()
-                input = input.contiguous().float()
 
                 if not args.fix_cam and not args.pred_cam:
-                    model2.update_projection(args, gt_hcam, gt_pitch)
+                    model.update_projection(args, gt_hcam, gt_pitch)
                 # Inference model
                 try:
-                    output1 = model1(input, no_lane_exist=True)
-                    output1 = F.softmax(output1, dim=1)
-                    output1 = output1 / torch.max(torch.max(output1, dim=2, keepdim=True)[0], dim=3, keepdim=True)[0]
-                    output1 = output1[:, 1:, :, :]
-                    output_net, pred_hcam, pred_pitch = model2(output1)
+                    if 'GeoOnly' in args.mod:
+                        output_net, pred_hcam, pred_pitch = model(seg_maps)
+                    else:
+                        output_net, pred_hcam, pred_pitch = model(input)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                     print(e)
@@ -482,19 +450,24 @@ if __name__ == '__main__':
     # dataset_name 'tusimple' or 'sim3d'
     args.dataset_name = 'sim3d_0924_exclude_daytime'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
+    # args.dataset_name = 'tusimple'
+    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
     args.data_dir = ops.join('data', args.dataset_name)
 
     # load configuration for certain dataset
     global evaluator
-    sim3d_config(args)
-    # define evaluator
-    evaluator = eval_3D_lane.LaneEval(args)
+    if 'tusimple' in args.dataset_name:
+        tusimple_config(args)
+        # define evaluator
+        evaluator = eval_lane_tusimple.LaneEval
+    elif 'sim3d' in args.dataset_name:
+        sim3d_config(args)
+        # define evaluator
+        evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 
-    # define the network model
-    args.num_class = 2  # 1 background + n lane labels
-    args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
-    args.mod = '3DLaneNet_gflat_2stage'
+    # define the network model: 3DLaneNet_gflat or 3DLaneNet_gflat_GeoOnly
+    args.mod = '3DLaneNet_gflat_GeoOnly'
     args.y_ref = 5
     global crit_string
     crit_string = 'loss_gflat'

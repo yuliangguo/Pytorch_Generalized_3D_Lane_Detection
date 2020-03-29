@@ -4,27 +4,11 @@
 import numpy as np
 import torch
 import torch.optim
-import torch.nn as nn
-import cv2
-import copy
-
-import os
-import os.path as ops
 import glob
-import time
-import sys
-import shutil
-import json
-import matplotlib.pyplot as plt
-import pdb
-import torch.nn.functional as F
 from tqdm import tqdm
-from Dataloader.Load_Data_3DLane import *
-from Networks.Loss_crit import Laneline_loss_3D
-from Networks import LaneNet3D, LaneNet3D_GeoOnly, erfnet
-from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
-                        mkdir_if_missing, Logger, define_init_weights,\
-                        define_scheduler, define_optim, AverageMeter, Visualizer
+from Dataloader.Load_Data_3DLane_ext import *
+from Networks import LaneNet3D_ext, GeoNet3D_ext, erfnet
+from tools.utils import *
 from tools import eval_lane_tusimple, eval_3D_lane
 
 
@@ -78,11 +62,12 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
 
                 gt = gt.data.cpu().numpy()
                 output_net = output_net.data.cpu().numpy()
-                # pred_pitch = pred_pitch.data.cpu().numpy().flatten()
-                # pred_hcam = pred_hcam.data.cpu().numpy().flatten()
                 output1 = output1.data.cpu().numpy()
                 x_proj = x_proj.data.cpu().numpy()
                 x_feat = x_feat.data.cpu().numpy()
+                # pred_pitch = pred_pitch.data.cpu().numpy().flatten()
+                pred_hcam = pred_hcam.data.cpu().numpy().flatten()
+                gt_hcam = gt_hcam.data.cpu().numpy().flatten()
 
                 # unormalize lane outputs
                 num_el = input.size(0)
@@ -111,14 +96,14 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         M1 = np.matmul(H_crop, H_g2im)
                         M2 = np.matmul(H_crop, P_g2im)
                         if args1.no_3d:
-                            img1 = vs_saver1.draw_on_img(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
+                            img1 = vs_saver1.draw_on_img_new(img1, gt[j], M1, 'laneline', color=[0, 0, 1])
                         else:
-                            img1 = vs_saver1.draw_on_img(img1, gt[j], M2, 'laneline', color=[0, 0, 1])
-                        img1 = vs_saver2.draw_on_img(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
+                            img1 = vs_saver1.draw_on_img_new(img1, gt[j], M2, 'laneline', color=[0, 0, 1])
+                        img1 = vs_saver2.draw_on_img_new(img1, output_net[j], M2, 'laneline', color=[1, 0, 0])
 
                         # visualize on ipm
-                        im_ipm1 = vs_saver1.draw_on_ipm(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
-                        im_ipm1 = vs_saver2.draw_on_ipm(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
+                        im_ipm1 = vs_saver1.draw_on_ipm_new(im_ipm1, gt[j], 'laneline', color=[0, 0, 1])
+                        im_ipm1 = vs_saver2.draw_on_ipm_new(im_ipm1, output_net[j], 'laneline', color=[1, 0, 0])
 
                         fig = plt.figure()
                         ax1 = fig.add_subplot(231)
@@ -129,8 +114,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         ax6 = fig.add_subplot(236)
                         ax1.imshow(img1)
                         ax2.imshow(im_ipm1)
-                        vs_saver1.draw_3d_curves(ax3, gt[j], 'laneline', [0, 0, 1])
-                        vs_saver2.draw_3d_curves(ax3, output_net[j], 'laneline', [1, 0, 0])
+                        vs_saver1.draw_3d_curves_new(ax3, gt[j], gt_hcam[j], 'laneline', [0, 0, 1])
+                        vs_saver2.draw_3d_curves_new(ax3, output_net[j], pred_hcam[j], 'laneline', [1, 0, 0])
                         ax3.set_xlabel('x axis')
                         ax3.set_ylabel('y axis')
                         ax3.set_zlabel('z axis')
@@ -147,6 +132,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         x_feat_i = np.sum(np.square(x_feat_i), axis=0)
                         x_feat_i = x_feat_i / np.max(x_feat_i)
                         ax6.imshow(x_feat_i)
+
                         fig.savefig(vs_saver2.save_path + '/example/' + vs_saver2.vis_folder + '/infer_{}'.format(idx[j]))
                         plt.clf()
                         plt.close(fig)
@@ -160,7 +146,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     if 'tusimple' in args1.dataset_name:
                         h_samples = json_line["h_samples"]
                         lane_anchor_short = np.concatenate((lane_anchors[:, 0:args1.num_y_steps],
-                                                            lane_anchors[:, 2*args1.num_y_steps].reshape(-1, 1)), axis=1)
+                                                            lane_anchors[:, 3*args1.num_y_steps].reshape(-1, 1)), axis=1)
                         lanes_pred = compute_tusimple_lanes(lane_anchor_short, h_samples, H_g2im,
                                                             dataset1.anchor_x_steps, args1.anchor_y_steps, 0, args1.org_w, args1.prob_th)
                         json_line["lanes"] = lanes_pred
@@ -169,17 +155,18 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         jsonFile.write('\n')
                     elif 'sim3d' in args1.dataset_name:
                         # lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset1.anchor_dim,
-                        #                                                        dataset1.anchor_x_steps, args1.anchor_y_steps, args1.prob_th)
-                        lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
+                        #                                                        dataset1.anchor_x_steps,
+                        #                                                        args1.anchor_y_steps,
+                        #                                                        pred_hcam[j], args1.prob_th)
+                        lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob =\
                             compute_sim3d_lanes_all_prob(lane_anchors, dataset1.anchor_dim,
-                                                         dataset1.anchor_x_steps, args1.anchor_y_steps)
+                                                         dataset1.anchor_x_steps, args1.anchor_y_steps, pred_hcam[j])
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json_line["laneLines_prob"] = lanelines_prob
                         json_line["centerLines_prob"] = centerlines_prob
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
-        # eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file)
         eval_stats = evaluator.bench_one_submit_varying_probs(lane_pred_file, test_gt_file, eval_out_file, eval_fig_file)
 
         if 'tusimple' in args1.dataset_name:
@@ -234,7 +221,7 @@ if __name__ == '__main__':
 
     # define trained Geo model
     num_class = 2
-    geo_model_dir = 'Model_3DLaneNet_2stage_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
+    geo_model_dir = 'Model_3DLaneNet_gflat_2stage_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
     # use two sets of configurations for different datasets
     sim3d_config(args2)
     args2.save_path = os.path.join(args2.save_path, geo_model_dir)
@@ -265,8 +252,9 @@ if __name__ == '__main__':
         eval_fig_file = ops.join(args2.data_dir, test_name + '_pr.jpg')
 
     # define the network model
-    args1.mod = '3DLaneNet_2stage'
-    args2.mod = '3DLaneNet_2stage'
+    args1.mod = '3DLaneNet_gflat_2stage'
+    args2.mod = '3DLaneNet_gflat_2stage'
+    args2.y_ref = 5
 
     """   run the test   """
     # Check GPU availability
@@ -287,7 +275,7 @@ if __name__ == '__main__':
 
     # Define network
     model1 = erfnet.ERFNet(num_class)
-    model2 = LaneNet3D_GeoOnly.Net(args2, input_dim=num_class-1, debug=True)
+    model2 = GeoNet3D_ext.Net(args2, input_dim=num_class - 1, debug=True)
     define_init_weights(model2, args2.weight_init)
 
     if not args1.no_cuda:
@@ -305,13 +293,13 @@ if __name__ == '__main__':
     vs_saver2 = Visualizer(args2, vis_folder)
 
     # load trained model for testing
-    best_file_name = glob.glob(os.path.join(args2.save_path, 'model_best*'))[0]
-    if os.path.isfile(best_file_name):
+    best_test_name = glob.glob(os.path.join(args2.save_path, 'model_best*'))[0]
+    if os.path.isfile(best_test_name):
         sys.stdout = Logger(os.path.join(args1.save_path, 'Evaluate.txt'))
-        print("=> loading checkpoint '{}'".format(best_file_name))
-        checkpoint = torch.load(best_file_name)
+        print("=> loading checkpoint '{}'".format(best_test_name))
+        checkpoint = torch.load(best_test_name)
         model2.load_state_dict(checkpoint['state_dict'])
     else:
-        print("=> no checkpoint found at '{}'".format(best_file_name))
+        print("=> no checkpoint found at '{}'".format(best_test_name))
     mkdir_if_missing(os.path.join(args2.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, train_dataset, model1, model2, vs_saver1, vs_saver2, test_gt_file)

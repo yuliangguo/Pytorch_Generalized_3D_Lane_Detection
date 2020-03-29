@@ -64,9 +64,6 @@ class LaneEval(object):
         :return:
         """
 
-        # if raw_file == 'images/05/0000347.jpg':
-        #     print('here')
-
         close_range_idx = np.int((self.close_range - 1) / 0.8)
 
         r_lane, p_lane = 0., 0.

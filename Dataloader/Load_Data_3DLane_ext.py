@@ -1,24 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import numpy as np
 import copy
-import os.path as ops
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-import os
-import torch
-from torch.autograd import Variable
-from PIL import Image, ImageOps
-import cv2
 import json
-import numbers
 import random
 import warnings
-from scipy.optimize import fsolve
-import matplotlib
-import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
-from torch.utils.data.dataloader import default_collate
 from tools.utils import *
 warnings.simplefilter('ignore', np.RankWarning)
 matplotlib.use('Agg')

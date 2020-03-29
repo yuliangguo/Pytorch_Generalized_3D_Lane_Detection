@@ -11,14 +11,12 @@ import numpy as np
 import torch
 import torch.nn.init as init
 import torch.optim
-from PIL import Image
 from torch.optim import lr_scheduler
 import os.path as ops
 from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
-from scipy.optimize import fsolve
 plt.rcParams['figure.figsize'] = (35, 30)
 
 
@@ -30,8 +28,8 @@ def define_args():
     parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
     parser.add_argument('--save_path', type=str, default='data/', help='directory to save output')
     # Dataset settings
-    parser.add_argument('--org_h', type=int, default=720, help='height of the original image')
-    parser.add_argument('--org_w', type=int, default=1280, help='width of the original image')
+    parser.add_argument('--org_h', type=int, default=1080, help='height of the original image')
+    parser.add_argument('--org_w', type=int, default=1920, help='width of the original image')
     parser.add_argument('--crop_y', type=int, default=0, help='crop from image')
     parser.add_argument('--cam_height', type=float, default=1.55, help='height of camera in meters')
     parser.add_argument('--pitch', type=float, default=3, help='pitch angle of camera to ground in centi degree')

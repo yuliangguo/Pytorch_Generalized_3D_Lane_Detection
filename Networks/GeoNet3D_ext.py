@@ -16,14 +16,11 @@ Modifications:
 """
 
 import numpy as np
-import os.path as ops
 import torch
 import torch.optim
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import cv2
-import torchvision.models as models
 from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, homography_crop_resize, homography_ipmnorm2g, tusimple_config, sim3d_config
 
 
@@ -49,96 +46,6 @@ def make_one_layer(in_channels, out_channels, kernel_size=3, padding=1, stride=1
     else:
         layers = [conv2d, nn.ReLU(inplace=True)]
     return layers
-
-
-class VggEncoder(nn.Module):
-
-    def __init__(self, batch_norm=False, init_weights=True):
-        super(VggEncoder, self).__init__()
-        if batch_norm:
-            model_org = models.vgg16_bn()
-            output_layers = [12, 22, 32, 42]
-        else:
-            model_org = models.vgg16()
-            output_layers = [8, 15, 22, 29]
-        self.features1 = nn.Sequential(
-                    *list(model_org.features.children())[:output_layers[0]+1])
-        self.features2 = nn.Sequential(
-                    *list(model_org.features.children())[output_layers[0]+1:output_layers[1]+1])
-        self.features3 = nn.Sequential(
-                    *list(model_org.features.children())[output_layers[1]+1:output_layers[2]+1])
-        self.features4 = nn.Sequential(
-                    *list(model_org.features.children())[output_layers[2]+1:output_layers[3]+1])
-
-        if init_weights:
-            self._initialize_weights()
-
-    def forward(self, x):
-        x1 = self.features1(x)
-        x2 = self.features2(x1)
-        x3 = self.features3(x2)
-        x4 = self.features4(x3)
-        return x1, x2, x3, x4
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                # if m.bias is not None:
-                #     nn.init.constant_(m.bias, 0)
-                nn.init.normal_(m.weight.data, 0.0, 0.02)
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                nn.init.constant_(m.bias, 0)
-
-
-# Road plane prediction: estimate camera height and pitch angle
-class RoadPlanePredHead(nn.Module):
-    def __init__(self, im_h, im_w, batch_norm=False, init_weights=True):
-        super().__init__()
-        self.im_h = im_h
-        self.im_w = im_w
-        self.features1 = make_layers(['M', 256, 256, 256], 512, batch_norm)
-        self.features2 = make_layers(['M', 128, 128, 128], 256, batch_norm)
-        self.features3 = make_layers(['M', 64, 64, 64], 128, batch_norm)
-        # fc layer
-        self.fc = nn.Sequential(
-            nn.Linear(64 * int(self.im_h/128) * int(self.im_w/128), 64),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(64, 2))
-
-        if init_weights:
-            self._initialize_weights()
-
-    def forward(self, x):
-        x1 = self.features1(x)
-        x2 = self.features2(x1)
-        x3 = self.features3(x2)
-        x3 = x3.reshape([-1, 64 * int(self.im_h/128) * int(self.im_w/128)])
-        out = self.fc(x3)
-        return out
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                # if m.bias is not None:
-                #     nn.init.constant_(m.bias, 0)
-                nn.init.normal_(m.weight.data, 0.0, 0.02)
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                nn.init.constant_(m.bias, 0)
 
 
 # initialize base_grid with different sizes can adapt to different sizes
@@ -236,9 +143,8 @@ class LanePredictionHead(nn.Module):
         self.num_lane_type = num_lane_type
         self.num_y_steps = num_y_steps
         self.anchor_dim = 3*self.num_y_steps + 1
-
         layers = []
-        layers += make_one_layer(512, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
+        layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
         layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
         layers += make_one_layer(64, 64, kernel_size=3, padding=(0, 1), batch_norm=batch_norm)
 
@@ -271,7 +177,7 @@ class LanePredictionHead(nn.Module):
 
 # The 3D-lanenet composed of image encode, top view pathway, and lane predication head
 class Net(nn.Module):
-    def __init__(self, args, debug=False):
+    def __init__(self, args, input_dim=1, debug=False):
         super().__init__()
 
         self.no_cuda = args.no_cuda
@@ -349,80 +255,34 @@ class Net(nn.Module):
             self.cam_height_default = self.cam_height_default.cuda()
             self.cam_pitch_default = self.cam_pitch_default.cuda()
 
-        # Define network
-        self.im_encoder = VggEncoder(batch_norm=args.batch_norm)
+            # Define network
+            # the grid considers both src and dst grid normalized
+            size_top = torch.Size([self.batch_size, np.int(args.ipm_h), np.int(args.ipm_w)])
+            self.project_layer = ProjectiveGridGenerator(size_top, self.M_inv, args.no_cuda)
 
-        if self.pred_cam:
-            self.road_plane_pred_head = RoadPlanePredHead(args.resize_h, args.resize_w, batch_norm=False)
+            # Conv layers to convert original resolution binary map to target resolution with high-dimension
+            self.encoder = make_layers([8, 'M', 16, 'M', 32, 'M', 64], input_dim, batch_norm=args.batch_norm)
 
-        # the grid considers both src and dst grid normalized
-        # resize_img_size = torch.from_numpy(resize_img_size).type(torch.FloatTensor)
-        size_top1 = torch.Size([self.batch_size, args.ipm_h, args.ipm_w])
-        self.project_layer1 = ProjectiveGridGenerator(size_top1, self.M_inv, args.no_cuda)
-        size_top2 = torch.Size([self.batch_size, np.int(args.ipm_h / 2), np.int(args.ipm_w / 2)])
-        self.project_layer2 = ProjectiveGridGenerator(size_top2, self.M_inv, args.no_cuda)
-        size_top3 = torch.Size([self.batch_size, np.int(args.ipm_h / 4), np.int(args.ipm_w / 4)])
-        self.project_layer3 = ProjectiveGridGenerator(size_top3, self.M_inv, args.no_cuda)
-        size_top4 = torch.Size([self.batch_size, np.int(args.ipm_h / 8), np.int(args.ipm_w / 8)])
-        self.project_layer4 = ProjectiveGridGenerator(size_top4, self.M_inv, args.no_cuda)
-
-        self.dim_rt1 = nn.Sequential(*make_one_layer(256, 128, kernel_size=1, padding=0, batch_norm=args.batch_norm))
-        self.dim_rt2 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
-        self.dim_rt3 = nn.Sequential(*make_one_layer(512, 256, kernel_size=1, padding=0, batch_norm=args.batch_norm))
-
-        self.top_pathway = TopViewPathway(args.batch_norm)
-        self.lane_out = LanePredictionHead(self.num_lane_type, self.num_y_steps, args.batch_norm)
+            self.lane_out = LanePredictionHead(self.num_lane_type, self.num_y_steps, args.batch_norm)
 
     def forward(self, input):
         # compute image features from multiple layers
-        x1, x2, x3, x4 = self.im_encoder(input)
 
-        if self.pred_cam:
-            pred_cam = self.road_plane_pred_head(x4)
-            cam_height = self.cam_height_default + pred_cam[:, 0]
-            cam_pitch = self.cam_pitch_default + pred_cam[:, 1]
-            # compute projection matrix based on predicted camera height and pitch
-            # ATTENTION: need to implement in tensor format, how to prevent back-propagation?
-            with torch.no_grad():
-                self.H_g2cam[:, 1, 1] = torch.sin(-cam_pitch)
-                self.H_g2cam[:, 2, 1] = torch.cos(-cam_pitch)
-                self.H_g2cam[:, 1, 2] = cam_height
-                M_ipm2im = torch.bmm(self.H_g2cam, self.H_ipmnorm2g)
-                M_ipm2im = torch.bmm(self.K, M_ipm2im)
-                M_ipm2im = torch.bmm(self.H_c, M_ipm2im)
-                M_ipm2im = torch.bmm(self.S_im_inv_batch, M_ipm2im)
-                M_ipm2im = torch.div(M_ipm2im,
-                                     M_ipm2im[:, 2, 2].reshape([self.batch_size, 1, 1]).expand([self.batch_size, 3, 3]))
-                self.M_inv = M_ipm2im
-        else:
-            cam_height = self.cam_height
-            cam_pitch = self.cam_pitch
+        cam_height = self.cam_height
+        cam_pitch = self.cam_pitch
 
         # spatial transfer image features to IPM features
-        grid1 = self.project_layer1(self.M_inv)
-        grid2 = self.project_layer2(self.M_inv)
-        grid3 = self.project_layer3(self.M_inv)
-        grid4 = self.project_layer4(self.M_inv)
+        grid = self.project_layer(self.M_inv)
+        x_proj = F.grid_sample(input, grid)
 
-        x1_proj = F.grid_sample(x1, grid1)
-        x2_proj = F.grid_sample(x2, grid2)
-        x2_proj_out = x2_proj
-        x2_proj = self.dim_rt1(x2_proj)
-        x3_proj = F.grid_sample(x3, grid3)
-        x3_proj_out = x3_proj
-        x3_proj = self.dim_rt2(x3_proj)
-        x4_proj = F.grid_sample(x4, grid4)
-        x4_proj_out = x4_proj
-        x4_proj = self.dim_rt3(x4_proj)
-
-        # process features from top view
-        x, top_2, top_3, top_4 = self.top_pathway(x1_proj, x2_proj, x3_proj, x4_proj)
+        # conv layers to convert original resolution binary map to target resolution with high-dimension
+        x_feat = self.encoder(x_proj)
 
         # convert top-view features to anchor output
-        out = self.lane_out(x)
+        out = self.lane_out(x_feat)
 
         if self.debug:
-            return out, cam_height, cam_pitch, x1, x2, x3, x4, x1_proj, x2_proj_out, x3_proj_out, x4_proj_out, top_2, top_3, top_4
+            return out, cam_height, cam_pitch, x_proj, x_feat
 
         return out, cam_height, cam_pitch
 
@@ -459,35 +319,6 @@ class Net(nn.Module):
             aug_mats[i] = torch.matmul(torch.matmul(self.S_im_inv, aug_mats[i]), self.S_im)
             self.M_inv[i] = torch.matmul(aug_mats[i], self.M_inv[i])
 
-    def load_pretrained_vgg(self, batch_norm):
-        if batch_norm:
-            vgg = models.vgg16_bn(pretrained=True)
-            output_layers = [12, 22, 32, 42]
-        else:
-            vgg = models.vgg16(pretrained=True)
-            output_layers = [8, 15, 22, 29]
-
-        layer_ids_list = [range(0, output_layers[0]+1),
-                          range(output_layers[0]+1, output_layers[1]+1),
-                          range(output_layers[1] + 1, output_layers[2] + 1),
-                          range(output_layers[2]+1, output_layers[3]+1)]
-        features_list = [self.im_encoder.features1,
-                         self.im_encoder.features2,
-                         self.im_encoder.features3,
-                         self.im_encoder.features4]
-
-        for j in range(4):
-            layer_ids = layer_ids_list[j]
-            features = features_list[j]
-            for i, lid in enumerate(layer_ids):
-                classname = features[i].__class__.__name__
-                if classname.find('Conv') != -1:
-                    features[i].weight.data.copy_(vgg.features[lid].weight.data)
-                    features[i].bias.data.copy_(vgg.features[lid].bias.data)
-                elif classname.find('BatchNorm2d') != -1:
-                    features[i].weight.data.copy_(vgg.features[lid].weight.data)
-                    features[i].bias.data.copy_(vgg.features[lid].bias.data)
-
 
 # unit test
 if __name__ == '__main__':
@@ -522,9 +353,9 @@ if __name__ == '__main__':
     # put model on gpu
     model = model.cuda()
     # load input
-    img_name = '../1.jpg'
+    img_name = '../1.png'
     with open(img_name, 'rb') as f:
-        image = (Image.open(f).convert('RGB'))
+        image = (Image.open(f).convert('L'))
     w, h = image.size
     image = F2.crop(image, args.crop_y, 0, args.org_h - args.crop_y, w)
     image = F2.resize(image, size=(args.resize_h, args.resize_w), interpolation=Image.BILINEAR)

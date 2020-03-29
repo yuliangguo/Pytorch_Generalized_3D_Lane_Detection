@@ -5,25 +5,16 @@ import numpy as np
 import torch
 import torch.optim
 import torch.nn as nn
-import cv2
-
-import os
-import os.path as ops
 import glob
 import time
-import sys
 import shutil
-import json
-import pdb
 import torch.nn.functional as F
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from Dataloader.Load_Data_3DLane import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
+from Dataloader.Load_Data_3DLane import *
 from Networks.Loss_crit import Laneline_loss_3D
-from Networks import LaneNet3D, LaneNet3D_GeoOnly, erfnet
-from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
-                        mkdir_if_missing, Logger, define_init_weights,\
-                        define_scheduler, define_optim, AverageMeter, Visualizer
+from Networks import LaneNet3D, GeoNet3D, erfnet
+from tools.utils import *
 from tools import eval_lane_tusimple, eval_3D_lane
 
 
@@ -83,7 +74,7 @@ def train_net():
 
     # Define network
     model1 = erfnet.ERFNet(args.num_class)
-    model2 = LaneNet3D_GeoOnly.Net(args, input_dim=args.num_class-1)
+    model2 = GeoNet3D.Net(args, input_dim=args.num_class - 1)
     define_init_weights(model2, args.weight_init)
 
     if not args.no_cuda:

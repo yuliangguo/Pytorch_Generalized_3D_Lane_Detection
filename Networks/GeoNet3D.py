@@ -1,13 +1,8 @@
-import numpy as np
-import os.path as ops
-import torch
 import torch.optim
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import cv2
-import torchvision.models as models
-from tools.utils import define_args, define_init_weights, homography_im2ipm_norm, homography_crop_resize, homography_ipmnorm2g, tusimple_config, sim3d_config
+from tools.utils import *
 
 
 def make_layers(cfg, in_channels=3, batch_norm=False):

@@ -5,23 +5,15 @@ import numpy as np
 import torch
 import torch.optim
 import torch.nn as nn
-
-import os
-import os.path as ops
 import glob
 import time
-import sys
 import shutil
-import json
-import pdb
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-
-from Dataloader.Load_Data_3DLane_gflat import LaneDataset, get_loader, compute_tusimple_lanes, compute_sim3d_lanes, unormalize_lane_anchor
-from Networks import Loss_crit, LaneNet3D_gflat, LaneNet3D_gflat_GeoOnly
-from tools.utils import define_args, first_run, tusimple_config, sim3d_config,\
-                        mkdir_if_missing, Logger, define_init_weights,\
-                        define_scheduler, define_optim, AverageMeter, Visualizer
+from Dataloader.Load_Data_3DLane import *
+from Networks.Loss_crit import Laneline_loss_3D
+from Networks import LaneNet3D, GeoNet3D
+from tools.utils import *
 from tools import eval_lane_tusimple, eval_3D_lane
 
 
@@ -55,7 +47,6 @@ def train_net():
     valid_dataset.set_x_off_std(train_dataset._x_off_std)
     if not args.no_3d:
         valid_dataset.set_z_std(train_dataset._z_std)
-        valid_dataset.set_y_off_std(train_dataset._y_off_std)
     valid_dataset.normalize_lane_label()
     valid_loader = get_loader(valid_dataset, args)
 
@@ -67,9 +58,9 @@ def train_net():
 
     # Define network
     if 'GeoOnly' in args.mod:
-        model = LaneNet3D_gflat_GeoOnly.Net(args)
+        model = GeoNet3D.Net(args)
     else:
-        model = LaneNet3D_gflat.Net(args)
+        model = LaneNet3D.Net(args)
     define_init_weights(model, args.weight_init)
 
     # load in vgg pretrained weights on ImageNet
@@ -87,13 +78,7 @@ def train_net():
     scheduler = define_scheduler(optimizer, args)
 
     # Define loss criteria
-    if crit_string == 'loss_gflat_3D':
-        criterion = Loss_crit.Laneline_loss_gflat_3D(args.batch_size, train_dataset.num_types,
-                                                     train_dataset.anchor_x_steps, train_dataset.anchor_y_steps,
-                                                     train_dataset._x_off_std, train_dataset._y_off_std,
-                                                     train_dataset._z_std, args.pred_cam, args.no_cuda)
-    else:
-        criterion = Loss_crit.Laneline_loss_gflat(train_dataset.num_types, args.num_y_steps, args.pred_cam)
+    criterion = Laneline_loss_3D(train_dataset.num_types, train_dataset.anchor_dim, args.pred_cam)
 
     if not args.no_cuda:
         criterion = criterion.cuda()
@@ -256,8 +241,8 @@ def train_net():
 
             # Plot curves in two views
             if (i + 1) % args.save_freq == 0:
-                vs_saver.save_result_new(train_dataset, 'train', epoch, i, idx,
-                                         input, gt, output_net, pred_pitch, pred_hcam, aug_mat)
+                vs_saver.save_result(train_dataset, 'train', epoch, i, idx,
+                                     input, gt, output_net, pred_pitch, pred_hcam, aug_mat)
 
         losses_valid, eval_stats = validate(valid_loader, valid_dataset, model, criterion, vs_saver, val_gt_file, epoch)
 
@@ -372,8 +357,8 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
                 # Plot curves in two views
                 if (i + 1) % args.save_freq == 0 or args.evaluate:
-                    vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
-                                             input, gt, output_net, pred_pitch, pred_hcam, evaluate=args.evaluate)
+                    vs_saver.save_result(dataset, 'valid', epoch, i, idx,
+                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=args.evaluate)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -391,10 +376,8 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif 'sim3d' in args.dataset_name:
-                        # P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
                         lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps,
-                                                                               pred_hcam[j], args.prob_th)
+                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json.dump(json_line, jsonFile)
@@ -475,11 +458,10 @@ if __name__ == '__main__':
         evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 
-    # define the network model: 3DLaneNet_gflat or 3DLaneNet_gflat_GeoOnly
-    args.mod = '3DLaneNet_gflat_GeoOnly'
-    args.y_ref = 5
+    # define the network model: 3DLaneNet or 3DLaneNet_GeoOnly
+    args.mod = '3DLaneNet_GeoOnly'
     global crit_string
-    crit_string = 'loss_gflat'
+    crit_string = 'loss_3D'
 
     # for the case only running evaluation
     args.evaluate = False
