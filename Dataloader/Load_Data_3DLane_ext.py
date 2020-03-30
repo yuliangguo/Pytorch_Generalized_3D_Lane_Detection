@@ -3,6 +3,7 @@
 import copy
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
+from PIL import Image, ImageOps
 import json
 import random
 import warnings
@@ -89,10 +90,11 @@ class LaneDataset(Dataset):
 
         if self.no_3d:
             self.anchor_dim = self.num_y_steps + 1
-        elif args.mod is '3DLaneNet':
-            self.anchor_dim = 2 * args.num_y_steps + 1
-        elif '3DLaneNet_gflat' in args.mod:
-            self.anchor_dim = 3 * args.num_y_steps + 1
+        else:
+            if 'ext' not in args.mod:
+                self.anchor_dim = 2 * args.num_y_steps + 1
+            else:
+                self.anchor_dim = 3 * args.num_y_steps + 1
 
         self.y_ref = args.y_ref
         self.ref_id = np.argmin(np.abs(self.num_y_steps - self.y_ref))
@@ -105,7 +107,7 @@ class LaneDataset(Dataset):
                 self._laneline_ass_ids, \
                 self._x_off_std,\
                 self._gt_laneline_visibility_all = self.init_dataset_tusimple(dataset_base_dir, json_file_path)
-        elif 'sim3d' in self.dataset_name:  # assume loading apollo sim 3D lane
+        else:  # assume loading apollo sim 3D lane
             self._label_image_path, \
                 self._label_laneline_all_org, \
                 self._label_laneline_all, \
@@ -707,7 +709,7 @@ def get_loader(transformed_dataset, args):
     return data_loader
 
 
-def compute_tusimple_lanes(pred_anchor, h_samples, H_g2im, anchor_x_steps, anchor_y_steps, x_min, x_max, prob_th=0.5):
+def compute_2d_lanes(pred_anchor, h_samples, H_g2im, anchor_x_steps, anchor_y_steps, x_min, x_max, prob_th=0.5):
     """
         convert anchor lanes to image lanes in tusimple format
     :return: x values at h_samples in image coordinates
@@ -739,7 +741,7 @@ def compute_tusimple_lanes(pred_anchor, h_samples, H_g2im, anchor_x_steps, ancho
     return lanes_out
 
 
-def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, h_cam, prob_th=0.5):
+def compute_3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, h_cam, prob_th=0.5):
     lanelines_out = []
     centerlines_out = []
     num_y_steps = anchor_y_steps.shape[0]
@@ -807,7 +809,7 @@ def compute_sim3d_lanes(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps,
     return lanelines_out, centerlines_out
 
 
-def compute_sim3d_lanes_all_prob(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, h_cam):
+def compute_3d_lanes_all_prob(pred_anchor, anchor_dim, anchor_x_steps, anchor_y_steps, h_cam):
     lanelines_out = []
     lanelines_prob = []
     centerlines_out = []

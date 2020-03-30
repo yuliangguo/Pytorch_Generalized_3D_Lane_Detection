@@ -147,8 +147,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         h_samples = json_line["h_samples"]
                         lane_anchor_short = np.concatenate((lane_anchors[:, 0:args1.num_y_steps],
                                                             lane_anchors[:, 3*args1.num_y_steps].reshape(-1, 1)), axis=1)
-                        lanes_pred = compute_tusimple_lanes(lane_anchor_short, h_samples, H_g2im,
-                                                            dataset1.anchor_x_steps, args1.anchor_y_steps, 0, args1.org_w, args1.prob_th)
+                        lanes_pred = compute_2d_lanes(lane_anchor_short, h_samples, H_g2im,
+                                                      dataset1.anchor_x_steps, args1.anchor_y_steps, 0, args1.org_w, args1.prob_th)
                         json_line["lanes"] = lanes_pred
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
@@ -159,8 +159,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                         #                                                        args1.anchor_y_steps,
                         #                                                        pred_hcam[j], args1.prob_th)
                         lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob =\
-                            compute_sim3d_lanes_all_prob(lane_anchors, dataset1.anchor_dim,
-                                                         dataset1.anchor_x_steps, args1.anchor_y_steps, pred_hcam[j])
+                            compute_3d_lanes_all_prob(lane_anchors, dataset1.anchor_dim,
+                                                      dataset1.anchor_x_steps, args1.anchor_y_steps, pred_hcam[j])
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json_line["laneLines_prob"] = lanelines_prob

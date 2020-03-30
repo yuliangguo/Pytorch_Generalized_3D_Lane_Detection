@@ -12,9 +12,9 @@ from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from Dataloader.Load_Data_3DLane import *
 from Networks.Loss_crit import Laneline_loss_3D
-from Networks import LaneNet3D, GeoNet3D
+from Networks import LaneNet3D
 from tools.utils import *
-from tools import eval_lane_tusimple, eval_3D_lane
+from tools import eval_3D_lane
 
 
 def train_net():
@@ -25,20 +25,21 @@ def train_net():
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define save path
-    save_id = 'Model_{}_crit_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
-              .format(args.mod,
-                      crit_string,
-                      args.optimizer,
-                      args.learning_rate,
-                      args.batch_size,
-                      args.resize_h,
-                      args.resize_w,
-                      args.pretrained,
-                      args.batch_norm,
-                      args.pred_cam)
+    # save_id = 'Model_{}_crit_{}_opt_{}_lr_{}_batch_{}_{}X{}_pretrain_{}_batchnorm_{}_predcam_{}' \
+    #           .format(args.mod,
+    #                   crit_string,
+    #                   args.optimizer,
+    #                   args.learning_rate,
+    #                   args.batch_size,
+    #                   args.resize_h,
+    #                   args.resize_w,
+    #                   args.pretrained,
+    #                   args.batch_norm,
+    #                   args.pred_cam)
+    save_id = args.mod
 
     # Dataloader for training and validation set
-    val_gt_file = ops.join(args.data_dir, 'val.json')
+    val_gt_file = ops.join(args.data_dir, 'test.json')
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
     train_dataset.normalize_lane_label()
     train_loader = get_loader(train_dataset, args)
@@ -57,14 +58,11 @@ def train_net():
     anchor_x_steps = valid_dataset.anchor_x_steps
 
     # Define network
-    if 'GeoOnly' in args.mod:
-        model = GeoNet3D.Net(args)
-    else:
-        model = LaneNet3D.Net(args)
+    model = LaneNet3D.Net(args)
     define_init_weights(model, args.weight_init)
 
     # load in vgg pretrained weights on ImageNet
-    if args.pretrained and 'GeoOnly' not in args.mod:
+    if args.pretrained:
         model.load_pretrained_vgg(args.batch_norm)
         print('vgg weights pretrained on ImageNet loaded!')
 
@@ -194,10 +192,7 @@ def train_net():
             optimizer.zero_grad()
             # Inference model
             try:
-                if 'GeoOnly' in args.mod:
-                    output_net, pred_hcam, pred_pitch = model(seg_maps)
-                else:
-                    output_net, pred_hcam, pred_pitch = model(input)
+                output_net, pred_hcam, pred_pitch = model(input)
             except RuntimeError as e:
                 print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                 print(e)
@@ -248,30 +243,20 @@ def train_net():
 
         print("===> Average {}-loss on training set is {:.8f}".format(crit_string, losses.avg))
         print("===> Average {}-loss on validation set is {:.8f}".format(crit_string, losses_valid))
-        if 'tusimple' in args.dataset_name:
-            print("===> Evaluation accuracy: {:3f}".format(eval_stats[0]))
-        elif 'sim3d' in args.dataset_name:
-            print("===> Evaluation laneline F-measure: {:3f}".format(eval_stats[0]))
-            print("===> Evaluation laneline Recall: {:3f}".format(eval_stats[1]))
-            print("===> Evaluation laneline Precision: {:3f}".format(eval_stats[2]))
-            print("===> Evaluation centerline F-measure: {:3f}".format(eval_stats[7]))
-            print("===> Evaluation centerline Recall: {:3f}".format(eval_stats[8]))
-            print("===> Evaluation centerline Precision: {:3f}".format(eval_stats[9]))
+        print("===> Evaluation laneline F-measure: {:3f}".format(eval_stats[0]))
+        print("===> Evaluation laneline Recall: {:3f}".format(eval_stats[1]))
+        print("===> Evaluation laneline Precision: {:3f}".format(eval_stats[2]))
+        print("===> Evaluation centerline F-measure: {:3f}".format(eval_stats[7]))
+        print("===> Evaluation centerline Recall: {:3f}".format(eval_stats[8]))
+        print("===> Evaluation centerline Precision: {:3f}".format(eval_stats[9]))
 
         print("===> Last best {}-loss was {:.8f} in epoch {}".format(crit_string, lowest_loss, best_epoch))
 
         if not args.no_tb:
             writer.add_scalars('3D-Lane-Loss', {'Training': losses.avg}, epoch)
             writer.add_scalars('3D-Lane-Loss', {'Validation': losses_valid}, epoch)
-            if 'tusimple' in args.dataset_name:
-                writer.add_scalars('Evaluation', {'Accuracy': eval_stats[0]}, epoch)
-            elif 'sim3d' in args.dataset_name:
-                writer.add_scalars('Evaluation', {'laneline F-measure': eval_stats[0]}, epoch)
-                # writer.add_scalars('Evaluation', {'laneline Recall': eval_stats[1]}, epoch)
-                # writer.add_scalars('Evaluation', {'laneline Precision': eval_stats[2]}, epoch)
-                writer.add_scalars('Evaluation', {'centerline F-measure': eval_stats[7]}, epoch)
-                # writer.add_scalars('Evaluation', {'centerline Recall': eval_stats[8]}, epoch)
-                # writer.add_scalars('Evaluation', {'centerline Precision': eval_stats[9]}, epoch)
+            writer.add_scalars('Evaluation', {'laneline F-measure': eval_stats[0]}, epoch)
+            writer.add_scalars('Evaluation', {'centerline F-measure': eval_stats[7]}, epoch)
         total_score = losses.avg
 
         # Adjust learning_rate if loss plateaued
@@ -304,7 +289,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
 
     # Define container to keep track of metric and loss
     losses = AverageMeter()
-    lane_pred_file = ops.join(args.save_path, 'val_pred_file.json')
+    lane_pred_file = ops.join(args.save_path, 'test_pred_file.json')
 
     # Evaluate model
     model.eval()
@@ -325,10 +310,7 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                     model.update_projection(args, gt_hcam, gt_pitch)
                 # Inference model
                 try:
-                    if 'GeoOnly' in args.mod:
-                        output_net, pred_hcam, pred_pitch = model(seg_maps)
-                    else:
-                        output_net, pred_hcam, pred_pitch = model(input)
+                    output_net, pred_hcam, pred_pitch = model(input)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to inference error".format(idx.numpy()))
                     print(e)
@@ -367,49 +349,39 @@ def validate(loader, dataset, model, criterion, vs_saver, val_gt_file, epoch=0):
                     json_line = valid_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
-                    if 'tusimple' in args.dataset_name:
-                        h_samples = json_line["h_samples"]
-                        lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
-                                                            anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
-                        json_line["lanes"] = lanes_pred
-                        json_line["run_time"] = 0
-                        json.dump(json_line, jsonFile)
-                        jsonFile.write('\n')
-                    elif 'sim3d' in args.dataset_name:
-                        lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset.anchor_dim,
-                                                                               anchor_x_steps, args.anchor_y_steps, args.prob_th)
-                        json_line["laneLines"] = lanelines_pred
-                        json_line["centerLines"] = centerlines_pred
-                        json.dump(json_line, jsonFile)
-                        jsonFile.write('\n')
+                    lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
+                        compute_3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
+                                                  anchor_x_steps, args.anchor_y_steps)
+                    json_line["laneLines"] = lanelines_pred
+                    json_line["centerLines"] = centerlines_pred
+                    json_line["laneLines_prob"] = lanelines_prob
+                    json_line["centerLines_prob"] = centerlines_prob
+                    json.dump(json_line, jsonFile)
+                    jsonFile.write('\n')
         eval_stats = evaluator.bench_one_submit(lane_pred_file, val_gt_file)
 
         if args.evaluate:
-            print("===> Average {}-loss on validation set is {:.8}".format(crit_string, losses.avg))
-            if 'tusimple' in args.dataset_name:
-                print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
-            elif 'sim3d' in args.dataset_name:
-                print("===> Evaluation on validation set: \n"
-                      "laneline F-measure {:.8} \n"
-                      "laneline Recall  {:.8} \n"
-                      "laneline Precision  {:.8} \n"
-                      "laneline x error (close)  {:.8} m\n"
-                      "laneline x error (far)  {:.8} m\n"
-                      "laneline z error (close)  {:.8} m\n"
-                      "laneline z error (far)  {:.8} m\n\n"
-                      "centerline F-measure {:.8} \n"
-                      "centerline Recall  {:.8} \n"
-                      "centerline Precision  {:.8} \n"
-                      "centerline x error (close)  {:.8} m\n"
-                      "centerline x error (far)  {:.8} m\n"
-                      "centerline z error (close)  {:.8} m\n"
-                      "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
-                                                                   eval_stats[2], eval_stats[3],
-                                                                   eval_stats[4], eval_stats[5],
-                                                                   eval_stats[6], eval_stats[7],
-                                                                   eval_stats[8], eval_stats[9],
-                                                                   eval_stats[10], eval_stats[11],
-                                                                   eval_stats[12], eval_stats[13]))
+            print("===> Evaluation on validation set: \n"
+                  "laneline F-measure {:.8} \n"
+                  "laneline Recall  {:.8} \n"
+                  "laneline Precision  {:.8} \n"
+                  "laneline x error (close)  {:.8} m\n"
+                  "laneline x error (far)  {:.8} m\n"
+                  "laneline z error (close)  {:.8} m\n"
+                  "laneline z error (far)  {:.8} m\n\n"
+                  "centerline F-measure {:.8} \n"
+                  "centerline Recall  {:.8} \n"
+                  "centerline Precision  {:.8} \n"
+                  "centerline x error (close)  {:.8} m\n"
+                  "centerline x error (far)  {:.8} m\n"
+                  "centerline z error (close)  {:.8} m\n"
+                  "centerline z error (far)  {:.8} m\n".format(eval_stats[0], eval_stats[1],
+                                                               eval_stats[2], eval_stats[3],
+                                                               eval_stats[4], eval_stats[5],
+                                                               eval_stats[6], eval_stats[7],
+                                                               eval_stats[8], eval_stats[9],
+                                                               eval_stats[10], eval_stats[11],
+                                                               eval_stats[12], eval_stats[13]))
 
         return losses.avg, eval_stats
 
@@ -439,27 +411,21 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924_exclude_daytime'
-    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
-    # args.dataset_name = 'tusimple'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args.data_dir = ops.join('data', args.dataset_name)
+    # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
+    args.dataset_name = 'illus_chg'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.data_dir = ops.join('data_splits', args.dataset_name)
+    args.save_path = ops.join('data_splits', args.dataset_name)
 
     # load configuration for certain dataset
     global evaluator
-    if 'tusimple' in args.dataset_name:
-        tusimple_config(args)
-        # define evaluator
-        evaluator = eval_lane_tusimple.LaneEval
-    elif 'sim3d' in args.dataset_name:
-        sim3d_config(args)
-        # define evaluator
-        evaluator = eval_3D_lane.LaneEval(args)
+    sim3d_config(args)
+    # define evaluator
+    evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 
-    # define the network model: 3DLaneNet or 3DLaneNet_GeoOnly
-    args.mod = '3DLaneNet_GeoOnly'
+    # define the network model
+    args.mod = '3D_LaneNet'
     global crit_string
     crit_string = 'loss_3D'
 

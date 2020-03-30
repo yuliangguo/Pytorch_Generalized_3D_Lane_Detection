@@ -26,7 +26,7 @@ def define_args():
     parser.add_argument('--dataset_name', type=str, help='the dataset name to be used in saving model names')
     parser.add_argument('--data_dir', type=str, help='The path saving train.json and val.json files')
     parser.add_argument('--dataset_dir', type=str, help='The path saving actual data')
-    parser.add_argument('--save_path', type=str, default='data/', help='directory to save output')
+    parser.add_argument('--save_path', type=str, default='data_splits/', help='directory to save output')
     # Dataset settings
     parser.add_argument('--org_h', type=int, default=1080, help='height of the original image')
     parser.add_argument('--org_w', type=int, default=1920, help='width of the original image')
@@ -89,7 +89,6 @@ def define_args():
 def tusimple_config(args):
 
     # set dataset parameters
-    args.save_path = ops.join(args.save_path, args.dataset_name)
     args.org_h = 720
     args.org_w = 1280
     args.crop_y = 80
@@ -126,7 +125,6 @@ def tusimple_config(args):
 def sim3d_config(args):
 
     # set dataset parameters
-    args.save_path = ops.join(args.save_path, args.dataset_name)
     args.org_h = 1080
     args.org_w = 1920
     args.crop_y = 0

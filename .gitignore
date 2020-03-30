@@ -1,5 +1,6 @@
 # Directories
 data
+data_splits
 Saved
 .*
 !/.gitignore

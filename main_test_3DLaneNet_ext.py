@@ -212,16 +212,16 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     # convert to json output format
                     if 'tusimple' in args.dataset_name:
                         h_samples = json_line["h_samples"]
-                        lanes_pred = compute_tusimple_lanes(lane_anchors, h_samples, H_g2im,
-                                                            anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
+                        lanes_pred = compute_2d_lanes(lane_anchors, h_samples, H_g2im,
+                                                      anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
                         json_line["lanes"] = lanes_pred
                         json_line["run_time"] = 0
                         json.dump(json_line, jsonFile)
                         jsonFile.write('\n')
                     elif 'sim3d' in args.dataset_name:
                         lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob =\
-                            compute_sim3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
-                                                         anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
+                            compute_3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
+                                                      anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
                         json_line["laneLines"] = lanelines_pred
                         json_line["centerLines"] = centerlines_pred
                         json_line["laneLines_prob"] = lanelines_prob
