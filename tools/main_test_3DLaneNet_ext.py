@@ -9,7 +9,7 @@ from tqdm import tqdm
 from Dataloader.Load_Data_3DLane_ext import *
 from Networks import LaneNet3D_ext, GeoNet3D_ext
 from tools.utils import *
-from tools import eval_lane_tusimple, eval_3D_lane
+from tools import eval_3D_lane
 
 
 def main():
@@ -36,16 +36,8 @@ def main():
     anchor_x_steps = test_dataset.anchor_x_steps
 
     # Define network
-    if 'GeoOnly' in args.mod:
-        model = GeoNet3D_ext.Net(args)
-    else:
-        model = LaneNet3D_ext.Net(args, debug=True)
+    model = LaneNet3D_ext.Net(args, debug=True)
     define_init_weights(model, args.weight_init)
-
-    # load in vgg pretrained weights on ImageNet
-    if args.pretrained and 'GeoOnly' not in args.mod:
-        model.load_pretrained_vgg(args.batch_norm)
-        print('vgg weights pretrained on ImageNet loaded!')
 
     if not args.no_cuda:
         # Load model on gpu before passing params to optimizer
@@ -92,12 +84,9 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     model.update_projection(args, gt_hcam, gt_pitch)
                 # Evaluate model
                 try:
-                    if 'GeoOnly' in args.mod:
-                        output_net, pred_hcam, pred_pitch = model(seg_maps)
-                    else:
-                        output_net, pred_hcam, pred_pitch,\
-                            x1_feat, x2_feat, x3_feat, x4_feat,\
-                            x1_proj, x2_proj, x3_proj, x4_proj, top_2, top_3, top_4 = model(input)
+                    output_net, pred_hcam, pred_pitch,\
+                        x1_feat, x2_feat, x3_feat, x4_feat,\
+                        x1_proj, x2_proj, x3_proj, x4_proj, top_2, top_3, top_4 = model(input)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
                     print(e)
@@ -210,28 +199,16 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     json_line = test_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
-                    if 'tusimple' in args.dataset_name:
-                        h_samples = json_line["h_samples"]
-                        lanes_pred = compute_2d_lanes(lane_anchors, h_samples, H_g2im,
-                                                      anchor_x_steps, args.anchor_y_steps, 0, args.org_w, args.prob_th)
-                        json_line["lanes"] = lanes_pred
-                        json_line["run_time"] = 0
-                        json.dump(json_line, jsonFile)
-                        jsonFile.write('\n')
-                    elif 'sim3d' in args.dataset_name:
-                        lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob =\
-                            compute_3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
-                                                      anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
-                        json_line["laneLines"] = lanelines_pred
-                        json_line["centerLines"] = centerlines_pred
-                        json_line["laneLines_prob"] = lanelines_prob
-                        json_line["centerLines_prob"] = centerlines_prob
-                        json.dump(json_line, jsonFile)
-                        jsonFile.write('\n')
+                    lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob =\
+                        compute_3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
+                                                  anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
+                    json_line["laneLines"] = lanelines_pred
+                    json_line["centerLines"] = centerlines_pred
+                    json_line["laneLines_prob"] = lanelines_prob
+                    json_line["centerLines_prob"] = centerlines_prob
+                    json.dump(json_line, jsonFile)
+                    jsonFile.write('\n')
         eval_stats = evaluator.bench_one_submit_varying_probs(lane_pred_file, test_gt_file, eval_out_file, eval_fig_file)
-
-        if 'tusimple' in args.dataset_name:
-            print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
 
         return eval_stats
 
@@ -246,46 +223,36 @@ if __name__ == '__main__':
     global vis_feat
     vis_feat = False
 
-    # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924_random_split'
-    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
-    args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
-    # args.dataset_name = 'tusimple'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args.data_dir = ops.join('data', args.dataset_name)
+    # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
+    args.dataset_name = 'rare_subset'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.data_dir = ops.join('data_splits', args.dataset_name)
+    args.save_path = ops.join('data_splits', args.dataset_name)
 
     # load configuration for certain dataset
     global evaluator
-    if 'tusimple' in args.dataset_name:
-        tusimple_config(args)
-        # define evaluator
-        evaluator = eval_lane_tusimple.LaneEval
-    elif 'sim3d' in args.dataset_name:
-        sim3d_config(args)
-        # define evaluator
-        evaluator = eval_3D_lane.LaneEval(args)
+    sim3d_config(args)
+    # define evaluator
+    evaluator = eval_3D_lane.LaneEval(args)
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3DLaneNet_gflat_GeoOnly'
-    args.y_ref = 5
-
-    # use batch 1 for testing
-    args.batch_size = 8
+    args.mod = '3D_LaneNet_ext'
 
     # settings for save and visualize
-    args.save_path = os.path.join(args.save_path, 'Model_3DLaneNet_gflat_GeoOnly_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False')
+    args.save_path = os.path.join(args.save_path, args.mod)
     global vis_folder
     global test_gt_file
     global lane_pred_file
     global eval_out_file
     global eval_fig_file
-    test_name = 'val'
+    test_name = 'test'
     vis_folder = test_name + '_vis'
     test_gt_file = ops.join(args.data_dir, test_name + '.json')
     lane_pred_file = ops.join(args.save_path, test_name + '_pred_file.json')
-    eval_out_file = ops.join(args.data_dir, test_name + '_eval.json')
-    eval_fig_file = ops.join(args.data_dir, test_name + '_pr.jpg')
+    eval_out_file = ops.join(args.save_path, test_name + '_eval.json')
+    eval_fig_file = ops.join(args.save_path, test_name + '_pr.jpg')
 
-    # run the training
+    # run the test
     main()

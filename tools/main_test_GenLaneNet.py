@@ -7,9 +7,9 @@ import torch.optim
 import glob
 from tqdm import tqdm
 from Dataloader.Load_Data_3DLane import *
-from Networks import LaneNet3D, GeoNet3D, erfnet
+from Networks import GeoNet3D, erfnet
 from tools.utils import *
-from tools import eval_lane_tusimple, eval_3D_lane
+from tools import eval_3D_lane
 
 
 def load_my_state_dict(model, state_dict):  # custom function to load model when not all dict elements
@@ -141,33 +141,17 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                     json_line = test_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
-                    if 'tusimple' in args1.dataset_name:
-                        h_samples = json_line["h_samples"]
-                        lane_anchor_short = np.concatenate((lane_anchors[:, 0:args1.num_y_steps],
-                                                            lane_anchors[:, 2*args1.num_y_steps].reshape(-1, 1)), axis=1)
-                        lanes_pred = compute_2d_lanes(lane_anchor_short, h_samples, H_g2im,
-                                                      dataset1.anchor_x_steps, args1.anchor_y_steps, 0, args1.org_w, args1.prob_th)
-                        json_line["lanes"] = lanes_pred
-                        json_line["run_time"] = 0
-                        json.dump(json_line, jsonFile)
-                        jsonFile.write('\n')
-                    elif 'sim3d' in args1.dataset_name:
-                        # lanelines_pred, centerlines_pred = compute_sim3d_lanes(lane_anchors, dataset1.anchor_dim,
-                        #                                                        dataset1.anchor_x_steps, args1.anchor_y_steps, args1.prob_th)
-                        lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
-                            compute_3d_lanes_all_prob(lane_anchors, dataset1.anchor_dim,
-                                                      dataset1.anchor_x_steps, args1.anchor_y_steps)
-                        json_line["laneLines"] = lanelines_pred
-                        json_line["centerLines"] = centerlines_pred
-                        json_line["laneLines_prob"] = lanelines_prob
-                        json_line["centerLines_prob"] = centerlines_prob
-                        json.dump(json_line, jsonFile)
-                        jsonFile.write('\n')
+                    lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
+                        compute_3d_lanes_all_prob(lane_anchors, dataset1.anchor_dim,
+                                                  dataset1.anchor_x_steps, args1.anchor_y_steps)
+                    json_line["laneLines"] = lanelines_pred
+                    json_line["centerLines"] = centerlines_pred
+                    json_line["laneLines_prob"] = lanelines_prob
+                    json_line["centerLines_prob"] = centerlines_prob
+                    json.dump(json_line, jsonFile)
+                    jsonFile.write('\n')
         # eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file)
         eval_stats = evaluator.bench_one_submit_varying_probs(lane_pred_file, test_gt_file, eval_out_file, eval_fig_file)
-
-        if 'tusimple' in args1.dataset_name:
-            print("===> Evaluation accuracy on validation set is {:.8}".format(eval_stats[0]))
 
         return eval_stats
 
@@ -183,52 +167,45 @@ if __name__ == '__main__':
     args1 = parser.parse_args()
     args2 = parser.parse_args()
 
-    # dataset_name 'tusimple' or 'sim3d'
-    # args1.dataset_name = 'tusimple'
-    # args1.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args1.dataset_name = 'sim3d_0924_random_split'
-    args1.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
-    args2.dataset_name = 'sim3d_0924_random_split'
-    args2.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
+    # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
+    args1.dataset_name = 'rare_subset'
+    args1.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args2.dataset_name = 'rare_subset'
+    args2.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
 
-    args1.data_dir = ops.join('data', args1.dataset_name)
-    args2.data_dir = ops.join('data', args2.dataset_name)
+    args1.data_dir = ops.join('data_splits', args1.dataset_name)
+    args2.data_dir = ops.join('data_splits', args2.dataset_name)
+    args1.save_path = ops.join('data_splits', args1.dataset_name)
+    args2.save_path = ops.join('data_splits', args2.dataset_name)
 
     # define trained Geo model
     num_class = 2
-    geo_model_dir = 'Model_3DLaneNet_2stage_crit_loss_3D_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False'
+    model_name = 'Gen_LaneNet'
     # use two sets of configurations for different datasets
     sim3d_config(args2)
-    args2.save_path = os.path.join(args2.save_path, geo_model_dir)
+    args2.save_path = os.path.join(args2.save_path, model_name)
 
     global evaluator
     # define evaluator
-    if 'tusimple' in args1.dataset_name:
-        tusimple_config(args1)
-        args1.crop_y = 0
-        evaluator = eval_lane_tusimple.LaneEval
-        # define pretrained feat model
-        pretrained_feat_model = 'pretrained/erfnet_model_tusimple.tar'
-        vis_folder = 'test_vis_tusimple'
-        test_gt_file = ops.join(args1.data_dir, 'test.json')
-        lane_pred_file = ops.join(args2.save_path, 'test_pred_file_tusimple.json')
-    elif 'sim3d' in args1.dataset_name:
-        sim3d_config(args1)
-        evaluator = eval_3D_lane.LaneEval(args1)
-        # define pretrained feat model
-        pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
-        test_name = 'test2'
-        vis_folder = test_name + '_vis'
-        test_gt_file = ops.join(args1.data_dir, test_name + '.json')
-        lane_pred_file = ops.join(args2.save_path, test_name + '_pred_file.json')
-        global eval_out_file
-        global eval_fig_file
-        eval_out_file = ops.join(args2.data_dir, test_name + '_eval.json')
-        eval_fig_file = ops.join(args2.data_dir, test_name + '_pr.jpg')
+    sim3d_config(args1)
+    args1.save_path = os.path.join(args1.save_path, model_name)
+    evaluator = eval_3D_lane.LaneEval(args1)
+    # define pretrained feat model
+    pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
+
+    test_name = 'test'
+    vis_folder = test_name + '_vis'
+    test_gt_file = ops.join(args1.data_dir, test_name + '.json')
+    lane_pred_file = ops.join(args2.save_path, test_name + '_pred_file.json')
+    global eval_out_file
+    global eval_fig_file
+    eval_out_file = ops.join(args2.save_path, test_name + '_eval.json')
+    eval_fig_file = ops.join(args2.save_path, test_name + '_pr.jpg')
 
     # define the network model
-    args1.mod = '3DLaneNet_2stage'
-    args2.mod = '3DLaneNet_2stage'
+    args1.mod = model_name
+    args2.mod = model_name
+    args2.y_ref = 5
 
     """   run the test   """
     # Check GPU availability
@@ -236,7 +213,7 @@ if __name__ == '__main__':
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args1.cudnn
 
-    # Dataloader for training and test set
+    # Dataloader for training and test set, training set is for normalizing
     train_dataset = LaneDataset(args2.dataset_dir, ops.join(args2.data_dir, 'train.json'), args2, data_aug=True)
     train_dataset.normalize_lane_label()
 
@@ -267,13 +244,13 @@ if __name__ == '__main__':
     vs_saver2 = Visualizer(args2, vis_folder)
 
     # load trained model for testing
-    best_file_name = glob.glob(os.path.join(args2.save_path, 'model_best*'))[0]
-    if os.path.isfile(best_file_name):
+    best_test_name = glob.glob(os.path.join(args2.save_path, 'model_best*'))[0]
+    if os.path.isfile(best_test_name):
         sys.stdout = Logger(os.path.join(args1.save_path, 'Evaluate.txt'))
-        print("=> loading checkpoint '{}'".format(best_file_name))
-        checkpoint = torch.load(best_file_name)
+        print("=> loading checkpoint '{}'".format(best_test_name))
+        checkpoint = torch.load(best_test_name)
         model2.load_state_dict(checkpoint['state_dict'])
     else:
-        print("=> no checkpoint found at '{}'".format(best_file_name))
+        print("=> no checkpoint found at '{}'".format(best_test_name))
     mkdir_if_missing(os.path.join(args2.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, train_dataset, model1, model2, vs_saver1, vs_saver2, test_gt_file)
