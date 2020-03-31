@@ -1,24 +1,27 @@
 #!/usr/bin/env python
 import os
 import os.path as ops
-import sys
-import random
-import math
-import glob
+
+"""
+This code conduct:
+1. exclude a subset of data related to a certain illumination condition from an existing training set
+2. keep a subset of data related to the same illumination condition from an existing test set
+
+ATTENTION: this code require to run prepare_data_split.py first
+"""
+
 
 if __name__ == '__main__':
+    batch_size = 8  # use to ignore the last for convenience
 
     # exclude subsets from train
-    # val_name_pattens = ['/18/', '/19/', '/20/', '/21/', '/22/', '/23/']
-    # name_pattens_to_exclude = ['/02/', '/03/', '/08/', '/09/']
     name_pattens_to_exclude = ['/00/', '/01/', '/06/', '/07/']
-    batch_size = 8
-    output_folder = '../data/sim3d_0924_exclude_daytime/'
+    output_folder = '../data_splits/illus_chg/'
     if not ops.exists(output_folder):
         os.makedirs(output_folder)
 
     lines_train = []
-    json_file_path = "../data/sim3d_0924_random_split/train.json"
+    json_file_path = "../data_splits/standard/train.json"
     assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
     with open(json_file_path) as f:
         lines_i = f.readlines()
@@ -43,13 +46,9 @@ if __name__ == '__main__':
     #########################################################################################
     # include subsets in test
     name_pattens_to_include = ['/00/', '/01/', '/06/', '/07/']
-    batch_size = 8
-    output_folder = '../data/sim3d_0924_exclude_daytime/'
-    if not ops.exists(output_folder):
-        os.makedirs(output_folder)
 
     lines_test = []
-    json_file_path = "../data/sim3d_0924_random_split/val.json"
+    json_file_path = "../data_splits/standard/test.json"
     assert ops.exists(json_file_path), '{:s} not exist'.format(json_file_path)
     with open(json_file_path) as f:
         lines_i = f.readlines()

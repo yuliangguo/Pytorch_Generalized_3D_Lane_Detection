@@ -208,8 +208,22 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     json_line["centerLines_prob"] = centerlines_prob
                     json.dump(json_line, jsonFile)
                     jsonFile.write('\n')
-        eval_stats = evaluator.bench_one_submit_varying_probs(lane_pred_file, test_gt_file, eval_out_file, eval_fig_file)
+        # evaluation at varying thresholds
+        eval_stats_pr = evaluator.bench_one_submit_varying_probs(lane_pred_file, test_gt_file)
+        max_f_prob = eval_stats_pr['max_F_prob_th']
 
+        # evaluate at the point with max F-measure. Additional eval of position error.
+        eval_stats = evaluator.bench_one_submit(lane_pred_file, test_gt_file, prob_th=max_f_prob)
+
+        print("Metrics: AP, F-score, x error (close), x error (far), z error (close), z error (far)")
+        print(
+            "Laneline:  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats_pr['laneline_AP'], eval_stats[0],
+                                                                         eval_stats[3], eval_stats[4],
+                                                                         eval_stats[5], eval_stats[6]))
+        print("Centerline:  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats_pr['centerline_AP'],
+                                                                             eval_stats[7],
+                                                                             eval_stats[10], eval_stats[11],
+                                                                             eval_stats[12], eval_stats[13]))
         return eval_stats
 
 
@@ -245,14 +259,11 @@ if __name__ == '__main__':
     global vis_folder
     global test_gt_file
     global lane_pred_file
-    global eval_out_file
-    global eval_fig_file
+
     test_name = 'test'
     vis_folder = test_name + '_vis'
     test_gt_file = ops.join(args.data_dir, test_name + '.json')
     lane_pred_file = ops.join(args.save_path, test_name + '_pred_file.json')
-    eval_out_file = ops.join(args.save_path, test_name + '_eval.json')
-    eval_fig_file = ops.join(args.save_path, test_name + '_pr.jpg')
 
     # run the test
     main()

@@ -2,16 +2,9 @@
 """
 Process apollo sim laneline raw labels, and save in .json file
 """
-import argparse
 import os
-import os.path as ops
-import time
-
 import cv2
 import numpy as np
-from scipy.signal import medfilt
-import matplotlib.pyplot as plt
-import math
 import json
 from json import encoder
 encoder.FLOAT_REPR = lambda o: format(o, '.3f')
@@ -48,7 +41,6 @@ img_width = 1920
 K = np.array([[2015.0,      0, 960.0],
              [      0, 2015.0, 540.0],
              [      0,      0,     1]])
-vis = True
 merge = True
 parse_visibility = True
 vis_dist_th = 2
@@ -396,9 +388,10 @@ def laneline_label_generator(base_folder, image_file, label_file, seg_file, dept
 
 
 if __name__ == '__main__':
-    base_folder = "/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_1110/"
+    vis = False
+    base_folder = "/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_release/"
     input_file = base_folder + "img_list.txt"
-    output_gt_file = base_folder + "temp.json"
+    output_gt_file = base_folder + "laneline_label.json"
     vis_folder = base_folder + "laneline_vis/"
     if not os.path.exists(vis_folder) and vis:
         os.mkdir(vis_folder)

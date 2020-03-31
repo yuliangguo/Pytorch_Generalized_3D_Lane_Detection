@@ -1,3 +1,10 @@
+"""
+Description: Visualization code to draw predicted lane-lines and center-lines in three views: image, virtual top,
+             3D ego-car. Respectively, lane-lines are shown in the top row, center-lines are drawn in the bottom.
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
+
 import numpy as np
 import cv2
 import os
@@ -5,12 +12,7 @@ import os.path as ops
 import math
 import ujson as json
 import matplotlib
-from tools.utils import define_args, \
-     homographic_transformation, projective_transformation, transform_lane_g2gflat,\
-     projection_g2im, homography_crop_resize, homograpthy_g2im,\
-     sim3d_config, resample_laneline_in_y, prune_3d_lane_by_range, prune_3d_lane_by_visibility
-from tools.MinCostFlow import SolveMinCostFlow
-from mpl_toolkits.mplot3d import Axes3D
+from tools.utils import *
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 plt.rcParams['figure.figsize'] = (35, 30)
@@ -125,19 +127,23 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    args.dataset_name = 'sim3d_0924'
-    args.dataset_dir = '/media/yuliangguo/DATA/Datasets/Apollo_Sim_3D_Lane_0924/'
+    # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
+    args.dataset_name = 'rare_subset'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+
+    # model name: 'Gen_LaneNet_ext' / '3D_LaneNet'
+    model_name = 'Gen_LaneNet_ext'
 
     # load configuration for certain dataset
     sim3d_config(args)
     args.top_view_region = np.array([[-10, max_y], [10, max_y], [-10, 3], [10, 3]])
     vs = lane_visualizer(args)
 
-    pred_file = '../data/sim3d_0924/Model_3DLaneNet_gflat_2stage_7class_crit_loss_gflat_opt_adam_lr_0.0005_batch_8_360X480_pretrain_False_batchnorm_True_predcam_False/val_pred_file.json'
-    gt_file = '../data/sim3d_0924/val.json'
+    pred_file = '../data_splits/' + args.dataset_name + '/' + model_name + '/test_pred_file.json'
+    gt_file = '../data_splits/' + args.dataset_name + '/test.json'
 
     save_path = pred_file[:pred_file.rfind('/')]
-    save_path += '/example/val_vis_tmp'
+    save_path += '/example/test_vis_pred'
     if not os.path.exists(save_path):
         try:
             os.makedirs(save_path)
