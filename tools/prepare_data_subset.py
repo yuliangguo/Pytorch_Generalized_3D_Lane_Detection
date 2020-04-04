@@ -1,14 +1,16 @@
-#!/usr/bin/env python
-import os
-import os.path as ops
-
 """
 This code conduct:
 1. exclude a subset of data related to a certain illumination condition from an existing training set
 2. keep a subset of data related to the same illumination condition from an existing test set
 
 ATTENTION: this code require to run prepare_data_split.py first
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
 """
+
+import os
+import os.path as ops
 
 
 if __name__ == '__main__':

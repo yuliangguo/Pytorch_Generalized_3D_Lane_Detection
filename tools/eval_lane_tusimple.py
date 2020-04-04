@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 # code for TuSimple evaluation (based on the code provided by TuSimple)
+"""
+This code is originated from tusimple lane detection dataset
+"""
+
+
 import os
 import os.path as ops
 import numpy as np

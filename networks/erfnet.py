@@ -3,6 +3,11 @@
 # Eduardo Romera
 #######################
 
+"""
+This code is modified from pytorch ERFNET implementation:
+https://github.com/cardwing/Codes-for-Lane-Detection/tree/master/ERFNet-CULane-PyTorch
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.init as init

@@ -4,7 +4,7 @@
 
 This is a pytorch implementation of the paper:
 
-'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020
+'Gen-laneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020
 
 ## Another baseline
 Another baseline method, '3D-LaneNet' is unofficially implemented in pytorch for comparision:

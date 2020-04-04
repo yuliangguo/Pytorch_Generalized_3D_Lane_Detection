@@ -1,5 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+The training code for 'Gen-LaneNet' which is a two-stage framework composed of segmentation subnetwork (erfnet)
+and 3D lane prediction subnetwork (3D-GeoNet). A new lane anchor is integrated in the 3D-GeoNet. The architecture and
+new anchor design are based on:
+
+    "Gen-laneNet: a generalized and scalable approach for 3D lane detection", Y.Guo, etal., arxiv 2020
+
+The training of Gen-LaneNet is based on a pretrained ERFNet saved in ./pretrained folder. The training is on a
+synthetic dataset for 3D lane detection proposed in the above paper.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
 
 import numpy as np
 import torch

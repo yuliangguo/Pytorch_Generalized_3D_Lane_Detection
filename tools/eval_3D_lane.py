@@ -1,8 +1,4 @@
 """
-Author: Yuliang Guo (33yuliangguo@gmail.com)
-
-Reference: "Gen-LaneNet: Generalized and Scalable Approach for 3D Lane Detection". Y. Guo. etal. 2020
-
 Description: This code is to evaluate 3D lane detection. The optimal matching between ground-truth set and predicted
 set of lanes are sought via solving a min cost flow.
 
@@ -13,6 +9,11 @@ Evaluation metrics includes:
     x error far (0 - 100 m)
     z error close (0 - 40 m)
     z error far (0 - 100 m)
+
+Reference: "Gen-LaneNet: Generalized and Scalable Approach for 3D Lane Detection". Y. Guo. etal. 2020
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
 """
 
 import numpy as np

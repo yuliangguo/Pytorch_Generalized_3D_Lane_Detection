@@ -1,5 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+The training code for '3D-LaneNet' which predicts 3D lanes from a single image. This is an unofficial implementation
+of the paper:
+
+    "3d-lanenet: end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019"
+
+The training of 3D-LaneNet is on a synthetic dataset for 3D lane detection proposed in:
+
+    "Gen-laneNet: a generalized and scalable approach for 3D lane detection", Y.Guo, etal., arxiv 2020
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
 
 import numpy as np
 import torch

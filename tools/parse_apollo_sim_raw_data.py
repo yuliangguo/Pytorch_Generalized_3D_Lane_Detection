@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
-Process apollo sim laneline raw labels, and save in .json file
+Process laneline raw labels for the synthetic 3D lane dataset, and save in .json file.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
 """
 import os
 import cv2

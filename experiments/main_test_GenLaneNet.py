@@ -1,5 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+Batch test code for Gen-LaneNet. It predicts 3D lanes from a single image.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
 
 import numpy as np
 import torch

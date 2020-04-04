@@ -1,4 +1,10 @@
-# -*- coding: utf-8 -*-
+"""
+Loss functions
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
+
 import numpy as np
 import torch
 import torch.nn as nn

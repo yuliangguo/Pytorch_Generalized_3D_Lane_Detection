@@ -1,18 +1,19 @@
-#!/usr/bin/env python
+"""
+1. A standard five-fold split of training and testing data sets.
+2. A subset of rarely observed examples are extracted as another test set
+ATTENTION: if you rerun this, a new random split will replace the old one. This will cause discrepancy between
+           the new test ground-truth and previous prediction on the test data
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
+
 import os
 import os.path as ops
 import random
 import math
 import glob
 import shutil
-
-
-"""
-1. A standard five-fold split of training and testing data sets.
-2. A subset of rarely observed examples are extracted as another test set
-ATTENTION: if you rerun this, a new random split will replace the old one. This will cause discrepancy between 
-           the new test ground-truth and previous prediction on the test data
-"""
 
 if __name__ == '__main__':
     dataset_dir = '~/Datasets/Apollo_Sim_3D_Lane_Release'

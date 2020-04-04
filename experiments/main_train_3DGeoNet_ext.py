@@ -1,5 +1,15 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+The training code for '3D-GeoNet' which predict 3D lanes from segmentation input. A new lane anchor is integrated
+in the 3D-GeoNet. The architecture and new anchor design are based on:
+
+    "Gen-laneNet: a generalized and scalable approach for 3D lane detection", Y.Guo, etal., arxiv 2020
+
+This training uses perfect ground-truth segmentation, aiming to locate the upper bound of 3D lane detection.
+The training is on a synthetic dataset for 3D lane detection proposed in the above paper.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
 
 import numpy as np
 import torch

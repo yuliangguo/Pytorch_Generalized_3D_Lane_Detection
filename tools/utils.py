@@ -1,4 +1,9 @@
-# -*- coding: utf-8 -*-
+"""
+Utility functions and default settings
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
 
 import argparse
 import errno

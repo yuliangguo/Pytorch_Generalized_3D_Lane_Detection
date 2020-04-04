@@ -1,5 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+Batch test code for 3D-GeoNet with new anchor extension. It predicts 3D lanes from ground-truth segmentation.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
 
 import numpy as np
 import torch

@@ -1,3 +1,19 @@
+"""
+3D-LanNet: predict 3D lanes from a single image.
+This arch is an unofficial implementation of:
+    "3d-lanenet: end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019"
+
+Overall dimension of the output tensor would be: N * W * 3 *(3 * K + 1), where
+    K          : number of y samples.
+    (2 * K + 1): Each lane includes K attributes for X_g offset + K attributes for Z + 1 lane probability
+    3          : Each anchor column include one laneline and two centerlines --> 3
+    W          : Number of columns for the output tensor each corresponds to a IPM X_g location
+    N          : batch size
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
+
 import torch.optim
 import torch.nn as nn
 import torch.nn.functional as F

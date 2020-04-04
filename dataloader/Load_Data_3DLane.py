@@ -1,5 +1,12 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+Dataloader for networks integrated with the original anchor design proposed in 3D-LaneNet:
+    "3d-lanenet: end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019"
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+
+"""
+
 import copy
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils

@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Description: batch testing code
+Batch test code for Gen-LaneNet with new anchor extension. It predicts 3D lanes from a single image.
+
 Author: Yuliang Guo (33yuliangguo@gmail.com)
 Date: March, 2020
 """

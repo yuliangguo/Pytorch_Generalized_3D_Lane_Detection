@@ -1,18 +1,23 @@
 """
-New network of 3D LaneNet version 1.
-Modifications:
+3D-LaneNet extended with new anchor design. The geometry-guided anchor design is based on:
+    "Gen-laneNet: a generalized and scalable approach for 3D lane detection"
+
+Lane Anchor:
     1. Prediction head's lane representation is in X_g, Y_g in flat ground space and Z in real 3D ground space.
     Y_g is sampled equally, X_g, Z is regressed from network output.
     2. In addition, visibility of each point is added into the anchor representation and regressed from network.
 
-    Overall dimension of the output tensor would be: N * W * 3 *(3 * K + 1), where
-        K          : number of y samples.
-        (3 * K + 1): Each lane includes K attributes for X_g offset + K attributes for Z + K attributes for visibility + 1 lane probability
-        3          : Each anchor column include one laneline and two centerlines --> 3
-        W          : Number of columns for the output tensor each corresponds to a IPM X_g location
-        N          : batch size
+Overall dimension of the output tensor would be: N * W * 3 *(3 * K + 1), where
+    K          : number of y samples.
+    (3 * K + 1): Each lane includes K attributes for X_g offset + K attributes for Z + K attributes for visibility + 1 lane probability
+    3          : Each anchor column include one laneline and two centerlines --> 3
+    W          : Number of columns for the output tensor each corresponds to a IPM X_g location
+    N          : batch size
 
-    Use of this network requires to use its corresponding data loader and loss criterion.
+Use of this network requires to use its corresponding data loader and loss criterion.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
 """
 
 import torch.optim

@@ -1,3 +1,10 @@
+"""
+MinCostFow solver adapted for matching two set of contours. The implementation is based on google-ortools.
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+"""
+
 from __future__ import print_function
 import numpy as np
 from ortools.graph import pywrapgraph

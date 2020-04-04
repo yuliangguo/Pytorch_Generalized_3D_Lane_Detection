@@ -1,5 +1,12 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+Dataloader for networks integrated with the new geometry-guided anchor design proposed in Gen-LaneNet:
+    "Gen-laneNet: a generalized and scalable approach for 3D lane detection", Y.Guo, etal., arxiv 2020
+
+Author: Yuliang Guo (33yuliangguo@gmail.com)
+Date: March, 2020
+
+"""
+
 import copy
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
