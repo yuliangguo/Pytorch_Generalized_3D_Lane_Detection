@@ -6,8 +6,8 @@ import torch
 import torch.optim
 import glob
 from tqdm import tqdm
-from Dataloader.Load_Data_3DLane import *
-from Networks import LaneNet3D
+from dataloader.Load_Data_3DLane import *
+from networks import LaneNet3D
 from tools.utils import *
 from tools import eval_lane_tusimple, eval_3D_lane
 
@@ -19,7 +19,7 @@ def main():
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args.cudnn
 
-    # Dataloader for training and test set
+    # dataloader for training and test set
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
     train_dataset.normalize_lane_label()
     test_dataset = LaneDataset(args.test_dataset_dir, test_gt_file, args)

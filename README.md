@@ -1,4 +1,4 @@
-# Gen-LaneNet (pytorch)
+# Gen-LaneNet: a generalized and scalable approach for 3D lane detection (pytorch)
 
 ## Introduction
 

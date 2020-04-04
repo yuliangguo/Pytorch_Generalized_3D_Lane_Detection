@@ -11,8 +11,8 @@ import shutil
 import torch.nn.functional as F
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from Dataloader.Load_Data_3DLane_ext import *
-from Networks import Loss_crit, GeoNet3D_ext, erfnet
+from dataloader.Load_Data_3DLane_ext import *
+from networks import Loss_crit, GeoNet3D_ext, erfnet
 from tools.utils import *
 from tools import eval_3D_lane
 
@@ -53,7 +53,7 @@ def train_net():
     #                   args.pred_cam)
     save_id = args.mod
 
-    # Dataloader for training and validation set
+    # dataloader for training and validation set
     val_gt_file = ops.join(args.data_dir, 'test.json')
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
     train_dataset.normalize_lane_label()

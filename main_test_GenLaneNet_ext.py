@@ -11,8 +11,8 @@ import torch
 import torch.optim
 import glob
 from tqdm import tqdm
-from Dataloader.Load_Data_3DLane_ext import *
-from Networks import GeoNet3D_ext, erfnet
+from dataloader.Load_Data_3DLane_ext import *
+from networks import GeoNet3D_ext, erfnet
 from tools.utils import *
 from tools import eval_3D_lane
 
@@ -173,6 +173,8 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                                                                              eval_stats[10], eval_stats[11],
                                                                              eval_stats[12], eval_stats[13]))
 
+    return eval_stats
+
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -227,7 +229,7 @@ if __name__ == '__main__':
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args1.cudnn
 
-    # Dataloader for training and test set, training set is for normalizing
+    # dataloader for training and test set, training set is for normalizing
     train_dataset = LaneDataset(args2.dataset_dir, ops.join(args2.data_dir, 'train.json'), args2, data_aug=True)
     train_dataset.normalize_lane_label()
 
@@ -268,3 +270,4 @@ if __name__ == '__main__':
         print("=> no checkpoint found at '{}'".format(best_test_name))
     mkdir_if_missing(os.path.join(args2.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, train_dataset, model1, model2, vs_saver1, vs_saver2, test_gt_file)
+

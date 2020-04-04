@@ -502,6 +502,7 @@ if __name__ == '__main__':
     args.dataset_name = 'sim3d'
     sim3d_config(args)
     args.pred_cam = True
+    args.batch_size = 1
 
     # construct model
     model = Net(args)
@@ -514,19 +515,10 @@ if __name__ == '__main__':
     if args.pretrained:
         model.load_pretrained_vgg(args.batch_norm)
         print('vgg weights pretrained on ImageNet loaded!')
-
-    # put model on gpu
     model = model.cuda()
-    # load input
-    img_name = '../1.jpg'
-    with open(img_name, 'rb') as f:
-        image = (Image.open(f).convert('RGB'))
-    w, h = image.size
-    image = F2.crop(image, args.crop_y, 0, args.org_h - args.crop_y, w)
-    image = F2.resize(image, size=(args.resize_h, args.resize_w), interpolation=Image.BILINEAR)
-    image = transforms.ToTensor()(image).float()
-    image.unsqueeze_(0)
-    image = torch.cat(list(torch.split(image, 1, dim=0))*args.batch_size)
+
+    # prepare input
+    image = torch.randn(1, 3, args.resize_h, args.resize_w)
     image = image.cuda()
 
     # test update of camera height and pitch

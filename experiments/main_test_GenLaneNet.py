@@ -6,8 +6,8 @@ import torch
 import torch.optim
 import glob
 from tqdm import tqdm
-from Dataloader.Load_Data_3DLane import *
-from Networks import GeoNet3D, erfnet
+from dataloader.Load_Data_3DLane import *
+from networks import GeoNet3D, erfnet
 from tools.utils import *
 from tools import eval_3D_lane
 
@@ -223,7 +223,7 @@ if __name__ == '__main__':
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args1.cudnn
 
-    # Dataloader for training and test set, training set is for normalizing
+    # dataloader for training and test set, training set is for normalizing
     train_dataset = LaneDataset(args2.dataset_dir, ops.join(args2.data_dir, 'train.json'), args2, data_aug=True)
     train_dataset.normalize_lane_label()
 

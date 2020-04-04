@@ -116,7 +116,7 @@ def tusimple_config(args):
     args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
     args.num_y_steps = len(args.anchor_y_steps)
 
-    # initialize with pre-trained vgg weights: paper suggested true
+    # initialize with pre-trained vgg weights
     args.pretrained = False
     # apply batch norm in network
     args.batch_norm = True
@@ -150,7 +150,7 @@ def sim3d_config(args):
     args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
     args.num_y_steps = len(args.anchor_y_steps)
 
-    # initialize with pre-trained vgg weights: paper suggested true
+    # initialize with pre-trained vgg weights
     args.pretrained = False
     # apply batch norm in network
     args.batch_norm = True

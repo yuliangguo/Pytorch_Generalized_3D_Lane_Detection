@@ -6,8 +6,8 @@ import torch
 import torch.optim
 import glob
 from tqdm import tqdm
-from Dataloader.Load_Data_3DLane_ext import *
-from Networks import LaneNet3D_ext, GeoNet3D_ext
+from dataloader.Load_Data_3DLane import *
+from networks import  GeoNet3D
 from tools.utils import *
 from tools import eval_3D_lane
 
@@ -19,10 +19,11 @@ def main():
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args.cudnn
 
-    # Dataloader for training and test set
+    # dataloader for training and test set
     train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
     train_dataset.normalize_lane_label()
     test_dataset = LaneDataset(args.test_dataset_dir, test_gt_file, args)
+    # assign std of test dataset to be consistent with train dataset
     test_dataset.set_x_off_std(train_dataset._x_off_std)
     if not args.no_3d:
         test_dataset.set_z_std(train_dataset._z_std)
@@ -36,31 +37,25 @@ def main():
     anchor_x_steps = test_dataset.anchor_x_steps
 
     # Define network
-    model = LaneNet3D_ext.Net(args, debug=True)
+    model = GeoNet3D.Net(args)
     define_init_weights(model, args.weight_init)
 
     if not args.no_cuda:
         # Load model on gpu before passing params to optimizer
         model = model.cuda()
 
-    global anchor_dim
-    if args.no_3d:
-        anchor_dim = args.num_y_steps + 1
-    else:
-        anchor_dim = 2 * args.num_y_steps + 1
-
     # initialize visual saver
     vs_saver = Visualizer(args, vis_folder)
 
     # load trained model for testing
-    best_test_name = glob.glob(os.path.join(args.save_path, 'model_best*'))[0]
-    if os.path.isfile(best_test_name):
+    best_file_name = glob.glob(os.path.join(args.save_path, 'model_best*'))[0]
+    if os.path.isfile(best_file_name):
         sys.stdout = Logger(os.path.join(args.save_path, 'Evaluate.txt'))
-        print("=> loading checkpoint '{}'".format(best_test_name))
-        checkpoint = torch.load(best_test_name)
+        print("=> loading checkpoint '{}'".format(best_file_name))
+        checkpoint = torch.load(best_file_name)
         model.load_state_dict(checkpoint['state_dict'])
     else:
-        print("=> no checkpoint found at '{}'".format(best_test_name))
+        print("=> no checkpoint found at '{}'".format(best_file_name))
     mkdir_if_missing(os.path.join(args.save_path, 'example/' + vis_folder))
     eval_stats = deploy(test_loader, test_dataset, model, vs_saver, test_gt_file)
 
@@ -84,9 +79,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     model.update_projection(args, gt_hcam, gt_pitch)
                 # Evaluate model
                 try:
-                    output_net, pred_hcam, pred_pitch,\
-                        x1_feat, x2_feat, x3_feat, x4_feat,\
-                        x1_proj, x2_proj, x3_proj, x4_proj, top_2, top_3, top_4 = model(input)
+                    output_net, pred_hcam, pred_pitch = model(seg_maps)
                 except RuntimeError as e:
                     print("Batch with idx {} skipped due to singular matrix".format(idx.numpy()))
                     print(e)
@@ -112,6 +105,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     top_2 = top_2.squeeze(0).data.cpu().numpy()
                     top_3 = top_3.squeeze(0).data.cpu().numpy()
                     top_4 = top_4.squeeze(0).data.cpu().numpy()
+
                     # compute attention map for visualization
                     x1_feat = np.sum(np.square(x1_feat), axis=0)
                     x2_feat = np.sum(np.square(x2_feat), axis=0)
@@ -189,8 +183,8 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     unormalize_lane_anchor(gt[j], dataset)
 
                 # Plot curves in two views
-                vs_saver.save_result_new(dataset, 'valid', epoch, i, idx,
-                                         input, gt, output_net, pred_pitch, pred_hcam, evaluate=False)
+                vs_saver.save_result(dataset, 'valid', epoch, i, idx,
+                                     input, gt, output_net, pred_pitch, pred_hcam, evaluate=False)
 
                 # write results and evaluate
                 for j in range(num_el):
@@ -199,9 +193,9 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     json_line = test_set_labels[im_id]
                     lane_anchors = output_net[j]
                     # convert to json output format
-                    lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob =\
+                    lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
                         compute_3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
-                                                  anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
+                                                  anchor_x_steps, args.anchor_y_steps)
                     json_line["laneLines"] = lanelines_pred
                     json_line["centerLines"] = centerlines_pred
                     json_line["laneLines_prob"] = lanelines_prob
@@ -220,8 +214,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
             "Laneline:  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats_pr['laneline_AP'], eval_stats[0],
                                                                          eval_stats[3], eval_stats[4],
                                                                          eval_stats[5], eval_stats[6]))
-        print("Centerline:  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats_pr['centerline_AP'],
-                                                                             eval_stats[7],
+        print("Centerline:  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}  {:.3}".format(eval_stats_pr['centerline_AP'], eval_stats[7],
                                                                              eval_stats[10], eval_stats[11],
                                                                              eval_stats[12], eval_stats[13]))
         return eval_stats
@@ -252,18 +245,16 @@ if __name__ == '__main__':
     args.prob_th = 0.5
 
     # define the network model
-    args.mod = '3D_LaneNet_ext'
+    args.mod = '3D_GeoNet'
 
     # settings for save and visualize
     args.save_path = os.path.join(args.save_path, args.mod)
     global vis_folder
     global test_gt_file
     global lane_pred_file
-
     test_name = 'test'
     vis_folder = test_name + '_vis'
     test_gt_file = ops.join(args.data_dir, test_name + '.json')
     lane_pred_file = ops.join(args.save_path, test_name + '_pred_file.json')
-
     # run the test
     main()
