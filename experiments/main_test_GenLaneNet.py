@@ -31,7 +31,7 @@ def load_my_state_dict(model, state_dict):  # custom function to load model when
     return model
 
 
-def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, test_gt_file, epoch=0):
+def deploy(loader1, dataset1, model1, model2, vs_saver1, vs_saver2, test_gt_file, epoch=0):
 
     # Evaluate model
     model2.eval()
@@ -76,7 +76,7 @@ def deploy(loader1, dataset1, dataset2, model1, model2, vs_saver1, vs_saver2, te
                 num_el = input.size(0)
                 for j in range(num_el):
                     unormalize_lane_anchor(gt[j], dataset1)
-                    unormalize_lane_anchor(output_net[j], dataset2)
+                    unormalize_lane_anchor(output_net[j], dataset1)
 
                 input = input.permute(0, 2, 3, 1).data.cpu().numpy()
                 # visualize and write results
@@ -186,9 +186,9 @@ if __name__ == '__main__':
     args2 = parser.parse_args()
 
     # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
-    args1.dataset_name = 'rare_subset'
+    args1.dataset_name = 'illus_chg'
     args1.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
-    args2.dataset_name = 'rare_subset'
+    args2.dataset_name = 'illus_chg'
     args2.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
 
     args1.data_dir = ops.join('data_splits', args1.dataset_name)
@@ -227,11 +227,13 @@ if __name__ == '__main__':
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args1.cudnn
 
-    # dataloader for training and test set, training set is for normalizing
-    train_dataset = LaneDataset(args2.dataset_dir, ops.join(args2.data_dir, 'train.json'), args2, data_aug=True)
-    train_dataset.normalize_lane_label()
-
     test_dataset = LaneDataset(args1.dataset_dir, test_gt_file, args1)
+    # assign std of valid dataset to be consistent with train dataset
+    with open(ops.join(args2.data_dir, 'anchor_std.json')) as f:
+        anchor_std = json.load(f)
+    test_dataset.set_x_off_std(anchor_std['x_off_std'])
+    if not args1.no_3d:
+        test_dataset.set_z_std(anchor_std['z_std'])
     test_dataset.normalize_lane_label()
     test_loader = get_loader(test_dataset, args1)
 
@@ -267,4 +269,4 @@ if __name__ == '__main__':
     else:
         print("=> no checkpoint found at '{}'".format(best_test_name))
     mkdir_if_missing(os.path.join(args2.save_path, 'example/' + vis_folder))
-    eval_stats = deploy(test_loader, test_dataset, train_dataset, model1, model2, vs_saver1, vs_saver2, test_gt_file)
+    eval_stats = deploy(test_loader, test_dataset, model1, model2, vs_saver1, vs_saver2, test_gt_file)

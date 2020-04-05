@@ -31,7 +31,7 @@ class LaneDataset(Dataset):
         This new version of data loader prepare ground-truth anchor tensor in flat ground space.
         It is assumed the dataset provides accurate visibility labels. Preparing ground-truth tensor depends on it.
     """
-    def __init__(self, dataset_base_dir, json_file_path, args, data_aug=False):
+    def __init__(self, dataset_base_dir, json_file_path, args, data_aug=False, save_std=False):
         """
 
         :param dataset_info_file: json file list
@@ -98,10 +98,7 @@ class LaneDataset(Dataset):
         if self.no_3d:
             self.anchor_dim = self.num_y_steps + 1
         else:
-            if 'ext' not in args.mod:
-                self.anchor_dim = 2 * args.num_y_steps + 1
-            else:
-                self.anchor_dim = 3 * args.num_y_steps + 1
+            self.anchor_dim = 3 * args.num_y_steps + 1
 
         self.y_ref = args.y_ref
         self.ref_id = np.argmin(np.abs(self.num_y_steps - self.y_ref))
@@ -130,6 +127,13 @@ class LaneDataset(Dataset):
                 self._gt_centerline_visibility_all = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
 
+        if save_std is True:
+            with open(ops.join(args.data_dir, 'geo_anchor_std.json'), 'w') as jsonFile:
+                json_out = {}
+                json_out["x_off_std"] = self._x_off_std.tolist()
+                json_out["z_std"] = self._z_std.tolist()
+                json.dump(json_out, jsonFile)
+                jsonFile.write('\n')
         # # normalize label values: manual execute in main function, in case overwriting stds is needed
         # self.normalize_lane_label()
 
@@ -905,27 +909,18 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_0924_random_split'
-    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_0924/'
-    # args.dataset_name = 'tusimple'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args.data_dir = ops.join('data', args.dataset_name)
+    # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
+    args.dataset_name = 'illus_chg'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.data_dir = ops.join('data_splits', args.dataset_name)
 
     # load configuration for certain dataset
     if 'tusimple' in args.dataset_name:
         tusimple_config(args)
-    elif 'sim3d' in args.dataset_name:
-        sim3d_config(args)
     else:
-        print('Not using a supported dataset')
-        sys.exit()
-
-    # define the network model
-    args.mod = '3DLaneNet_gflat_GeoOnly'
+        sim3d_config(args)
     args.y_ref = 5.0
-    # args.ipm_w = args.ipm_w*2
-    # args.ipm_h = args.ipm_h*2
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -933,12 +928,13 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.dataset_dir, 'val.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True, save_std=True)
     dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps
 
     # initialize visualizer
+    args.mod = 'ext'
     visualizer = Visualizer(args)
     Visualizer.anchor_dim = dataset.anchor_dim
 
@@ -992,21 +988,19 @@ if __name__ == '__main__':
 
             # visualize ground-truth anchor lanelines by projecting them on the image
             img = visualizer.draw_on_img_new(img, gt_anchor, M, 'laneline', color=[0, 0, 1])
-            # if not args.no_centerline:
-            #     img = visualizer.draw_on_img_new(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
+            if not args.no_centerline:
+                img = visualizer.draw_on_img_new(img, gt_anchor, M, 'centerline', color=[0, 1, 0])
 
-            # cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
-            #             (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
-            # cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
-            #             (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            cv2.putText(img, 'camara pitch: {:.3f}'.format(gt_cam_pitch[i]/np.pi*180),
+                        (5, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
+            cv2.putText(img, 'camara height: {:.3f}'.format(gt_cam_height[i]),
+                        (5, 60), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0, 0, 1), thickness=2)
 
             # visualize on ipm
             im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'laneline', color=[0, 0, 1])
-            # if not args.no_centerline:
-            #     im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
+            if not args.no_centerline:
+                im_ipm = visualizer.draw_on_ipm_new(im_ipm, gt_anchor, 'centerline', color=[0, 1, 0])
 
-            # if idx[i] == 936:
-            # if '05/0000327' in dataset._label_image_path[idx[i]]:
             # convert image to BGR for opencv imshow
             cv2.imshow('image gt check', np.flip(img, axis=2))
             cv2.imshow('ipm gt check', np.flip(im_ipm, axis=2))

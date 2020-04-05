@@ -28,7 +28,7 @@ class LaneDataset(Dataset):
         w/o centerline annotations
         default considers 3D laneline, including centerlines
     """
-    def __init__(self, dataset_base_dir, json_file_path, args, data_aug=False):
+    def __init__(self, dataset_base_dir, json_file_path, args, data_aug=False, save_std=False):
         """
 
         :param dataset_info_file: json file list
@@ -119,6 +119,14 @@ class LaneDataset(Dataset):
                 self._x_off_std, \
                 self._z_std = self.init_dataset_3D(dataset_base_dir, json_file_path)
         self.n_samples = self._label_image_path.shape[0]
+
+        if save_std is True:
+            with open(ops.join(args.data_dir, 'anchor_std.json'), 'w') as jsonFile:
+                json_out = {}
+                json_out["x_off_std"] = self._x_off_std.tolist()
+                json_out["z_std"] = self._z_std.tolist()
+                json.dump(json_out, jsonFile)
+                jsonFile.write('\n')
 
         # # normalize label values: manual execute in main function, in case overwriting stds is needed
         # self.normalize_lane_label()
@@ -672,21 +680,20 @@ if __name__ == '__main__':
     parser = define_args()
     args = parser.parse_args()
 
-    # dataset_name 'tusimple' or 'sim3d'
-    args.dataset_name = 'sim3d_final'
-    args.dataset_dir = '/home/yuliangguo/Datasets/Apollo_Sim_3D_Lane_Final/'
-    # args.dataset_name = 'tusimple'
-    # args.dataset_dir = '/home/yuliangguo/Datasets/tusimple/'
-    args.data_dir = ops.join('data', args.dataset_name)
+    # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
+    args.dataset_name = 'illus_chg'
+    args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
+    args.data_dir = ops.join('data_splits', args.dataset_name)
 
     # load configuration for certain dataset
     if 'tusimple' in args.dataset_name:
         tusimple_config(args)
-    elif 'sim3d' in args.dataset_name:
-        sim3d_config(args)
     else:
-        print('Not using a supported dataset')
-        sys.exit()
+        sim3d_config(args)
+
+    # # define the network model
+    # args.mod = '3D_LaneNet'
 
     # set 3D ground area for visualization
     vis_border_3d = np.array([[-1.75, 100.], [1.75, 100.], [-1.75, 5.], [1.75, 5.]])
@@ -694,7 +701,7 @@ if __name__ == '__main__':
     print(vis_border_3d)
 
     # load data
-    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
+    dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True, save_std=True)
     dataset.normalize_lane_label()
     loader = get_loader(dataset, args)
     anchor_x_steps = dataset.anchor_x_steps

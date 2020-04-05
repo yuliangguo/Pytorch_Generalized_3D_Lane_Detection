@@ -23,14 +23,17 @@ def main():
         raise Exception("No gpu available for usage")
     torch.backends.cudnn.benchmark = args.cudnn
 
-    # dataloader for training and test set
-    train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
-    train_dataset.normalize_lane_label()
+    # # dataloader for training and test set
+    # train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
+    # train_dataset.normalize_lane_label()
+
     test_dataset = LaneDataset(args.test_dataset_dir, test_gt_file, args)
     # assign std of test dataset to be consistent with train dataset
-    test_dataset.set_x_off_std(train_dataset._x_off_std)
+    with open(ops.join(args.data_dir, 'anchor_std.json')) as f:
+        anchor_std = json.load(f)
+    test_dataset.set_x_off_std(anchor_std['x_off_std'])
     if not args.no_3d:
-        test_dataset.set_z_std(train_dataset._z_std)
+        test_dataset.set_z_std(anchor_std['z_std'])
     # need to perform normalization after reset std
     test_dataset.normalize_lane_label()
     test_loader = get_loader(test_dataset, args)
@@ -187,7 +190,7 @@ def deploy(loader, dataset, model, vs_saver, test_gt_file, epoch=0):
                     unormalize_lane_anchor(gt[j], dataset)
 
                 # Plot curves in two views
-                vs_saver.save_result(dataset, 'valid', epoch, i, idx,
+                vs_saver.save_result(dataset, vis_folder, epoch, i, idx,
                                      input, gt, output_net, pred_pitch, pred_hcam, evaluate=False)
 
                 # write results and evaluate
@@ -235,7 +238,7 @@ if __name__ == '__main__':
     vis_feat = False
 
     # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
-    args.dataset_name = 'rare_subset'
+    args.dataset_name = 'illus_chg'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
     args.test_dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
     args.data_dir = ops.join('data_splits', args.dataset_name)
@@ -253,6 +256,7 @@ if __name__ == '__main__':
 
     # settings for save and visualize
     args.save_path = os.path.join(args.save_path, args.mod)
+    global test_name
     global vis_folder
     global test_gt_file
     global lane_pred_file

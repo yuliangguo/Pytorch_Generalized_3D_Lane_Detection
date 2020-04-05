@@ -49,10 +49,15 @@ def train_net():
     #                   args.batch_norm,
     #                   args.pred_cam)
     save_id = args.mod
+    args.save_path = os.path.join(args.save_path, save_id)
+    mkdir_if_missing(args.save_path)
+    mkdir_if_missing(os.path.join(args.save_path, 'example/'))
+    mkdir_if_missing(os.path.join(args.save_path, 'example/train'))
+    mkdir_if_missing(os.path.join(args.save_path, 'example/valid'))
 
     # dataloader for training and validation set
     val_gt_file = ops.join(args.data_dir, 'test.json')
-    train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True)
+    train_dataset = LaneDataset(args.dataset_dir, ops.join(args.data_dir, 'train.json'), args, data_aug=True, save_std=True)
     train_dataset.normalize_lane_label()
     train_loader = get_loader(train_dataset, args)
     valid_dataset = LaneDataset(args.dataset_dir, val_gt_file, args)
@@ -104,11 +109,6 @@ def train_net():
     best_epoch = 0
     lowest_loss = np.inf
     log_file_name = 'log_train_start_0.txt'
-    args.save_path = os.path.join(args.save_path, save_id)
-    mkdir_if_missing(args.save_path)
-    mkdir_if_missing(os.path.join(args.save_path, 'example/'))
-    mkdir_if_missing(os.path.join(args.save_path, 'example/train'))
-    mkdir_if_missing(os.path.join(args.save_path, 'example/valid'))
 
     # Tensorboard writer
     if not args.no_tb:
