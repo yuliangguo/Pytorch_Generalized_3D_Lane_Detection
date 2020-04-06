@@ -85,8 +85,6 @@ def train_net():
     # extract valid set labels for evaluation later
     global valid_set_labels
     valid_set_labels = [json.loads(line) for line in open(val_gt_file).readlines()]
-    global anchor_x_steps
-    anchor_x_steps = valid_dataset.anchor_x_steps
 
     # Define network
     model1 = erfnet.ERFNet(args.num_class)
@@ -402,7 +400,7 @@ def validate(loader, dataset, model1, model2, criterion, vs_saver, val_gt_file, 
                     # P_g2gflat = np.matmul(np.linalg.inv(H_g2im), P_g2im)
                     lanelines_pred, centerlines_pred, lanelines_prob, centerlines_prob = \
                         compute_3d_lanes_all_prob(lane_anchors, dataset.anchor_dim,
-                                                  anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
+                                                  dataset.anchor_x_steps, args.anchor_y_steps, pred_hcam[j])
                     json_line["laneLines"] = lanelines_pred
                     json_line["centerLines"] = centerlines_pred
                     json_line["laneLines_prob"] = lanelines_prob
