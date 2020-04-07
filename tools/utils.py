@@ -997,29 +997,6 @@ def transform_lane_g2gflat(h_cam, X_g, Y_g, Z_g):
 
     return X_gflat, Y_gflat
 
-# def transform_lane_gflat2g(P_g2gflat, X_gflat, Y_gflat, Z_g):
-#     """
-#         Given X coordinates in flat ground space, Y coordinates in flat ground space, and Z coordinates in real 3D ground space
-#         with projection matrix from 3D ground to flat ground, compute real 3D coordinates X, Y in 3D ground space.
-#
-#     :param P_g2gflat: a 3 X 4 matrix transforms lane form 3d ground x,y,z to flat ground x, y
-#     :param X_gflat: X coordinates in flat ground space
-#     :param Y_gflat: Y coordinates in flat ground space
-#     :param Z_g: Z coordinates in real 3D ground space
-#     :return:
-#     """
-#     P_gflat2g = np.linalg.inv(np.vstack((P_g2gflat, np.array([[0, 0, 0, 1]]))))
-#     g_flat_coords = np.vstack((X_gflat, Y_gflat, np.ones_like(X_gflat), np.ones_like(X_gflat)))
-#     trans = np.matmul(P_gflat2g, g_flat_coords)
-#
-#     x = trans[0, :]/trans[3, :]
-#     y = trans[1, :]/trans[3, :]
-#     z = trans[2, :]/trans[3, :]
-#
-#     # scale with estimated Z_g
-#     X_g = x / z * Z_g
-#     Y_g = y / z * Z_g
-#     return X_g, Y_g
 
 def nms_1d(v):
     """

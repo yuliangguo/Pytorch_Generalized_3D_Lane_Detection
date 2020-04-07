@@ -1,5 +1,5 @@
 """
-Batch test code for Gen-LaneNet with new anchor extension. It predicts 3D lanes from a single image.
+Batch test code for Gen-LaneNet with new anchor extension. It predicts 3D lanes per image.
 
 Author: Yuliang Guo (33yuliangguo@gmail.com)
 Date: March, 2020
@@ -67,13 +67,9 @@ def deploy(args, loader, dataset, model_seg, model_geo, vs_saver, test_gt_file, 
                     continue
 
                 gt = gt.data.cpu().numpy()
-                output_seg = output_seg.data.cpu().numpy()
                 output_geo = output_geo.data.cpu().numpy()
-                # x_proj = x_proj.data.cpu().numpy()
-                # x_feat = x_feat.data.cpu().numpy()
                 pred_pitch = pred_pitch.data.cpu().numpy().flatten()
                 pred_hcam = pred_hcam.data.cpu().numpy().flatten()
-                # gt_hcam = gt_hcam.data.cpu().numpy().flatten()
 
                 # unormalize lane outputs
                 num_el = input.size(0)
@@ -136,7 +132,6 @@ if __name__ == '__main__':
     args.dataset_name = 'illus_chg'  # choose a data split 'standard' / 'rare_subset' / 'illus_chg'
     args.mod = 'Gen_LaneNet_ext'  # model name
     test_name = 'test'  # test set name
-    num_class = 2
     pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
     vis = False  # choose to save visualization result
 
@@ -162,8 +157,8 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = args.cudnn
 
     # Define network
-    model_seg = erfnet.ERFNet(num_class)
-    model_geo = GeoNet3D_ext.Net(args, input_dim=num_class - 1)
+    model_seg = erfnet.ERFNet(2)  # 2-class model
+    model_geo = GeoNet3D_ext.Net(args)
     define_init_weights(model_geo, args.weight_init)
 
     if not args.no_cuda:

@@ -114,12 +114,15 @@ class lane_visualizer(object):
         for i in range(cnt_gt):
             x_values = gt_lanes[i][:, 0]
             z_values = gt_lanes[i][:, 1]
-            if 'gflat' in pred_file:
-                x_ipm_values, y_ipm_value = transform_lane_g2gflat(gt_cam_height, x_values, self.y_samples, z_values)
+            if 'gflat' in pred_file or 'ext' in pred_file:
+                x_ipm_values, y_ipm_values = transform_lane_g2gflat(gt_cam_height, x_values, self.y_samples, z_values)
+                # remove those points with z_values > gt_cam_height, this is only for visualization on top-view
+                x_ipm_values = x_ipm_values[np.where(z_values < gt_cam_height)]
+                y_ipm_values = y_ipm_values[np.where(z_values < gt_cam_height)]
             else:
                 x_ipm_values = x_values
-                y_ipm_value = self.y_samples
-            x_ipm_values, y_ipm_values = homographic_transformation(self.H_g2ipm, x_ipm_values, y_ipm_value)
+                y_ipm_values = self.y_samples
+            x_ipm_values, y_ipm_values = homographic_transformation(self.H_g2ipm, x_ipm_values, y_ipm_values)
             x_ipm_values = x_ipm_values.astype(np.int)
             y_ipm_values = y_ipm_values.astype(np.int)
             x_2d, y_2d = projective_transformation(P_gt, x_values, self.y_samples, z_values)
@@ -150,12 +153,15 @@ class lane_visualizer(object):
         for i in range(cnt_pred):
             x_values = pred_lanes[i][:, 0]
             z_values = pred_lanes[i][:, 1]
-            if 'gflat' in pred_file:
-                x_ipm_values, y_ipm_value = transform_lane_g2gflat(gt_cam_height, x_values, self.y_samples, z_values)
-            else:
+            if 'gflat' in pred_file or 'ext' in pred_file:
+                x_ipm_values, y_ipm_values = transform_lane_g2gflat(gt_cam_height, x_values, self.y_samples, z_values)
+                # remove those points with z_values > gt_cam_height, this is only for visualization on top-view
+                x_ipm_values = x_ipm_values[np.where(z_values < gt_cam_height)]
+                y_ipm_values = y_ipm_values[np.where(z_values < gt_cam_height)]
+            else:  # mean to visualize original anchor's preparation
                 x_ipm_values = x_values
-                y_ipm_value = self.y_samples
-            x_ipm_values, y_ipm_values = homographic_transformation(self.H_g2ipm, x_ipm_values, y_ipm_value)
+                y_ipm_values = self.y_samples
+            x_ipm_values, y_ipm_values = homographic_transformation(self.H_g2ipm, x_ipm_values, y_ipm_values)
             x_ipm_values = x_ipm_values.astype(np.int)
             y_ipm_values = y_ipm_values.astype(np.int)
             x_2d, y_2d = projective_transformation(P_gt, x_values, self.y_samples, z_values)
@@ -189,7 +195,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
-    args.dataset_name = 'rare_subset'
+    args.dataset_name = 'illus_chg'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
 
     # model name: 'Gen_LaneNet_ext' / '3D_LaneNet'

@@ -57,9 +57,6 @@ class lane_visualizer(object):
         self.x_max = args.top_view_region[1, 0]
         # self.y_samples = np.linspace(args.anchor_y_steps[0], args.anchor_y_steps[-1], num=100, endpoint=False)
         self.y_samples = np.linspace(min_y, max_y, num=100, endpoint=False)
-        self.dist_th = 1.5
-        self.ratio_th = 0.75
-        self.close_range = 30
 
     def visualize_lanes(self, pred_lanes, raw_file, gt_cam_height, gt_cam_pitch, ax1, ax2, ax3):
         P_g2im = projection_g2im(gt_cam_pitch, gt_cam_height, self.K)
@@ -94,8 +91,15 @@ class lane_visualizer(object):
         for i in range(cnt_pred):
             x_values = pred_lanes[i][:, 0]
             z_values = pred_lanes[i][:, 1]
-            x_ipm_values, y_ipm_value = transform_lane_g2gflat(gt_cam_height, x_values, self.y_samples, z_values)
-            x_ipm_values, y_ipm_values = homographic_transformation(self.H_g2ipm, x_ipm_values, y_ipm_value)
+            # if 'gflat' in pred_file or 'ext' in pred_file:
+            x_ipm_values, y_ipm_values = transform_lane_g2gflat(gt_cam_height, x_values, self.y_samples, z_values)
+            # remove those points with z_values > gt_cam_height, this is only for visualization on top-view
+            x_ipm_values = x_ipm_values[np.where(z_values < gt_cam_height)]
+            y_ipm_values = y_ipm_values[np.where(z_values < gt_cam_height)]
+            # else:  # mean to visualize original anchor's preparation
+            #     x_ipm_values = x_values
+            #     y_ipm_values = self.y_samples
+            x_ipm_values, y_ipm_values = homographic_transformation(self.H_g2ipm, x_ipm_values, y_ipm_values)
             x_ipm_values = x_ipm_values.astype(np.int)
             y_ipm_values = y_ipm_values.astype(np.int)
             x_2d, y_2d = projective_transformation(P_gt, x_values, self.y_samples, z_values)
@@ -128,7 +132,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # dataset_name: 'standard' / 'rare_subset' / 'illus_chg'
-    args.dataset_name = 'rare_subset'
+    args.dataset_name = 'illus_chg'
     args.dataset_dir = '/media/yuliangguo/DATA1/Datasets/Apollo_Sim_3D_Lane_Release/'
 
     # model name: 'Gen_LaneNet_ext' / '3D_LaneNet'
@@ -162,8 +166,6 @@ if __name__ == '__main__':
     for i, pred in enumerate(json_pred):
         raw_file = pred['raw_file']
 
-        # if raw_file != 'images/05/0000347.jpg':
-        #     continue
         pred_lanelines = pred['laneLines']
         pred_centerlines = pred['centerLines']
 

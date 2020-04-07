@@ -478,7 +478,7 @@ if __name__ == '__main__':
     args.num_class = 2  # 1 background + n lane labels
     args.pretrained_feat_model = 'pretrained/erfnet_model_sim3d.tar'
     args.mod = 'Gen_LaneNet_ext'
-    args.y_ref = 5
+    args.y_ref = 5  # new anchor prefer closer range gt assign
     global crit_string
     crit_string = 'loss_gflat'
 
