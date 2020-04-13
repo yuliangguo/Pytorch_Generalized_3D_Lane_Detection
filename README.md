@@ -6,7 +6,7 @@ This is a pytorch implementation of Gen-LaneNet, which predicts 3D lanes from a 
 is a unified network solution that solves image encoding, spatial transform of features and 3D lane prediction simultaneously.
 The method refers to the paper:
 
-'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020 [[paper](https://arxiv.org/abs/2003.10656)]
+'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020. [[paper](https://arxiv.org/abs/2003.10656)]
 
 Key features:
 
@@ -21,9 +21,9 @@ Key features:
 </p>
 
 ## Another baseline
-Another baseline method, '3D-LaneNet' is unofficially implemented in pytorch for comparison:
+This repo also includes an unofficial implementation of '3D-LaneNet' in pytorch for comparison. The method refers to
 
-"3d-lanenet:  end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019 [[paper](https://arxiv.org/abs/1811.10203)]
+"3d-lanenet:  end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019. [[paper](https://arxiv.org/abs/1811.10203)]
 
 ## Requirements
 If you have Anaconda installed, you can directly import the provided environment file.
@@ -60,7 +60,7 @@ normalization parameters wrt. the training set are also loaded. The demo code pr
 image visualized in the following figure.
 
 <p align="center">
-  <img src="example/test_exp.png" width="600" />
+  <img src="example/test_exp.png" width="500" />
 </p>
 
 The results are shown in three coordinate frames respectively. The lane-lines are shown in the top row and the 
@@ -68,38 +68,49 @@ center-lines are shown in the bottom row.
 
 ## How to train the model
 
+Step 1: Train the segmentation subnetwork
+
+The training of Gen-LaneNet requires to first train the segmentation subnetwork.
+* Train the ERFNet from a pytorch implementation [repo](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/sim_data_adaption/ERFNet-CULane-PyTorch).
+modified to train the model on the 3D lane synthetic dataset 
+
+* Save the trained model as 'pretrained/erfnet_model_sim3d.tar'. 
+
+Step 2: Train the geometry subnetwork
+
     python main_train_GenLaneNet_ext.py
 
-It is necessary to modify the code to set data split in 'args.dataset_name', and the location saving the 
-raw dataset in 'args.dataset_dir' properly. The trained model will be saved in the directory corresponding to 
-certain data split and model name, e.g. 'data_splits/illus_chg/Gen_LaneNet_ext/model*'. The anchor offset std will be recorded
-for certain data split at the same time, e.g. 'data_splits/illus_chg/geo_anchor_std.json'.
+* Set 'args.dataset_name' to a certain data split to train the model.
+* Set 'args.dataset_dir' to the folder saving the raw dataset. 
+* The trained model will be saved in the directory corresponding to 
+certain data split and model name, e.g. 'data_splits/illus_chg/Gen_LaneNet_ext/model*'. 
+* The anchor offset std will be recorded for certain data split at the same time, e.g. 'data_splits/illus_chg/geo_anchor_std.json'.
 
 The training progress can be monitored by tensorboard as follows.
     
     cd datas_splits/Gen_LaneNet_ext
     ./tensorboard  --logdir ./
-    
-The training of Gen-LaneNet requires to first train the segmentation subnetwork, saved as 'pretrained/erfnet_model_sim3d.tar'.
-Specifically, [a pytorch implementation of ERFNet](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/master/ERFNet-CULane-PyTorch)
- is modified to train the model on the 3D lane synthetic dataset.
 
-We include training code for other variants of Gen-LaneNet models as well as for the baseline 
+#### Training of other baselines
+
+We include the training codes for other variants of Gen-LaneNet models as well as for the baseline 
 3D-LaneNet in './tools/'. Interested users are welcome to repeat the full set
  of ablation study reported in the gen-lanenet paper.
 
 ## Batch testing
 
     python main_test_GenLaneNet_ext.py
-    
-Similarly, it is necessary to modify the code to set 'args.dataset_name', and 'args.dataset_dir' properly. 
-Different from the validation code in training, the batch testing code not only produce the prediction results, e.g., 
+
+* Set 'args.dataset_name' to a certain data split to train the model.
+* Set 'args.dataset_dir' to the folder saving the raw dataset.
+  
+The batch testing code not only produces the prediction results, e.g., 
 'data_splits/illus_chg/Gen_LaneNet_ext/test_pred_file.json', but also perform full-range precision-recall evaluation to 
 produce AP and max F-score.
 
 ## Evaluation
 
-Stand-alone evaluation can be performed by
+Stand-alone evaluation can also be performed.
 
     cd tools
     python eval_3D_lane.py
