@@ -4,7 +4,9 @@
 
 This is a pytorch implementation of the paper:
 
-'Gen-laneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020 [[paper](https://arxiv.org/abs/2003.10656)]
+'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020 [[paper](https://arxiv.org/abs/2003.10656)]
+
+Gen-LaneNet is a unified network solution
 
 Key features:
 
@@ -15,13 +17,13 @@ Key features:
 (3) A synthetic dataset for 3D lane detection.
 
 <p align="center">
-  <img src="example/gen_lanenet_arch.png" width="900" />
+  <img src="example/gen_lanenet_arch.png" width="800" />
 </p>
 
 ## Another baseline
 Another baseline method, '3D-LaneNet' is unofficially implemented in pytorch for comparison:
 
-"3d-lanenet:  end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019
+"3d-lanenet:  end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019 [[paper](https://arxiv.org/abs/1811.10203)]
 
 ## Requirements
 If you have Anaconda installed, you can directly import the provided environment file.
@@ -64,7 +66,7 @@ normalization parameters wrt. the training set are also loaded. The demo code pr
 image visualized in the following figure.
 
 <p align="center">
-  <img src="example/test.png" width="600" />
+  <img src="example/test_exp.png" width="600" />
 </p>
 
 The results are shown in three coordinate frames respectively. The lane-lines are shown in the top row and the 
@@ -85,10 +87,11 @@ The training progress can be monitored by tensorboard as follows.
     ./tensorboard  --logdir ./
     
 The training of Gen-LaneNet requires to first train the segmentation subnetwork, saved as 'pretrained/erfnet_model_sim3d.tar'.
-ERFNet is trained on the 3D lane synthetic dataset via modifying a pytorch implementation [[code](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/master/ERFNet-CULane-PyTorch)].
+Specifically, [a pytorch implementation of ERFNet](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/master/ERFNet-CULane-PyTorch)
+ is modified to train the model on the 3D lane synthetic dataset.
 
 We include training code for other variants of Gen-LaneNet models as well as for the baseline 
-[3D-LaneNet](https://arxiv.org/abs/1811.10203) in './tools/'. Interested users are welcome to repeat the full set
+3D-LaneNet in './tools/'. Interested users are welcome to repeat the full set
  of ablation study reported in the gen-lanenet paper.
 
 ## Batch testing
@@ -115,7 +118,7 @@ We show the evaluation results comparing two methods:
 * "Gen-lanenet: a generalized and scalable approach for 3D lane detection", Y. Guo, etal., Arxiv, 2020 (GenLaneNet_ext in code)
 
 Comparisons are conducted under three distinguished splits of the dataset. For simplicity, only lane-line results are reported here.
-The results from the code is slightly different from that reported in the paper due to different random splits.
+The results from the code could be marginally different from that reported in the paper due to different random splits.
 
 - **Standard**
 
@@ -140,7 +143,7 @@ The results from the code is slightly different from that reported in the paper 
 
 ## Visualization
 
-Visual comparisons to the ground truth can be generated per image when setting 'vis = True' in eval_3D_lane.py.
+Visual comparisons to the ground truth can be generated per image when setting 'vis = True' in 'tools/eval_3D_lane.py'.
 We show two examples for each method under the data split involving illumination change.
 
 * 3D-LaneNet
