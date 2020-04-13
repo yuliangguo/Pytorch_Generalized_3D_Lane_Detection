@@ -1,20 +1,20 @@
-# Gen-LaneNet: a generalized and scalable approach for 3D lane detection (pytorch)
+# (pytorch) Gen-LaneNet: a generalized and scalable approach for 3D lane detection 
 
 ## Introduction
 
-This is a pytorch implementation of the paper:
+This is a pytorch implementation of Gen-LaneNet, which predicts 3D lanes from a single image. Specifically, Gen-LaneNet
+is a unified network solution that solves image encoding, spatial transform of features and 3D lane prediction simultaneously.
+The method refers to the paper:
 
 'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020 [[paper](https://arxiv.org/abs/2003.10656)]
 
-Gen-LaneNet is a unified network solution
-
 Key features:
 
-(1) A geometry-guilded lane anchor representation that is well-generalized to novel scenes.
+* A geometry-guided lane anchor representation generalizable to novel scenes.
 
-(2) A scalable two-stage framework that decouples the learning of image segmentation subnetwork and geometry encoding subnetwork.
+* A scalable two-stage framework that decouples the learning of image segmentation subnetwork and geometry encoding subnetwork.
 
-(3) A synthetic dataset for 3D lane detection.
+* A synthetic dataset for 3D lane detection.
 
 <p align="center">
   <img src="example/gen_lanenet_arch.png" width="800" />
@@ -31,30 +31,24 @@ If you have Anaconda installed, you can directly import the provided environment
     conda env update --file environment.yaml
 
 Those important packages includes:
-* python                    3.7.3
-* numpy                     1.16.2
-* scipy                     1.2.1 
-* matplotlib                3.0.3 
 * opencv-python             4.1.0.25
-* py3-ortools               5.1.4041
 * pytorch                   1.4.0
 * torchvision               0.5.0
 * tensorboard               1.15.0
 * tensorboardx              1.7
-
+* py3-ortools               5.1.4041
 
 ## Data preparation
 
 The 3D lane detection method is trained and tested on the 
-[3D lane synthetic dataset](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset) released from the paper. Running demo
+[3D lane synthetic dataset](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset). Running the demo
 code on a single image should directly work. However, repeating the training, testing and evaluation requires to prepare the dataset:
-* Download the [raw datasets](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain). The location
-is referred as 'dataset_dir' in the code.
+* Download the [raw datasets](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain). 
 * Download the prepared [data splits and pretrained models](https://drive.google.com/open?id=1GDgiAmJdP_BEluAZDgMaclNwb34OenCn). 
 * Put 'data_splits' in current directory.
 
-If you prefer to build your own data splits using the dataset, please follow the steps described in the github repository
-of the 3D lane synthetic dataset. All necessary codes are included here already. 
+If you prefer to build your own data splits using the dataset, please follow the steps described in the 3D lane 
+synthetic dataset repository. All necessary codes are included here already. 
 
 ## Run the Demo
 
