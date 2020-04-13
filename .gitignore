@@ -8,3 +8,4 @@ Saved
 *~
 *.pyc
 test.png
+!/example/test.png

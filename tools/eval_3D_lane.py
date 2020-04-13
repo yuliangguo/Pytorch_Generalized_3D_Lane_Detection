@@ -775,7 +775,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # two method are compared: '3D_LaneNet' and 'Gen_LaneNet'
-    method_name = 'Gen_LaneNet'
+    method_name = 'Gen_LaneNet_ext'
 
     # Three different splits of datasets: 'standard', 'rare_subsit', 'illus_chg'
     data_split = 'illus_chg'
