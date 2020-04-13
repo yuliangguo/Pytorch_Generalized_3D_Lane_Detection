@@ -46,10 +46,10 @@ Those important packages includes:
 The 3D lane detection method is trained and tested on the 
 [3D lane synthetic dataset](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset) released from the paper. Running demo
 code on a single image should directly work. However, repeating the training, testing and evaluation requires to prepare the dataset:
-* Download the raw datasets from [here](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain). The location
+* Download the [raw datasets](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain). The location
 is referred as 'dataset_dir' in the code.
-* Download the prepared data splits and pretrained models for each splits from here. 
-* Place 'data_splits' at current directory.
+* Download the prepared [data splits and pretrained models](https://drive.google.com/open?id=1GDgiAmJdP_BEluAZDgMaclNwb34OenCn). 
+* Put 'data_splits' in current directory.
 
 If you prefer to build your own data splits using the dataset, please follow the steps described in the github repository
 of the 3D lane synthetic dataset. All necessary codes are included here already. 
@@ -64,7 +64,7 @@ normalization parameters wrt. the training set are also loaded. The demo code pr
 image visualized in the following figure.
 
 <p align="center">
-  <img src="example/test.jpg" width="600" />
+  <img src="example/test.png" width="600" />
 </p>
 
 The results are shown in three coordinate frames respectively. The lane-lines are shown in the top row and the 
@@ -145,11 +145,11 @@ We show two examples for each method under the data split involving illumination
 
 * 3D-LaneNet
 
-<img src="examples/3D_LaneNet/images_00_0000148.jpg" width="400"> <img src="examples/3D_LaneNet/images_00_0000171.jpg" width="400">
+<img src="example/3D_LaneNet/images_00_0000148.jpg" width="400"> <img src="example/3D_LaneNet/images_00_0000171.jpg" width="400">
 
 * Gen-LaneNet
 
-<img src="examples/Gen_LaneNet/images_00_0000148.jpg" width="400"> <img src="examples/Gen_LaneNet/images_00_0000171.jpg" width="400">
+<img src="example/Gen_LaneNet/images_00_0000148.jpg" width="400"> <img src="example/Gen_LaneNet/images_00_0000171.jpg" width="400">
 
 ## Citation
 Please cite the paper in your publications if it helps your research: 
