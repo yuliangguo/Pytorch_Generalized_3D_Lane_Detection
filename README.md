@@ -14,7 +14,7 @@ Key features:
 
 * A scalable two-stage framework that decouples the learning of image segmentation subnetwork and geometry encoding subnetwork.
 
-* A synthetic dataset for 3D lane detection.
+* A synthetic dataset for 3D lane detection [[repo](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset)].
 
 <p align="center">
   <img src="example/gen_lanenet_arch.png" width="800" />
@@ -71,10 +71,10 @@ center-lines are shown in the bottom row.
 Step 1: Train the segmentation subnetwork
 
 The training of Gen-LaneNet requires to first train the segmentation subnetwork.
-* Train the ERFNet from a pytorch implementation [repo](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/sim_data_adaption/ERFNet-CULane-PyTorch).
+* Train the ERFNet from a pytorch implementation [repo](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/sim_data_adaption/ERFNet-CULane-PyTorch)
 modified to train the model on the 3D lane synthetic dataset 
 
-* Save the trained model as 'pretrained/erfnet_model_sim3d.tar'. 
+* Save the trained model as 'pretrained/erfnet_model_sim3d.tar'. A pre-trained model is already included here. 
 
 Step 2: Train the geometry subnetwork
 
