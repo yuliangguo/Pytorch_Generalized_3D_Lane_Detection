@@ -54,29 +54,29 @@ synthetic dataset repository. All necessary codes are included here already.
 
     python main_demo_GenLaneNet_ext.py
 
-Specifically, this code predict 3D lane from an image given known camera height and pitch angle. Because, gen-lanenet is
-a two-stage framework, pretrained models for segmentation subnetwork and geometry subnetwork are loaded. Meanwhile, anchor
-normalization parameters wrt. the training set are also loaded. The demo code produces lane predication from a single 
+Specifically, this code predict 3D lane from an image given known camera height and pitch angle. Pretrained models for the
+ segmentation subnetwork and the 3D geometry subnetwork are loaded. Meanwhile, anchor normalization parameters wrt. 
+ the training set are also loaded. The demo code will produce lane predication from a single 
 image visualized in the following figure.
 
 <p align="center">
   <img src="example/test_exp.png" width="500" />
 </p>
 
-The results are shown in three coordinate frames respectively. The lane-lines are shown in the top row and the 
-center-lines are shown in the bottom row. 
+The lane results are visualized in three coordinate frames, respectively image plane, virtual top-view, and ego-vehicle
+ coordinate frame. The lane-lines are shown in the top row and the center-lines are shown in the bottom row. 
 
 ## How to train the model
 
 Step 1: Train the segmentation subnetwork
 
-The training of Gen-LaneNet requires to first train the segmentation subnetwork.
-* Train the ERFNet from a pytorch implementation [repo](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/sim_data_adaption/ERFNet-CULane-PyTorch)
-modified to train the model on the 3D lane synthetic dataset 
+The training of Gen-LaneNet requires to first train the segmentation subnetwork, ERFNet.
+* The training of the ERFNet is based on a pytorch implementation [[repo](https://github.com/yuliangguo/Codes-for-Lane-Detection/tree/sim_data_adaption/ERFNet-CULane-PyTorch)]
+modified to train the model on the 3D lane synthetic dataset.
 
-* Save the trained model as 'pretrained/erfnet_model_sim3d.tar'. A pre-trained model is already included here. 
+* The trained model should be saved as 'pretrained/erfnet_model_sim3d.tar'. A pre-trained model is already included. 
 
-Step 2: Train the geometry subnetwork
+Step 2: Train the 3D-geometry subnetwork
 
     python main_train_GenLaneNet_ext.py
 
@@ -91,11 +91,6 @@ The training progress can be monitored by tensorboard as follows.
     cd datas_splits/Gen_LaneNet_ext
     ./tensorboard  --logdir ./
 
-#### Training of other baselines
-
-We include the training codes for other variants of Gen-LaneNet models as well as for the baseline 
-3D-LaneNet in './tools/'. Interested users are welcome to repeat the full set
- of ablation study reported in the gen-lanenet paper.
 
 ## Batch testing
 
@@ -108,6 +103,16 @@ The batch testing code not only produces the prediction results, e.g.,
 'data_splits/illus_chg/Gen_LaneNet_ext/test_pred_file.json', but also perform full-range precision-recall evaluation to 
 produce AP and max F-score.
 
+
+## Other methods
+
+In './experiments', we include the training codes for other variants of Gen-LaneNet models as well as for the baseline method
+[3D-LaneNet](https://arxiv.org/abs/1811.10203) as well as its extended version integrated with the new anchor proposed in Gen-LaneNet.
+Interested users are welcome to repeat the full set of ablation study reported in the gen-lanenet paper. For example, to train 3D-LaneNet:
+ 
+    cd experiments
+    python main_train_3DLaneNet.py
+
 ## Evaluation
 
 Stand-alone evaluation can also be performed.
@@ -116,7 +121,14 @@ Stand-alone evaluation can also be performed.
     python eval_3D_lane.py
 
 Basically, you need to set 'method_name' and 'data_split' properly to compare the predicted lanes against ground-truth
-lanes. Details can refer to the [3D lane synthetic dataset](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset) repository.
+lanes. Evaluation details can refer to the [3D lane synthetic dataset](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset) 
+repository or the Gen-LaneNet paper. Overall, the evaluation metrics include:
+ * Average Precision (AP)
+ * max F-score
+ * x-error in close range (0-40 m)
+ * x-error in far range (40-100 m)
+ * z-error in close range (0-40 m)
+ * z-error in far range (40-100 m)
 
 We show the evaluation results comparing two methods: 
 * "3d-lanenet:  end-to-end 3d multiple lane detection", N. Garnet, etal., ICCV 2019
@@ -170,6 +182,9 @@ Please cite the paper in your publications if it helps your research:
       year={2020}
     }
 
+## Copyright and License
 
+The copyright of this work belongs to Baidu [Apollo](https://github.com/ApolloAuto/apollo), 
+which is provided under the [Apache-2.0 license](https://github.com/ApolloAuto/apollo/blob/master/LICENSE).
 
 
