@@ -14,7 +14,7 @@ Key features:
 
 * A scalable two-stage framework that decouples the learning of image segmentation subnetwork and geometry encoding subnetwork.
 
-* A synthetic dataset for 3D lane detection [[repo](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset)].
+* A synthetic dataset for 3D lane detection [[repo](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset)] [[data](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain)].
 
 <p align="center">
   <img src="example/gen_lanenet_arch.png" width="800" />
