@@ -4,9 +4,10 @@
 
 This is a pytorch implementation of Gen-LaneNet, which predicts 3D lanes from a single image. Specifically, Gen-LaneNet
 is a unified network solution that solves image encoding, spatial transform of features and 3D lane prediction simultaneously.
-The method refers to the paper:
+The method refers to the ECCV 2020 paper:
 
-'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. Arxiv 2020. [[paper](https://arxiv.org/abs/2003.10656)]
+'Gen-LaneNet: a generalized and scalable approach for 3D lane detection', Y Guo, etal. ECCV 2020. [[eccv](https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123660664.pdf)][[arxiv](https://arxiv.org/abs/2003.10656)]
+
 
 Key features:
 
@@ -177,8 +178,7 @@ Please cite the paper in your publications if it helps your research:
     @article{guo2020gen,
       title={Gen-LaneNet: A Generalized and Scalable Approach for 3D Lane Detection},
       author={Yuliang Guo, Guang Chen, Peitao Zhao, Weide Zhang, Jinghao Miao, Jingao Wang, and Tae Eun Choe},
-      journal={arXiv},
-      pages={arXiv--2003},
+      booktitle={Computer Vision - {ECCV} 2020 - 16th European Conference},
       year={2020}
     }
 
