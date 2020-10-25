@@ -97,7 +97,7 @@ The training progress can be monitored by tensorboard as follows.
 
     python main_test_GenLaneNet_ext.py
 
-* Set 'args.dataset_name' to a certain data split to train the model.
+* Set 'args.dataset_name' to a certain data split to test the model.
 * Set 'args.dataset_dir' to the folder saving the raw dataset.
   
 The batch testing code not only produces the prediction results, e.g., 
