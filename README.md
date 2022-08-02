@@ -44,7 +44,7 @@ Those important packages includes:
 The 3D lane detection method is trained and tested on the 
 [3D lane synthetic dataset](https://github.com/yuliangguo/3D_Lane_Synthetic_Dataset). Running the demo
 code on a single image should directly work. However, repeating the training, testing and evaluation requires to prepare the dataset:
-* Download the [raw datasets](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain). 
+* Download the raw dataset [(google drive)](https://drive.google.com/open?id=1Kisxoj7mYl1YyA_4xBKTE8GGWiNZVain) [(baidunetdisk)](https://pan.baidu.com/s/1y_d73-SaNreesif5nVXIVg?pwd=a852). 
 * Download the prepared [data splits and pretrained models](https://drive.google.com/open?id=1GDgiAmJdP_BEluAZDgMaclNwb34OenCn). 
 * Put 'data_splits' in current directory.
 
